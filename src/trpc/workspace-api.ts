@@ -13,6 +13,7 @@ import type {
 } from "../core/api-contract";
 import {
 	parseGitCheckoutRequest,
+	parseTaskWorkspaceBranchRequest,
 	parseWorktreeDeleteRequest,
 	parseWorktreeEnsureRequest,
 } from "../core/api-validation";
@@ -28,6 +29,7 @@ import { getCommitDiff, getGitLog, getGitRefs } from "../workspace/git-history";
 import { discardGitChanges, getGitSyncSummary, runGitCheckoutAction, runGitSyncAction } from "../workspace/git-sync";
 import { searchWorkspaceFiles } from "../workspace/search-workspace-files";
 import {
+	branchTaskWorktree,
 	deleteTaskWorktree,
 	ensureTaskWorktreeIfDoesntExist,
 	getTaskWorkspaceInfo,
@@ -323,6 +325,15 @@ export function createWorkspaceApi(deps: CreateWorkspaceApiDependencies): Runtim
 			return await ensureTaskWorktreeIfDoesntExist({
 				cwd: workspaceScope.workspacePath,
 				taskId: body.taskId,
+				baseRef: body.baseRef,
+			});
+		},
+		branchTaskWorkspace: async (workspaceScope, input) => {
+			const body = parseTaskWorkspaceBranchRequest(input);
+			return await branchTaskWorktree({
+				cwd: workspaceScope.workspacePath,
+				sourceTaskId: body.sourceTaskId,
+				targetTaskId: body.targetTaskId,
 				baseRef: body.baseRef,
 			});
 		},

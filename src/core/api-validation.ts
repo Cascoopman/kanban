@@ -26,6 +26,7 @@ import {
 	type RuntimeTaskSessionInputRequest,
 	type RuntimeTaskSessionStartRequest,
 	type RuntimeTaskSessionStopRequest,
+	type RuntimeTaskWorkspaceBranchRequest,
 	type RuntimeTaskWorkspaceInfoRequest,
 	type RuntimeTerminalWsClientMessage,
 	type RuntimeWorkspaceChangesRequest,
@@ -58,6 +59,7 @@ import {
 	runtimeTaskSessionInputRequestSchema,
 	runtimeTaskSessionStartRequestSchema,
 	runtimeTaskSessionStopRequestSchema,
+	runtimeTaskWorkspaceBranchRequestSchema,
 	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTerminalWsClientMessageSchema,
 	runtimeWorkspaceChangesRequestSchema,
@@ -163,6 +165,21 @@ export function parseWorktreeEnsureRequest(value: unknown): RuntimeWorktreeEnsur
 	};
 }
 
+export function parseTaskWorkspaceBranchRequest(value: unknown): RuntimeTaskWorkspaceBranchRequest {
+	const parsed = parseWithSchema(runtimeTaskWorkspaceBranchRequestSchema, value);
+	const sourceTaskId = parsed.sourceTaskId.trim();
+	const targetTaskId = parsed.targetTaskId.trim();
+	const baseRef = parsed.baseRef.trim();
+	if (!sourceTaskId || !targetTaskId || !baseRef || sourceTaskId === targetTaskId) {
+		throw new Error("Invalid task workspace branch payload.");
+	}
+	return {
+		sourceTaskId,
+		targetTaskId,
+		baseRef,
+	};
+}
+
 export function parseWorktreeDeleteRequest(value: unknown): RuntimeWorktreeDeleteRequest {
 	const parsed = parseWithSchema(runtimeWorktreeDeleteRequestSchema, value);
 	const taskId = parsed.taskId.trim();
@@ -232,6 +249,7 @@ export function parseTaskSessionStartRequest(value: unknown): RuntimeTaskSession
 		...parsed,
 		taskId,
 		baseRef,
+		...(parsed.branchedFromTaskId?.trim() ? { branchedFromTaskId: parsed.branchedFromTaskId.trim() } : {}),
 	};
 }
 

@@ -19,6 +19,7 @@ import {
 } from "@/types";
 
 export interface TaskDraft {
+	taskId?: string;
 	title?: string;
 	prompt: string;
 	startInPlanMode?: boolean;
@@ -27,6 +28,7 @@ export interface TaskDraft {
 	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
 	clineSettings?: RuntimeTaskClineSettings;
+	branchedFromTaskId?: string;
 	baseRef: string;
 }
 
@@ -162,6 +164,7 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		clineProviderId?: unknown;
 		clineModelId?: unknown;
 		clineReasoningEffort?: unknown;
+		branchedFromTaskId?: unknown;
 		createdAt?: unknown;
 		updatedAt?: unknown;
 	};
@@ -199,6 +202,9 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		baseRef,
 		...(typeof card.agentId === "string" && card.agentId ? { agentId: card.agentId as RuntimeAgentId } : {}),
 		...(clineSettings !== undefined ? { clineSettings } : {}),
+		...(typeof card.branchedFromTaskId === "string" && card.branchedFromTaskId.trim()
+			? { branchedFromTaskId: card.branchedFromTaskId.trim() }
+			: {}),
 		createdAt: typeof card.createdAt === "number" ? card.createdAt : now,
 		updatedAt: typeof card.updatedAt === "number" ? card.updatedAt : now,
 	};
@@ -338,6 +344,7 @@ export function addTaskToColumnWithResult(
 		board,
 		columnId,
 		{
+			taskId: draft.taskId,
 			title: draft.title,
 			prompt,
 			startInPlanMode: draft.startInPlanMode,
@@ -346,6 +353,7 @@ export function addTaskToColumnWithResult(
 			images: draft.images,
 			agentId: draft.agentId,
 			clineSettings: draft.clineSettings,
+			branchedFromTaskId: draft.branchedFromTaskId,
 			baseRef: draft.baseRef,
 		},
 		createBrowserUuid,

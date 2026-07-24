@@ -4,7 +4,11 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { deleteTaskWorktree, ensureTaskWorktreeIfDoesntExist } from "../../src/workspace/task-worktree";
+import {
+	branchTaskWorktree,
+	deleteTaskWorktree,
+	ensureTaskWorktreeIfDoesntExist,
+} from "../../src/workspace/task-worktree";
 import { createGitTestEnv } from "../utilities/git-env";
 import { createTempDir } from "../utilities/temp-dir";
 
@@ -367,6 +371,55 @@ describe.sequential("task-worktree integration", () => {
 				expect(readFileSync(join(restored.path, "tracked.txt"), "utf8")).toBe("base\nlocal change\n");
 				expect(readFileSync(join(restored.path, "notes.txt"), "utf8")).toBe("untracked\n");
 				expect(existsSync(patchPath)).toBe(false);
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
+	it("branches a task worktree with its commits and working copy", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-branch-");
+			try {
+				const repoPath = join(sandboxRoot, "repo");
+				mkdirSync(repoPath, { recursive: true });
+				runGit(repoPath, ["init"]);
+				runGit(repoPath, ["config", "user.name", "Kanban Test"]);
+				runGit(repoPath, ["config", "user.email", "kanban-test@example.com"]);
+				writeFileSync(join(repoPath, "tracked.txt"), "base\n", "utf8");
+				runGit(repoPath, ["add", "tracked.txt"]);
+				runGit(repoPath, ["commit", "-m", "init"]);
+
+				const source = await ensureTaskWorktreeIfDoesntExist({
+					cwd: repoPath,
+					taskId: "source-task",
+					baseRef: "HEAD",
+				});
+				expect(source.ok).toBe(true);
+				if (!source.ok) {
+					throw new Error("Source task worktree was not created");
+				}
+				writeFileSync(join(source.path, "branch-only.txt"), "committed on source\n", "utf8");
+				runGit(source.path, ["add", "branch-only.txt"]);
+				runGit(source.path, ["commit", "-m", "source commit"]);
+				const sourceHead = runGit(source.path, ["rev-parse", "HEAD"]);
+				writeFileSync(join(source.path, "tracked.txt"), "base\nworking change\n", "utf8");
+				writeFileSync(join(source.path, "untracked.txt"), "untracked\n", "utf8");
+
+				const branched = await branchTaskWorktree({
+					cwd: repoPath,
+					sourceTaskId: "source-task",
+					targetTaskId: "target-task",
+					baseRef: "HEAD",
+				});
+				expect(branched.ok).toBe(true);
+				if (!branched.ok) {
+					throw new Error(branched.error ?? "Target task worktree was not created");
+				}
+				expect(runGit(branched.path, ["rev-parse", "HEAD"])).toBe(sourceHead);
+				expect(readFileSync(join(branched.path, "branch-only.txt"), "utf8")).toBe("committed on source\n");
+				expect(readFileSync(join(branched.path, "tracked.txt"), "utf8")).toBe("base\nworking change\n");
+				expect(readFileSync(join(branched.path, "untracked.txt"), "utf8")).toBe("untracked\n");
 			} finally {
 				cleanup();
 			}

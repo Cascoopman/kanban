@@ -81,6 +81,7 @@ import type {
 	RuntimeTaskSessionStartResponse,
 	RuntimeTaskSessionStopRequest,
 	RuntimeTaskSessionStopResponse,
+	RuntimeTaskWorkspaceBranchRequest,
 	RuntimeTaskWorkspaceInfoRequest,
 	RuntimeTaskWorkspaceInfoResponse,
 	RuntimeUpdateStatusResponse,
@@ -172,6 +173,7 @@ import {
 	runtimeTaskSessionStartResponseSchema,
 	runtimeTaskSessionStopRequestSchema,
 	runtimeTaskSessionStopResponseSchema,
+	runtimeTaskWorkspaceBranchRequestSchema,
 	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTaskWorkspaceInfoResponseSchema,
 	runtimeUpdateStatusResponseSchema,
@@ -321,6 +323,10 @@ export interface RuntimeTrpcContext {
 		ensureWorktree: (
 			scope: RuntimeTrpcWorkspaceScope,
 			input: RuntimeWorktreeEnsureRequest,
+		) => Promise<RuntimeWorktreeEnsureResponse>;
+		branchTaskWorkspace: (
+			scope: RuntimeTrpcWorkspaceScope,
+			input: RuntimeTaskWorkspaceBranchRequest,
 		) => Promise<RuntimeWorktreeEnsureResponse>;
 		deleteWorktree: (
 			scope: RuntimeTrpcWorkspaceScope,
@@ -635,6 +641,12 @@ export const runtimeAppRouter = t.router({
 			.output(runtimeWorktreeEnsureResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.workspaceApi.ensureWorktree(ctx.workspaceScope, input);
+			}),
+		branchTaskWorkspace: workspaceProcedure
+			.input(runtimeTaskWorkspaceBranchRequestSchema)
+			.output(runtimeWorktreeEnsureResponseSchema)
+			.mutation(async ({ ctx, input }) => {
+				return await ctx.workspaceApi.branchTaskWorkspace(ctx.workspaceScope, input);
 			}),
 		deleteWorktree: workspaceProcedure
 			.input(runtimeWorktreeDeleteRequestSchema)

@@ -212,6 +212,33 @@ describe("BoardCard", () => {
 		expect(trashButton?.querySelector("svg.animate-spin")).toBeTruthy();
 	});
 
+	it("shows a branch button and sends the selected task", async () => {
+		const onBranch = vi.fn();
+		const card = createCard();
+		await act(async () => {
+			root.render(
+				<TooltipProvider>
+					<BoardCard
+						card={card}
+						index={0}
+						columnId="backlog"
+						sessionSummary={createSummary("running")}
+						onBranch={onBranch}
+					/>
+				</TooltipProvider>,
+			);
+		});
+
+		const branchButton = container.querySelector('button[aria-label="Branch task"]');
+		expect(branchButton).toBeInstanceOf(HTMLButtonElement);
+		expect((branchButton as HTMLButtonElement | null)?.disabled).toBe(false);
+		await act(async () => {
+			branchButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+			(branchButton as HTMLButtonElement | null)?.click();
+		});
+		expect(onBranch).toHaveBeenCalledWith(card);
+	});
+
 	it("shows inline see more and less controls for long descriptions", async () => {
 		const description =
 			"Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau final hidden segment";

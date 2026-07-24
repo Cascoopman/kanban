@@ -36,6 +36,8 @@ export interface AgentAdapterLaunchInput {
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
+	codexResumeSessionId?: string;
+	codexForkSessionId?: string;
 	env?: Record<string, string | undefined>;
 	workspaceId?: string;
 }
@@ -749,7 +751,11 @@ const codexAdapter: AgentSessionAdapter = {
 			codexArgs.push("--dangerously-bypass-approvals-and-sandbox");
 		}
 
-		if (input.resumeFromTrash) {
+		if (input.codexResumeSessionId) {
+			codexArgs.push("resume", input.codexResumeSessionId);
+		} else if (input.codexForkSessionId) {
+			codexArgs.push("fork", input.codexForkSessionId);
+		} else if (input.resumeFromTrash) {
 			if (!codexArgs.includes("resume")) {
 				codexArgs.push("resume");
 			}

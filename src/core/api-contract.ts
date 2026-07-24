@@ -143,6 +143,7 @@ export const runtimeBoardCardSchema = z
 		clineProviderId: z.string().optional(),
 		clineModelId: z.string().optional(),
 		clineReasoningEffort: runtimeLegacyTaskClineReasoningEffortSchema.optional(),
+		branchedFromTaskId: z.string().optional(),
 		baseRef: z.string(),
 		createdAt: z.number(),
 		updatedAt: z.number(),
@@ -543,6 +544,13 @@ export const runtimeWorktreeEnsureRequestSchema = z.object({
 	baseRef: z.string(),
 });
 export type RuntimeWorktreeEnsureRequest = z.infer<typeof runtimeWorktreeEnsureRequestSchema>;
+
+export const runtimeTaskWorkspaceBranchRequestSchema = z.object({
+	sourceTaskId: z.string(),
+	targetTaskId: z.string(),
+	baseRef: z.string(),
+});
+export type RuntimeTaskWorkspaceBranchRequest = z.infer<typeof runtimeTaskWorkspaceBranchRequestSchema>;
 
 export const runtimeWorktreeEnsureResponseSchema = z.union([
 	z.object({
@@ -984,6 +992,7 @@ export const runtimeTaskSessionStartRequestSchema = z.object({
 	rows: z.number().int().positive().optional(),
 	agentId: runtimeAgentIdSchema.optional(),
 	clineSettings: runtimeTaskClineSettingsSchema.optional(),
+	branchedFromTaskId: z.string().optional(),
 });
 export type RuntimeTaskSessionStartRequest = z.infer<typeof runtimeTaskSessionStartRequestSchema>;
 

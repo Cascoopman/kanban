@@ -21,6 +21,7 @@ export interface RuntimeCreateTaskInput {
 	images?: RuntimeTaskImage[];
 	agentId?: RuntimeAgentId;
 	clineSettings?: RuntimeTaskClineSettings;
+	branchedFromTaskId?: string;
 	baseRef: string;
 }
 
@@ -309,6 +310,7 @@ export function addTaskToColumn(
 		images: cloneTaskImages(input.images),
 		...(input.agentId ? { agentId: input.agentId } : {}),
 		...(input.clineSettings !== undefined ? { clineSettings: cloneTaskClineSettings(input.clineSettings) } : {}),
+		...(input.branchedFromTaskId?.trim() ? { branchedFromTaskId: input.branchedFromTaskId.trim() } : {}),
 		baseRef,
 		createdAt: now,
 		updatedAt: now,

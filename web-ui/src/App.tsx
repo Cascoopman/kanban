@@ -16,6 +16,7 @@ import { KanbanBoard } from "@/components/kanban-board";
 import { ProjectNavigationPanel } from "@/components/project-navigation-panel";
 import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components/runtime-settings-dialog";
 import { StartupOnboardingDialog } from "@/components/startup-onboarding-dialog";
+import { TaskBranchDialog } from "@/components/task-branch-dialog";
 import { TaskCreateDialog } from "@/components/task-create-dialog";
 import { TaskInlineCreateCard } from "@/components/task-inline-create-card";
 import { TopBar } from "@/components/top-bar";
@@ -50,6 +51,7 @@ import { useReviewReadyNotifications } from "@/hooks/use-review-ready-notificati
 import { useShortcutActions } from "@/hooks/use-shortcut-actions";
 import { useStartupOnboarding } from "@/hooks/use-startup-onboarding";
 import { useTaskBranchOptions } from "@/hooks/use-task-branch-options";
+import { useTaskBranching } from "@/hooks/use-task-branching";
 import { useTaskEditor } from "@/hooks/use-task-editor";
 import { useTaskSessions } from "@/hooks/use-task-sessions";
 import { useTaskStartActions } from "@/hooks/use-task-start-actions";
@@ -613,6 +615,12 @@ export default function App(): ReactElement {
 		handleStartAllBacklogTasks,
 		setSelectedTaskId,
 	});
+	const taskBranching = useTaskBranching({
+		board,
+		setBoard,
+		currentProjectId,
+		onStartTask: handleStartTaskFromBoard,
+	});
 
 	useAppHotkeys({
 		selectedCard,
@@ -938,6 +946,7 @@ export default function App(): ReactElement {
 												onCardSelect={handleCardSelect}
 												onCreateTask={handleOpenCreateTask}
 												onStartTask={handleStartTaskFromBoard}
+												onBranchTask={taskBranching.handleOpenBranchTask}
 												onStartAllTasks={handleStartAllBacklogTasksFromBoard}
 												onClearTrash={handleOpenClearTrash}
 												editingTaskId={editingTaskId}
@@ -1021,6 +1030,7 @@ export default function App(): ReactElement {
 									onTaskDragEnd={handleDetailTaskDragEnd}
 									onCreateTask={handleOpenCreateTask}
 									onStartTask={handleStartTaskFromBoard}
+									onBranchTask={taskBranching.handleOpenBranchTask}
 									onStartAllTasks={handleStartAllBacklogTasksFromBoard}
 									onClearTrash={handleOpenClearTrash}
 									editingTaskId={editingTaskId}
@@ -1137,6 +1147,16 @@ export default function App(): ReactElement {
 					defaultProviderId={defaultTaskClineProviderId}
 					defaultModelId={runtimeProjectConfig?.clineProviderSettings?.modelId ?? null}
 					defaultReasoningEffort={runtimeProjectConfig?.clineProviderSettings?.reasoningEffort ?? null}
+				/>
+				<TaskBranchDialog
+					open={taskBranching.sourceTask !== null}
+					sourceTask={taskBranching.sourceTask}
+					prompt={taskBranching.prompt}
+					onPromptChange={taskBranching.setPrompt}
+					isPending={taskBranching.isPending}
+					onOpenChange={taskBranching.handleOpenChange}
+					onCreate={() => void taskBranching.handleCreateBranch()}
+					onCreateAndStart={() => void taskBranching.handleCreateBranch({ start: true })}
 				/>
 				<ClearTrashDialog
 					open={isClearTrashDialogOpen}

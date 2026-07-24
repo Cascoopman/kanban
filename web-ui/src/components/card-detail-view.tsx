@@ -321,6 +321,7 @@ export function CardDetailView({
 	onTaskDragEnd,
 	onCreateTask,
 	onStartTask,
+	onBranchTask,
 	onStartAllTasks,
 	onClearTrash,
 	editingTaskId,
@@ -379,6 +380,7 @@ export function CardDetailView({
 	onTaskDragEnd: (result: DropResult) => void;
 	onCreateTask?: () => void;
 	onStartTask?: (taskId: string) => void;
+	onBranchTask?: (task: BoardCard) => void;
 	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
 	editingTaskId?: string | null;
@@ -807,6 +809,7 @@ export function CardDetailView({
 							onTaskDragEnd={onTaskDragEnd}
 							onCreateTask={onCreateTask}
 							onStartTask={onStartTask}
+							onBranchTask={onBranchTask}
 							onStartAllTasks={onStartAllTasks}
 							onClearTrash={onClearTrash}
 							editingTaskId={editingTaskId}
