@@ -663,6 +663,27 @@ describe("prepareAgentLaunch hook strategies", () => {
 		expect(resumeLaunch.args).not.toContain("--last");
 	});
 
+	it("resumes an explicit Codex session with a continuation prompt", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-codex-restart",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp/task-codex-restart",
+			prompt: "Continue working on the task from where you left off.",
+			resumeExistingSession: true,
+			codexResumeSessionId: "codex-session-id",
+		});
+
+		expect(launch.args.slice(-3)).toEqual([
+			"resume",
+			"codex-session-id",
+			"Continue working on the task from where you left off.",
+		]);
+		expect(launch.args).not.toContain("--last");
+	});
+
 	it("applies autonomous mode flags in adapters for non-droid CLIs", async () => {
 		setupTempHome();
 

@@ -573,6 +573,59 @@ describe("createRuntimeApi startTaskSession", () => {
 		);
 	});
 
+	it("resumes an interrupted Codex session without trash-restore side effects", async () => {
+		taskWorktreeMocks.resolveTaskCwd.mockResolvedValue("/tmp/existing-worktree");
+		codexSessionResolverMocks.resolveCodexSessionIdForCwd.mockResolvedValue("codex-session-id");
+		agentRegistryMocks.resolveAgentCommand.mockReturnValue({
+			agentId: "codex",
+			label: "Codex",
+			command: "codex",
+			binary: "codex",
+			args: [],
+		});
+		const terminalManager = {
+			getSummary: vi.fn(() => createSummary({ state: "interrupted", agentId: "codex", pid: null })),
+			startTaskSession: vi.fn(async () => createSummary({ agentId: "codex" })),
+			applyTurnCheckpoint: vi.fn(),
+		};
+		const clineTaskSessionService = createClineTaskSessionServiceMock();
+		const broadcastTaskChatCleared = vi.fn();
+		const api = createTestRuntimeApi({
+			getActiveWorkspaceId: vi.fn(() => "workspace-1"),
+			loadScopedRuntimeConfig: vi.fn(async () => createRuntimeConfigState()),
+			setActiveRuntimeConfig: vi.fn(),
+			getScopedTerminalManager: vi.fn(async () => terminalManager as never),
+			getScopedClineTaskSessionService: vi.fn(async () => clineTaskSessionService as never),
+			resolveInteractiveShellCommand: vi.fn(),
+			runCommand: vi.fn(),
+			broadcastTaskChatCleared,
+		});
+
+		const response = await api.startTaskSession(
+			{ workspaceId: "workspace-1", workspacePath: "/tmp/repo" },
+			{
+				taskId: "task-1",
+				baseRef: "main",
+				prompt: "Continue working on the task from where you left off.",
+				resumeExistingSession: "running",
+			},
+		);
+
+		expect(response.ok).toBe(true);
+		expect(codexSessionResolverMocks.resolveCodexSessionIdForCwd).toHaveBeenCalledWith("/tmp/existing-worktree");
+		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
+			expect.objectContaining({
+				agentId: "codex",
+				prompt: "Continue working on the task from where you left off.",
+				resumeFromTrash: undefined,
+				resumeExistingSession: "running",
+				codexResumeSessionId: "codex-session-id",
+			}),
+		);
+		expect(broadcastTaskChatCleared).not.toHaveBeenCalled();
+		expect(turnCheckpointMocks.captureTaskTurnCheckpoint).not.toHaveBeenCalled();
+	});
+
 	it("routes cline start sessions to cline task session service", async () => {
 		taskWorktreeMocks.resolveTaskCwd.mockResolvedValue("/tmp/existing-worktree");
 		agentRegistryMocks.resolveAgentCommand.mockReturnValue(null);

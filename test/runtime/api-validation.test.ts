@@ -74,18 +74,20 @@ describe("parseHookIngestRequest", () => {
 });
 
 describe("parseTaskSessionStartRequest", () => {
-	it("parses resumeFromTrash and trims task identifiers", () => {
+	it("parses session resume flags and trims task identifiers", () => {
 		const parsed = parseTaskSessionStartRequest({
 			taskId: "  task-1  ",
 			prompt: "",
 			baseRef: "  main  ",
 			resumeFromTrash: true,
+			resumeExistingSession: "running",
 		});
 		expect(parsed).toEqual({
 			taskId: "task-1",
 			prompt: "",
 			baseRef: "main",
 			resumeFromTrash: true,
+			resumeExistingSession: "running",
 		});
 	});
 });

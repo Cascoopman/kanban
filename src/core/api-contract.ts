@@ -987,6 +987,7 @@ export const runtimeTaskSessionStartRequestSchema = z.object({
 	startInPlanMode: z.boolean().optional(),
 	mode: runtimeTaskSessionModeSchema.optional(),
 	resumeFromTrash: z.boolean().optional(),
+	resumeExistingSession: z.enum(["running", "awaiting_review"]).optional(),
 	baseRef: z.string(),
 	cols: z.number().int().positive().optional(),
 	rows: z.number().int().positive().optional(),

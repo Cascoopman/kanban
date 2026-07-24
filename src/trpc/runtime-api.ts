@@ -169,6 +169,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 		startTaskSession: async (workspaceScope, input) => {
 			try {
 				const body = parseTaskSessionStartRequest(input);
+				const shouldResumeSession = body.resumeFromTrash || body.resumeExistingSession !== undefined;
 				if (body.resumeFromTrash) {
 					deps.broadcastTaskChatCleared?.(workspaceScope.workspaceId, body.taskId);
 				}
@@ -181,7 +182,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 							taskId: body.taskId,
 							baseRef: body.baseRef,
 						});
-				const shouldCaptureTurnCheckpoint = !body.resumeFromTrash && !isHomeAgentSessionId(body.taskId);
+				const shouldCaptureTurnCheckpoint = !shouldResumeSession && !isHomeAgentSessionId(body.taskId);
 
 				// Per-task config source-of-truth precedence:
 				//
@@ -197,13 +198,13 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 				//   if the user changes the model on the card, the next session launch
 				//   (including trash-restore) uses the updated values.
 				const terminalManager = await deps.getScopedTerminalManager(workspaceScope);
-				const previousTerminalAgentId = body.resumeFromTrash
+				const previousTerminalAgentId = shouldResumeSession
 					? (terminalManager.getSummary(body.taskId)?.agentId ?? null)
 					: null;
 				const effectiveAgentId = previousTerminalAgentId ?? body.agentId ?? scopedRuntimeConfig.selectedAgentId;
 				let useClinePath = effectiveAgentId === "cline";
 				const shouldProbePersistedClineSession =
-					body.resumeFromTrash && !useClinePath && previousTerminalAgentId === null;
+					shouldResumeSession && !useClinePath && previousTerminalAgentId === null;
 				if (shouldProbePersistedClineSession) {
 					// If the terminal summary already has a concrete non-Cline agentId,
 					// skip Cline persisted-session probing. That probe can cold-start the
@@ -281,7 +282,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 				}
 				let codexResumeSessionId: string | undefined;
 				let codexForkSessionId: string | undefined;
-				if (resolved.agentId === "codex" && (body.resumeFromTrash || body.branchedFromTaskId)) {
+				if (resolved.agentId === "codex" && (shouldResumeSession || body.branchedFromTaskId)) {
 					const existingSessionId = await resolveCodexSessionIdForCwd(taskCwd);
 					if (existingSessionId) {
 						codexResumeSessionId = existingSessionId;
@@ -305,6 +306,7 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					images: body.images,
 					startInPlanMode: body.startInPlanMode,
 					resumeFromTrash: body.resumeFromTrash,
+					resumeExistingSession: body.resumeExistingSession,
 					codexResumeSessionId,
 					codexForkSessionId,
 					cols: body.cols,

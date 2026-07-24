@@ -46,6 +46,8 @@ interface StartTaskSessionResult {
 
 interface StartTaskSessionOptions {
 	resumeFromTrash?: boolean;
+	resumeExistingSession?: "running" | "awaiting_review";
+	continuationPrompt?: string;
 }
 
 export interface UseTaskSessionsResult {
@@ -150,7 +152,12 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				return { ok: false, message: "No project selected." };
 			}
 			try {
-				const kickoffPrompt = options?.resumeFromTrash ? "" : task.prompt.trim();
+				const isResumingSession = options?.resumeFromTrash || options?.resumeExistingSession !== undefined;
+				const kickoffPrompt = options?.resumeFromTrash
+					? ""
+					: options?.resumeExistingSession
+						? (options.continuationPrompt?.trim() ?? "")
+						: task.prompt.trim();
 				const trpcClient = getRuntimeTrpcClient(currentProjectId);
 				const geometry =
 					getTerminalGeometry(task.id) ?? estimateTaskSessionGeometry(window.innerWidth, window.innerHeight);
@@ -158,9 +165,10 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 					taskId: task.id,
 					prompt: kickoffPrompt,
 					taskTitle: task.title,
-					images: options?.resumeFromTrash ? undefined : task.images,
-					startInPlanMode: options?.resumeFromTrash ? undefined : task.startInPlanMode,
+					images: isResumingSession ? undefined : task.images,
+					startInPlanMode: isResumingSession ? undefined : task.startInPlanMode,
 					resumeFromTrash: options?.resumeFromTrash,
+					resumeExistingSession: options?.resumeExistingSession,
 					baseRef: task.baseRef,
 					cols: geometry.cols,
 					rows: geometry.rows,

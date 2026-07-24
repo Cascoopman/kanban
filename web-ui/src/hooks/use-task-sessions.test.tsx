@@ -153,6 +153,45 @@ describe("useTaskSessions", () => {
 		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
 	});
 
+	it("resumes an existing session with a continuation prompt and no kickoff attachments", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			await latestSnapshot?.startTaskSession(
+				{
+					...createTask(),
+					images: [{ id: "image-1", data: "abc", mimeType: "image/png" }],
+					startInPlanMode: true,
+				},
+				{
+					resumeExistingSession: "running",
+					continuationPrompt: "Continue working on the task from where you left off.",
+				},
+			);
+		});
+
+		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				prompt: "Continue working on the task from where you left off.",
+				images: undefined,
+				startInPlanMode: undefined,
+				resumeFromTrash: undefined,
+				resumeExistingSession: "running",
+			}),
+		);
+		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
+	});
+
 	it("forwards start-in-plan-mode from the task card when starting a task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
@@ -184,6 +223,7 @@ describe("useTaskSessions", () => {
 			images: undefined,
 			startInPlanMode: true,
 			resumeFromTrash: undefined,
+			resumeExistingSession: undefined,
 			baseRef: "main",
 			cols: 120,
 			rows: 40,
