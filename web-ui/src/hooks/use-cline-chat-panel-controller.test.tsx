@@ -266,6 +266,35 @@ describe("useClineChatPanelController", () => {
 		expect(requireSnapshot(latestSnapshot).showCancelAutomaticAction).toBe(true);
 	});
 
+	it("shows review actions for on-hold tasks", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+		setTaskWorkspaceSnapshot({
+			taskId: "task-1",
+			path: "/tmp/worktree",
+			branch: "task-1",
+			isDetached: false,
+			headCommit: "abc1234",
+			changedFiles: 2,
+			additions: 4,
+			deletions: 1,
+		});
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					summary={createSummary("awaiting_review")}
+					taskColumnId="on_hold"
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+			await Promise.resolve();
+		});
+
+		expect(requireSnapshot(latestSnapshot).showReviewActions).toBe(true);
+	});
+
 	it("hides review actions after the workspace becomes clean", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 		setTaskWorkspaceSnapshot({

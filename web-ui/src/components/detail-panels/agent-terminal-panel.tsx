@@ -10,6 +10,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
 import { usePersistentTerminalSession } from "@/terminal/use-persistent-terminal-session";
+import { isReviewLikeColumnId } from "@/types";
 import { isMacPlatform } from "@/utils/platform";
 
 interface AgentTerminalSessionControls {
@@ -112,7 +113,7 @@ function AgentTerminalReviewActions({
 	isOpenPrLoading: boolean;
 }): ReactElement | null {
 	const reviewWorkspaceSnapshot = useTaskWorkspaceSnapshotValue(taskId);
-	const showReviewGitActions = taskColumnId === "review" && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
+	const showReviewGitActions = isReviewLikeColumnId(taskColumnId) && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
 
 	if (!showReviewGitActions) {
 		return null;

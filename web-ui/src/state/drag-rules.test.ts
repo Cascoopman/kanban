@@ -57,4 +57,13 @@ describe("drag rules", () => {
 	it("allows manual trash to review drops", () => {
 		expect(isCardDropDisabled("review", "trash")).toBe(false);
 	});
+
+	it("allows manual review and on-hold drops in both directions", () => {
+		expect(isCardDropDisabled("on_hold", "review")).toBe(false);
+		expect(isCardDropDisabled("review", "on_hold")).toBe(false);
+	});
+
+	it("keeps manual in-progress to on-hold drops disabled", () => {
+		expect(isCardDropDisabled("on_hold", "in_progress")).toBe(true);
+	});
 });

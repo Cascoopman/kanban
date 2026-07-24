@@ -3,7 +3,7 @@ import type { RefObject } from "react";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { DependencyLinkDraft } from "@/components/dependencies/use-dependency-linking";
-import type { BoardColumnId, BoardDependency } from "@/types";
+import { type BoardColumnId, type BoardDependency, isReviewLikeColumnId } from "@/types";
 
 interface TaskAnchor {
 	left: number;
@@ -57,7 +57,7 @@ interface AnchorPoint {
 
 const SOURCE_CONNECTOR_PADDING = 2;
 const TARGET_CONNECTOR_PADDING = 8;
-const COLUMN_ORDER: BoardColumnId[] = ["backlog", "in_progress", "review", "trash"];
+const COLUMN_ORDER: BoardColumnId[] = ["backlog", "in_progress", "review", "on_hold", "trash"];
 const SIDE_NORMALS: Record<AnchorSide, { x: number; y: number }> = {
 	left: { x: -1, y: 0 },
 	right: { x: 1, y: 0 },
@@ -145,7 +145,13 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function normalizeColumnId(value: string | undefined): BoardColumnId | null {
-	if (value === "backlog" || value === "in_progress" || value === "review" || value === "trash") {
+	if (
+		value === "backlog" ||
+		value === "in_progress" ||
+		value === "review" ||
+		value === "on_hold" ||
+		value === "trash"
+	) {
 		return value;
 	}
 	return null;
@@ -208,7 +214,7 @@ function chooseConnection(
 		const sourceSide: AnchorSide =
 			firstColumnId === "backlog"
 				? "right"
-				: firstColumnId === "in_progress" || firstColumnId === "review"
+				: firstColumnId === "in_progress" || (firstColumnId && isReviewLikeColumnId(firstColumnId))
 					? "left"
 					: "left";
 		const targetSide: AnchorSide = sourceSide === "right" ? "left" : "right";
@@ -220,7 +226,7 @@ function chooseConnection(
 
 	if (firstColumnId === null) {
 		const targetSide: AnchorSide =
-			secondColumnId === "backlog" || secondColumnId === "in_progress" || secondColumnId === "review"
+			secondColumnId === "backlog" || secondColumnId === "in_progress" || isReviewLikeColumnId(secondColumnId)
 				? "right"
 				: "left";
 		const sourceSide: AnchorSide = targetSide === "right" ? "left" : "right";
@@ -234,7 +240,7 @@ function chooseConnection(
 		firstColumnId &&
 		secondColumnId &&
 		firstColumnId === secondColumnId &&
-		(firstColumnId === "backlog" || firstColumnId === "in_progress" || firstColumnId === "review")
+		(firstColumnId === "backlog" || firstColumnId === "in_progress" || isReviewLikeColumnId(firstColumnId))
 	) {
 		return {
 			start: getAnchorPoint(firstAnchor, "right", firstLaneOffset, firstPadding),
