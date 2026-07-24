@@ -614,7 +614,7 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 		isShuttingDown = true;
 		runPendingAutoUpdateOnShutdown();
 		if (options.skipShutdownCleanup) {
-			console.warn("Skipping shutdown task cleanup for this instance.");
+			console.warn("Skipping shutdown session cleanup for this instance.");
 		}
 		await runtime.shutdown({
 			skipSessionCleanup: options.skipShutdownCleanup,
@@ -682,7 +682,7 @@ function createProgram(invocationArgs: string[]): Command {
 		.option("--host <ip>", "Host IP to bind the server to (default: 127.0.0.1).")
 		.option("--port <number|auto>", "Runtime port (1-65535) or auto.", parseCliPortValue)
 		.option("--no-open", "Do not open browser automatically.")
-		.option("--skip-shutdown-cleanup", "Do not move sessions to done or delete task worktrees on shutdown.")
+		.option("--skip-shutdown-cleanup", "Do not stop or persist task sessions during shutdown.")
 		.option("--https", "Enable HTTPS. Requires both --cert and --key.")
 		.option("--cert <path>", "Path to a TLS certificate PEM file (implies HTTPS).")
 		.option("--key <path>", "Path to a TLS private key PEM file (implies HTTPS).")
