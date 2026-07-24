@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { RequestProgrammaticCardMove } from "@/components/kanban-board";
 import type { ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import type { BoardColumnId } from "@/types";
+import { type BoardColumnId, isReviewLikeColumnId } from "@/types";
 
 interface RequestMoveTaskToTrashOptions {
 	optimisticMoveApplied?: boolean;
@@ -195,7 +195,7 @@ export function useProgrammaticCardMoves(): {
 			if (!requestMoveTaskToTrash) {
 				return;
 			}
-			if (fromColumnId !== "review") {
+			if (!isReviewLikeColumnId(fromColumnId)) {
 				await requestMoveTaskToTrash(taskId, fromColumnId, options);
 				return;
 			}

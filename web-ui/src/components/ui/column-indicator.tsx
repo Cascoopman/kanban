@@ -34,6 +34,18 @@ export function ColumnIndicator({ columnId, size = 14 }: { columnId: string; siz
 			</svg>
 		);
 	}
+	if (columnId === "on_hold") {
+		return (
+			<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+				<circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} />
+				<path
+					d={`M${cx - r * 0.3} ${cy - r * 0.45} V${cy + r * 0.45} M${cx + r * 0.3} ${cy - r * 0.45} V${cy + r * 0.45}`}
+					stroke={color}
+					strokeWidth={strokeWidth}
+				/>
+			</svg>
+		);
+	}
 	return (
 		<svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
 			<circle cx={cx} cy={cy} r={r + strokeWidth / 2} fill={color} />

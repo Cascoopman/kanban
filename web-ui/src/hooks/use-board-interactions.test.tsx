@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useBoardInteractions } from "@/hooks/use-board-interactions";
 import type { UseTaskSessionsResult } from "@/hooks/use-task-sessions";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
-import type { BoardCard, BoardData } from "@/types";
+import type { BoardCard, BoardColumnId, BoardData } from "@/types";
 
 const notifyErrorMock = vi.hoisted(() => vi.fn());
 const showAppToastMock = vi.hoisted(() => vi.fn());
@@ -103,7 +103,7 @@ function HookHarness({
 	startTaskSession: UseTaskSessionsResult["startTaskSession"];
 	stopTaskSession?: (taskId: string) => Promise<void>;
 	cleanupTaskWorkspace?: (taskId: string) => Promise<unknown>;
-	selectedCard?: { card: BoardCard; column: { id: "backlog" | "in_progress" | "review" | "trash" } } | null;
+	selectedCard?: { card: BoardCard; column: { id: BoardColumnId } } | null;
 	setSelectedTaskIdOverride?: Dispatch<SetStateAction<string | null>>;
 	onSnapshot?: (snapshot: HookSnapshot) => void;
 }): null {

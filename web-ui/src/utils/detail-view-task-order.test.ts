@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { getNextDetailTaskIdAfterTrashMove, isDetailViewColumnId } from "@/utils/detail-view-task-order";
 
 describe("isDetailViewColumnId", () => {
-	it("returns true only for in-progress and review columns", () => {
+	it("returns true only for in-progress and review-like columns", () => {
 		expect(isDetailViewColumnId("in_progress")).toBe(true);
 		expect(isDetailViewColumnId("review")).toBe(true);
+		expect(isDetailViewColumnId("on_hold")).toBe(true);
 		expect(isDetailViewColumnId("backlog")).toBe(false);
 		expect(isDetailViewColumnId("trash")).toBe(false);
 	});

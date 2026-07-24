@@ -16,6 +16,7 @@ function createBoard(): RuntimeBoardData {
 			{ id: "backlog", title: "Backlog", cards: [] },
 			{ id: "in_progress", title: "In Progress", cards: [] },
 			{ id: "review", title: "Review", cards: [] },
+			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
 		dependencies: [],
@@ -53,6 +54,28 @@ describe("deleteTasksFromBoard", () => {
 		expect(deleted.deleted).toBe(true);
 		expect(deleted.deletedTaskIds.sort()).toEqual(["aaaaa", "bbbbb"]);
 		expect(deleted.board.columns.find((column) => column.id === "trash")?.cards).toEqual([]);
+	});
+});
+
+describe("on-hold tasks", () => {
+	it("releases linked backlog tasks when an on-hold prerequisite moves to done", () => {
+		const prerequisite = addTaskToColumn(
+			createBoard(),
+			"on_hold",
+			{ prompt: "Prerequisite", baseRef: "main" },
+			() => "aaaaa111",
+		);
+		const dependent = addTaskToColumn(
+			prerequisite.board,
+			"backlog",
+			{ prompt: "Dependent", baseRef: "main" },
+			() => "bbbbb111",
+		);
+		const linked = addTaskDependency(dependent.board, dependent.task.id, prerequisite.task.id);
+		expect(linked.added).toBe(true);
+
+		const trashed = trashTaskAndGetReadyLinkedTaskIds(linked.board, prerequisite.task.id);
+		expect(trashed.readyTaskIds).toEqual([dependent.task.id]);
 	});
 });
 
