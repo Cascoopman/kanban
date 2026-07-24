@@ -161,11 +161,6 @@ function applyLiveSessionStateToProjectTaskCounts(
 		if (summary.state === "awaiting_review" && columnId === "in_progress") {
 			next.in_progress = Math.max(0, next.in_progress - 1);
 			next.review += 1;
-			continue;
-		}
-		if (summary.state === "interrupted" && columnId !== "trash") {
-			next[columnId] = Math.max(0, next[columnId] - 1);
-			next.trash += 1;
 		}
 	}
 	return next;

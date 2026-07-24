@@ -247,15 +247,16 @@ export class TerminalSessionManager implements TerminalSessionService {
 
 	hydrateFromRecord(record: Record<string, RuntimeTaskSessionSummary>): void {
 		for (const [taskId, summary] of Object.entries(record)) {
-			const hydratedSummary = summary.state === "running"
-				? {
-						...cloneSummary(summary),
-						state: "interrupted" as const,
-						pid: null,
-						reviewReason: "interrupted" as const,
-						updatedAt: now(),
-					}
-				: cloneSummary(summary);
+			const hydratedSummary =
+				summary.state === "running"
+					? {
+							...cloneSummary(summary),
+							state: "interrupted" as const,
+							pid: null,
+							reviewReason: "interrupted" as const,
+							updatedAt: now(),
+						}
+					: cloneSummary(summary);
 			this.entries.set(taskId, {
 				summary: hydratedSummary,
 				active: null,
@@ -949,14 +950,16 @@ export class TerminalSessionManager implements TerminalSessionService {
 
 	markInterruptedAndStopAll(): RuntimeTaskSessionSummary[] {
 		const activeEntries = Array.from(this.entries.values()).filter((entry) => entry.active != null);
+		const summariesBeforeStop = activeEntries.map((entry) => cloneSummary(entry.summary));
 		for (const entry of activeEntries) {
 			if (!entry.active) {
 				continue;
 			}
+			entry.suppressAutoRestartOnExit = true;
 			stopWorkspaceTrustTimers(entry.active);
 			entry.active.session.stop({ interrupted: true });
 		}
-		return activeEntries.map((entry) => cloneSummary(entry.summary));
+		return summariesBeforeStop;
 	}
 
 	private applySessionEvent(entry: SessionEntry, event: SessionTransitionEvent): RuntimeTaskSessionSummary {

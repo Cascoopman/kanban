@@ -43,6 +43,26 @@ function createTask(taskId: string, prompt: string, createdAt: number): BoardCar
 	};
 }
 
+function createSession(taskId: string, state: RuntimeTaskSessionSummary["state"]): RuntimeTaskSessionSummary {
+	return {
+		taskId,
+		state,
+		agentId: "codex",
+		workspacePath: `/tmp/${taskId}`,
+		pid: state === "running" ? 1234 : null,
+		startedAt: 1,
+		updatedAt: 2,
+		lastOutputAt: 1,
+		reviewReason: state === "interrupted" ? "interrupted" : null,
+		exitCode: null,
+		lastHookAt: null,
+		latestHookActivity: null,
+		warningMessage: null,
+		latestTurnCheckpoint: null,
+		previousTurnCheckpoint: null,
+	};
+}
+
 function createBoard(): BoardData {
 	return {
 		columns: [
@@ -93,6 +113,7 @@ function HookHarness({
 	startTaskSession,
 	stopTaskSession = NOOP_STOP_SESSION,
 	cleanupTaskWorkspace = NOOP_CLEANUP_WORKSPACE,
+	initialSessions = {},
 	selectedCard = null,
 	setSelectedTaskIdOverride,
 	onSnapshot,
@@ -103,11 +124,12 @@ function HookHarness({
 	startTaskSession: UseTaskSessionsResult["startTaskSession"];
 	stopTaskSession?: (taskId: string) => Promise<void>;
 	cleanupTaskWorkspace?: (taskId: string) => Promise<unknown>;
+	initialSessions?: Record<string, RuntimeTaskSessionSummary>;
 	selectedCard?: { card: BoardCard; column: { id: BoardColumnId } } | null;
 	setSelectedTaskIdOverride?: Dispatch<SetStateAction<string | null>>;
 	onSnapshot?: (snapshot: HookSnapshot) => void;
 }): null {
-	const [sessions, setSessions] = useState<Record<string, RuntimeTaskSessionSummary>>({});
+	const [sessions, setSessions] = useState<Record<string, RuntimeTaskSessionSummary>>(initialSessions);
 	const [, setSelectedTaskId] = useState<string | null>(null);
 	const [, setIsClearTrashDialogOpen] = useState(false);
 	const [, setIsGitHistoryOpen] = useState(false);
@@ -193,6 +215,59 @@ describe("useBoardInteractions", () => {
 			(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 				previousActEnvironment;
 		}
+	});
+
+	it("keeps interrupted tasks in their existing board column", async () => {
+		const interruptedTask = createTask("task-interrupted", "Interrupted task", 1);
+		let currentBoard: BoardData = {
+			columns: [
+				{ id: "backlog", title: "Backlog", cards: [] },
+				{ id: "in_progress", title: "In Progress", cards: [interruptedTask] },
+				{ id: "review", title: "Review", cards: [] },
+				{ id: "on_hold", title: "On Hold", cards: [] },
+				{ id: "trash", title: "Done", cards: [] },
+			],
+			dependencies: [],
+		};
+		const setBoard: Dispatch<SetStateAction<BoardData>> = (nextBoard) => {
+			currentBoard = typeof nextBoard === "function" ? nextBoard(currentBoard) : nextBoard;
+		};
+		const tryProgrammaticCardMove = vi.fn(() => "unavailable" as const);
+		useProgrammaticCardMovesMock.mockReturnValue({
+			handleProgrammaticCardMoveReady: () => {},
+			setRequestMoveTaskToTrashHandler: () => {},
+			tryProgrammaticCardMove,
+			consumeProgrammaticCardMove: () => ({}),
+			resolvePendingProgrammaticTrashMove: () => {},
+			waitForProgrammaticCardMoveAvailability: async () => {},
+			resetProgrammaticCardMoves: () => {},
+			requestMoveTaskToTrashWithAnimation: async () => {},
+			programmaticCardMoveCycle: 0,
+		});
+		useLinkedBacklogTaskActionsMock.mockReturnValue({
+			handleCreateDependency: () => {},
+			handleDeleteDependency: () => {},
+			confirmMoveTaskToTrash: async () => {},
+			requestMoveTaskToTrash: async () => {},
+		});
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					board={currentBoard}
+					setBoard={setBoard}
+					ensureTaskWorkspace={async () => ({ ok: true as const })}
+					startTaskSession={async () => ({ ok: true as const })}
+					initialSessions={{
+						[interruptedTask.id]: createSession(interruptedTask.id, "interrupted"),
+					}}
+				/>,
+			);
+		});
+
+		expect(currentBoard.columns.find((column) => column.id === "in_progress")?.cards).toEqual([interruptedTask]);
+		expect(currentBoard.columns.find((column) => column.id === "trash")?.cards).toEqual([]);
+		expect(tryProgrammaticCardMove).not.toHaveBeenCalled();
 	});
 
 	it("starts dependency-unblocked tasks even when setBoard updater is deferred", async () => {

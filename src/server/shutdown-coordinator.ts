@@ -10,37 +10,27 @@ export interface RuntimeShutdownCoordinatorDependencies {
 	skipSessionCleanup?: boolean;
 }
 
-async function persistInterruptedSessions(
+async function persistStoppedSessions(
 	workspacePath: string,
-	interruptedTaskIds: string[],
+	stoppedSessions: RuntimeTaskSessionSummary[],
 	options?: {
 		workspaceState?: RuntimeWorkspaceStateResponse;
-		resolveSummary?: (taskId: string) => RuntimeTaskSessionSummary | null;
 	},
 ): Promise<void> {
-	if (interruptedTaskIds.length === 0) {
+	if (stoppedSessions.length === 0) {
 		return;
 	}
 	const workspaceState = options?.workspaceState ?? (await loadWorkspaceState(workspacePath));
 	const nextSessions = {
 		...workspaceState.sessions,
 	};
-	let updated = false;
-	for (const taskId of interruptedTaskIds) {
-		const summary = options?.resolveSummary?.(taskId) ?? workspaceState.sessions[taskId] ?? null;
-		if (summary) {
-			updated = true;
-			nextSessions[taskId] = {
-				...summary,
-				state: "interrupted",
-				reviewReason: "interrupted",
-				pid: null,
-				updatedAt: Date.now(),
-			};
-		}
-	}
-	if (!updated) {
-		return;
+	const stoppedAt = Date.now();
+	for (const summary of stoppedSessions) {
+		nextSessions[summary.taskId] = {
+			...summary,
+			pid: null,
+			updatedAt: stoppedAt,
+		};
 	}
 	await saveWorkspaceState(workspacePath, {
 		board: workspaceState.board,
@@ -70,28 +60,25 @@ export async function shutdownRuntimeServer(deps: RuntimeShutdownCoordinatorDepe
 		return;
 	}
 
-	const interruptedByWorkspace: Array<{
+	const stoppedSessionsByWorkspace: Array<{
 		workspacePath: string;
-		interruptedTaskIds: string[];
+		stoppedSessions: RuntimeTaskSessionSummary[];
 		workspaceState?: RuntimeWorkspaceStateResponse;
-		resolveSummary?: (taskId: string) => RuntimeTaskSessionSummary | null;
 	}> = [];
 	const managedWorkspacePaths = new Set<string>();
 
 	for (const { workspacePath, terminalManager } of deps.workspaceRegistry.listManagedWorkspaces()) {
-		const interrupted = terminalManager.markInterruptedAndStopAll();
-		const interruptedTaskIds = interrupted.map((summary) => summary.taskId);
+		const stoppedSessions = terminalManager.markInterruptedAndStopAll();
 		if (!workspacePath) {
 			continue;
 		}
 		managedWorkspacePaths.add(workspacePath);
 		try {
 			const workspaceState = await loadWorkspaceState(workspacePath);
-			interruptedByWorkspace.push({
+			stoppedSessionsByWorkspace.push({
 				workspacePath,
-				interruptedTaskIds,
+				stoppedSessions,
 				workspaceState,
-				resolveSummary: (taskId) => terminalManager.getSummary(taskId),
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -102,10 +89,9 @@ export async function shutdownRuntimeServer(deps: RuntimeShutdownCoordinatorDepe
 	const indexedWorkspaces = await listWorkspaceIndexEntries();
 
 	await Promise.all(
-		interruptedByWorkspace.map(async (workspace) => {
-			await persistInterruptedSessions(workspace.workspacePath, workspace.interruptedTaskIds, {
+		stoppedSessionsByWorkspace.map(async (workspace) => {
+			await persistStoppedSessions(workspace.workspacePath, workspace.stoppedSessions, {
 				workspaceState: workspace.workspaceState,
-				resolveSummary: workspace.resolveSummary,
 			});
 		}),
 	);
