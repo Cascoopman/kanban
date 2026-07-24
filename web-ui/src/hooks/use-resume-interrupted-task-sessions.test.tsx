@@ -18,7 +18,12 @@ vi.mock("@/components/app-toaster", () => ({
 	notifyError: notifyErrorMock,
 }));
 
-function createTask(board: BoardData, columnId: "in_progress" | "review", title: string, agentId: RuntimeAgentId) {
+function createTask(
+	board: BoardData,
+	columnId: "in_progress" | "review" | "on_hold" | "trash",
+	title: string,
+	agentId: RuntimeAgentId,
+) {
 	return addTaskToColumnWithResult(board, columnId, {
 		title,
 		prompt: title,
@@ -96,17 +101,21 @@ describe("useResumeInterruptedTaskSessions", () => {
 		const codexTask = createTask(createInitialBoardData(), "in_progress", "Codex task", "codex");
 		const clineTask = createTask(codexTask.board, "in_progress", "Cline task", "cline");
 		const reviewTask = createTask(clineTask.board, "review", "Review task", "codex");
+		const onHoldTask = createTask(reviewTask.board, "on_hold", "On hold task", "codex");
+		const doneTask = createTask(onHoldTask.board, "trash", "Done task", "codex");
 		const sessions = {
 			[codexTask.task.id]: createSummary(codexTask.task.id, "codex"),
 			[clineTask.task.id]: createSummary(clineTask.task.id, "cline"),
 			[reviewTask.task.id]: createSummary(reviewTask.task.id, "codex", "awaiting_review"),
+			[onHoldTask.task.id]: createSummary(onHoldTask.task.id, "codex", "awaiting_review"),
+			[doneTask.task.id]: createSummary(doneTask.task.id, "codex"),
 		};
 		const startTaskSession = vi.fn<UseTaskSessionsResult["startTaskSession"]>(async () => ({ ok: true as const }));
 
 		await act(async () => {
 			root.render(
 				<Harness
-					board={reviewTask.board}
+					board={doneTask.board}
 					sessions={sessions}
 					workspaceHydrationNonce={1}
 					startTaskSession={startTaskSession}
@@ -126,7 +135,7 @@ describe("useResumeInterruptedTaskSessions", () => {
 		await act(async () => {
 			root.render(
 				<Harness
-					board={reviewTask.board}
+					board={doneTask.board}
 					sessions={sessions}
 					workspaceHydrationNonce={2}
 					startTaskSession={startTaskSession}

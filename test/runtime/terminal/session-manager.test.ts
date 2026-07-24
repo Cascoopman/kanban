@@ -102,6 +102,44 @@ describe("TerminalSessionManager", () => {
 		expect(summary?.exitCode).toBe(0);
 	});
 
+	it("returns pre-stop logical states and suppresses auto-restart during shutdown", () => {
+		const manager = new TerminalSessionManager();
+		const stop = vi.fn();
+		const entry = {
+			summary: createSummary({
+				taskId: "task-review",
+				state: "awaiting_review",
+				reviewReason: "hook",
+			}),
+			active: {
+				session: { stop },
+				workspaceTrustConfirmTimer: null,
+			},
+			suppressAutoRestartOnExit: false,
+		};
+		stop.mockImplementation(() => {
+			entry.summary = createSummary({
+				taskId: "task-review",
+				state: "interrupted",
+				reviewReason: "interrupted",
+				pid: null,
+			});
+		});
+		(
+			manager as unknown as {
+				entries: Map<string, typeof entry>;
+			}
+		).entries.set("task-review", entry);
+
+		const stopped = manager.markInterruptedAndStopAll();
+
+		expect(stopped).toHaveLength(1);
+		expect(stopped[0]?.state).toBe("awaiting_review");
+		expect(stopped[0]?.reviewReason).toBe("hook");
+		expect(entry.suppressAutoRestartOnExit).toBe(true);
+		expect(stop).toHaveBeenCalledWith({ interrupted: true });
+	});
+
 	it("tracks only the latest two turn checkpoints", () => {
 		const manager = new TerminalSessionManager();
 		manager.hydrateFromRecord({

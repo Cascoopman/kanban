@@ -57,7 +57,12 @@ function createCard(taskId: string) {
 	};
 }
 
-function createBoard(taskIds: { inProgress?: string[]; review?: string[]; onHold?: string[] }): RuntimeBoardData {
+function createBoard(taskIds: {
+	inProgress?: string[];
+	review?: string[];
+	onHold?: string[];
+	trash?: string[];
+}): RuntimeBoardData {
 	return {
 		columns: [
 			{ id: "backlog", title: "Backlog", cards: [] },
@@ -76,7 +81,11 @@ function createBoard(taskIds: { inProgress?: string[]; review?: string[]; onHold
 				title: "On Hold",
 				cards: (taskIds.onHold ?? []).map((taskId) => createCard(taskId)),
 			},
-			{ id: "trash", title: "Done", cards: [] },
+			{
+				id: "trash",
+				title: "Done",
+				cards: (taskIds.trash ?? []).map((taskId) => createCard(taskId)),
+			},
 		],
 		dependencies: [],
 	};
@@ -115,13 +124,15 @@ describe.sequential("shutdown coordinator integration", () => {
 				await saveWorkspaceState(managedProjectPath, {
 					board: createBoard({
 						inProgress: ["managed-running", "managed-missing-session"],
-						review: ["managed-idle"],
+						review: ["managed-review"],
 						onHold: ["managed-on-hold"],
+						trash: ["managed-done"],
 					}),
 					sessions: {
 						"managed-running": createSession("managed-running", "running"),
-						"managed-idle": createSession("managed-idle", "idle"),
+						"managed-review": createSession("managed-review", "awaiting_review"),
 						"managed-on-hold": createSession("managed-on-hold", "awaiting_review"),
+						"managed-done": createSession("managed-done", "idle"),
 					},
 					expectedRevision: managedInitial.revision,
 				});
@@ -142,24 +153,9 @@ describe.sequential("shutdown coordinator integration", () => {
 				const managedTerminalManager = {
 					markInterruptedAndStopAll: () => [
 						createSession("managed-running", "running"),
+						createSession("managed-review", "awaiting_review"),
 						createSession("managed-on-hold", "awaiting_review"),
 					],
-					listSummaries: () => [
-						createSession("managed-running", "running"),
-						createSession("managed-on-hold", "awaiting_review"),
-					],
-					getSummary: (taskId: string) => {
-						if (taskId === "managed-running") {
-							return createSession("managed-running", "running");
-						}
-						if (taskId === "managed-on-hold") {
-							return createSession("managed-on-hold", "awaiting_review");
-						}
-						if (taskId === "managed-idle") {
-							return createSession("managed-idle", "idle");
-						}
-						return null;
-					},
 				} as unknown as TerminalSessionManager;
 				await shutdownRuntimeServer({
 					workspaceRegistry: {
@@ -188,12 +184,18 @@ describe.sequential("shutdown coordinator integration", () => {
 				expect(managedInProgress.map((card) => card.id).sort()).toEqual(
 					["managed-missing-session", "managed-running"].sort(),
 				);
-				expect(managedReview.map((card) => card.id)).toEqual(["managed-idle"]);
+				expect(managedReview.map((card) => card.id)).toEqual(["managed-review"]);
 				expect(managedOnHold.map((card) => card.id)).toEqual(["managed-on-hold"]);
-				expect(managedTrash).toEqual([]);
-				expect(managedAfter.sessions["managed-running"]?.state).toBe("interrupted");
-				expect(managedAfter.sessions["managed-on-hold"]?.state).toBe("interrupted");
-				expect(managedAfter.sessions["managed-idle"]?.state).toBe("idle");
+				expect(managedTrash.map((card) => card.id)).toEqual(["managed-done"]);
+				expect(managedAfter.sessions["managed-running"]?.state).toBe("running");
+				expect(managedAfter.sessions["managed-running"]?.pid).toBeNull();
+				expect(managedAfter.sessions["managed-review"]?.state).toBe("awaiting_review");
+				expect(managedAfter.sessions["managed-review"]?.reviewReason).toBe("hook");
+				expect(managedAfter.sessions["managed-review"]?.pid).toBeNull();
+				expect(managedAfter.sessions["managed-on-hold"]?.state).toBe("awaiting_review");
+				expect(managedAfter.sessions["managed-on-hold"]?.reviewReason).toBe("hook");
+				expect(managedAfter.sessions["managed-on-hold"]?.pid).toBeNull();
+				expect(managedAfter.sessions["managed-done"]?.state).toBe("idle");
 				expect(managedAfter.sessions["managed-missing-session"]).toBeUndefined();
 
 				const indexedAfter = await loadWorkspaceState(indexedProjectPath);
