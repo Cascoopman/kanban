@@ -235,7 +235,7 @@ describe("KanbanBoard", () => {
 		expect(boardElement?.dataset.programmaticCardMove).toBe("true");
 	});
 
-	it("hides and restores columns while persisting the layout preference", async () => {
+	it("hides and restores any combination of columns while persisting the layout preference", async () => {
 		const board: BoardData = {
 			columns: [
 				{ id: "backlog", title: "Backlog", cards: [] },
@@ -272,10 +272,26 @@ describe("KanbanBoard", () => {
 		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("trash");
 
 		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="Hide Review column"]')?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
+		expect(container.querySelector('[data-column-id="trash"]')).toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review,trash");
+
+		await act(async () => {
 			container.querySelector<HTMLButtonElement>('button[aria-label="Show Done column"]')?.click();
 		});
 
 		expect(container.querySelector('[data-column-id="trash"]')).not.toBeNull();
+		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review");
+
+		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="Show Review column"]')?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="review"]')).not.toBeNull();
 		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("");
 	});
 

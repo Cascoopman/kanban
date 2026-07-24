@@ -1,5 +1,5 @@
-import type { DependencyList, Dispatch, SetStateAction } from "react";
-import { useCallback } from "react";
+import type { DependencyList, Dispatch, MutableRefObject, SetStateAction } from "react";
+import { useCallback, useRef } from "react";
 import {
 	useCopyToClipboard as useReactUseCopyToClipboard,
 	useDebounce as useReactUseDebounce,
@@ -64,6 +64,12 @@ function resolveNextValue<T>(nextValue: SetStateAction<T>, currentValue: T): T {
 	return nextValue;
 }
 
+function useLatestValueRef<T>(value: T): MutableRefObject<T> {
+	const valueRef = useRef(value);
+	valueRef.current = value;
+	return valueRef;
+}
+
 export function useBooleanLocalStorageValue(key: string, initialValue: boolean): [boolean, StateSetter<boolean>] {
 	const [storedValue, setStoredValue] = useReactUseLocalStorage<boolean>(key, initialValue, {
 		raw: false,
@@ -71,14 +77,14 @@ export function useBooleanLocalStorageValue(key: string, initialValue: boolean):
 		deserializer: (value) => value === "true",
 	});
 	const value = storedValue ?? initialValue;
+	const valueRef = useLatestValueRef(value);
 	const setValue: StateSetter<boolean> = useCallback(
 		(nextValue) => {
-			setStoredValue((currentValue) => {
-				const resolvedCurrent = currentValue ?? initialValue;
-				return resolveNextValue(nextValue, resolvedCurrent);
-			});
+			const resolvedValue = resolveNextValue(nextValue, valueRef.current);
+			valueRef.current = resolvedValue;
+			setStoredValue(resolvedValue);
 		},
-		[initialValue, setStoredValue],
+		[setStoredValue, valueRef],
 	);
 	return [value, setValue];
 }
@@ -92,14 +98,14 @@ export function useRawLocalStorageValue<T extends string>(
 		raw: true,
 	});
 	const value = storedValue ? (normalize(storedValue) ?? initialValue) : initialValue;
+	const valueRef = useLatestValueRef(value);
 	const setValue: StateSetter<T> = useCallback(
 		(nextValue) => {
-			setStoredValue((currentValue) => {
-				const resolvedCurrent = currentValue ? (normalize(currentValue) ?? initialValue) : initialValue;
-				return resolveNextValue(nextValue, resolvedCurrent);
-			});
+			const resolvedValue = resolveNextValue(nextValue, valueRef.current);
+			valueRef.current = resolvedValue;
+			setStoredValue(resolvedValue);
 		},
-		[initialValue, normalize, setStoredValue],
+		[setStoredValue, valueRef],
 	);
 	return [value, setValue];
 }
