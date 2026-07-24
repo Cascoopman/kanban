@@ -3,8 +3,9 @@
 import { spawn } from "node:child_process";
 import { open, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildAgentRuntimeEnv } from "./agent-runtime-env.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -360,39 +361,6 @@ function runRuntimeCommand(command, args, spawnOptions = {}) {
 	});
 }
 
-function stripNodeModulesBinFromPath(pathValue) {
-	if (typeof pathValue !== "string" || pathValue.length === 0) {
-		return pathValue;
-	}
-	// `npm run dogfood` prepends this repo's node_modules/.bin, which can shadow
-	// globally installed agent CLIs (codex/claude/etc) that Kanban should exercise.
-	// This is mostly a dogfood/dev-launch issue; normal installed CLI usage does
-	// not inject repo-local node_modules/.bin ahead of user PATH entries.
-	return pathValue
-		.split(delimiter)
-		.filter((entry) => {
-			const normalized = entry
-				.trim()
-				.replaceAll("\\", "/")
-				.replace(/\/+$/u, "")
-				.toLowerCase();
-			return !normalized.endsWith("/node_modules/.bin");
-		})
-		.join(delimiter);
-}
-
-function buildDogfoodRuntimeEnv(baseEnv) {
-	const runtimeEnv = { ...baseEnv };
-	for (const key of Object.keys(runtimeEnv)) {
-		if (key.toUpperCase() !== "PATH") {
-			continue;
-		}
-		runtimeEnv[key] = stripNodeModulesBinFromPath(runtimeEnv[key]);
-		break;
-	}
-	return runtimeEnv;
-}
-
 async function main() {
 	const args = parseArgs(process.argv.slice(2));
 	const cleanupOwnership = await acquireCleanupOwnership();
@@ -452,7 +420,7 @@ async function main() {
 
 		return await runRuntimeCommand(nodeBinary, [cliEntrypoint, ...launchArgs], {
 			cwd: launchCwd,
-			env: buildDogfoodRuntimeEnv(process.env),
+			env: buildAgentRuntimeEnv(process.env, [resolve(repoRoot, "node_modules", ".bin")]),
 		});
 	} finally {
 		await releaseCleanupOwnership(cleanupOwnership.ownerToken);
