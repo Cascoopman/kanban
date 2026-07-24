@@ -17,7 +17,7 @@ import {
 	useTaskWorkspaceStateVersionValue,
 } from "@/stores/workspace-metadata-store";
 import type { SendTerminalInputOptions } from "@/terminal/terminal-input";
-import type { BoardCard, BoardData, CardSelection } from "@/types";
+import { type BoardCard, type BoardData, type CardSelection, isReviewLikeColumnId } from "@/types";
 
 type TaskGitActionSource = "card" | "agent";
 
@@ -237,11 +237,11 @@ export function useGitActions({
 					});
 					return false;
 				}
-				if (selection.column.id !== "review") {
+				if (!isReviewLikeColumnId(selection.column.id)) {
 					showAppToast({
 						intent: "warning",
 						icon: "warning-sign",
-						message: "Commit and PR actions are only available for tasks in Review.",
+						message: "Commit and PR actions are only available for tasks in Review or On Hold.",
 						timeout: 5000,
 					});
 					return false;

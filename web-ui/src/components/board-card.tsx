@@ -17,8 +17,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
-import type { BoardCard as BoardCardModel, BoardColumnId } from "@/types";
-import { getTaskAutoReviewCancelButtonLabel } from "@/types";
+import {
+	type BoardCard as BoardCardModel,
+	type BoardColumnId,
+	getTaskAutoReviewCancelButtonLabel,
+	isReviewLikeColumnId,
+} from "@/types";
 import { formatPathForDisplay } from "@/utils/path-display";
 import { useMeasure } from "@/utils/react-use";
 import {
@@ -410,7 +414,7 @@ export function BoardCard({
 		return null;
 	};
 	const statusMarker = renderStatusMarker();
-	const showWorkspaceStatus = columnId === "in_progress" || columnId === "review" || isTrashCard;
+	const showWorkspaceStatus = columnId === "in_progress" || isReviewLikeColumnId(columnId) || isTrashCard;
 	const reviewWorkspacePath = reviewWorkspaceSnapshot
 		? formatPathForDisplay(reviewWorkspaceSnapshot.path)
 		: isTrashCard
@@ -426,7 +430,7 @@ export function BoardCard({
 					deletions: reviewWorkspaceSnapshot.deletions ?? 0,
 				}
 		: null;
-	const showReviewGitActions = columnId === "review" && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
+	const showReviewGitActions = isReviewLikeColumnId(columnId) && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
 	const isAnyGitActionLoading = isCommitLoading || isOpenPrLoading;
 	const cancelAutomaticActionLabel =
 		!isTrashCard && card.autoReviewEnabled ? getTaskAutoReviewCancelButtonLabel(card.autoReviewMode) : null;
@@ -614,7 +618,7 @@ export function BoardCard({
 											onStart?.(card.id);
 										}}
 									/>
-								) : columnId === "review" ? (
+								) : isReviewLikeColumnId(columnId) ? (
 									<Button
 										icon={isMoveToTrashLoading ? <Spinner size={13} /> : <Trash2 size={13} />}
 										variant="ghost"

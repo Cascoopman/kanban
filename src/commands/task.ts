@@ -27,7 +27,7 @@ import { resolveProjectInputPath } from "../projects/project-path";
 import { loadWorkspaceContext, mutateWorkspaceState } from "../state/workspace-state";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
-const LIST_TASK_COLUMNS = ["backlog", "in_progress", "review", "trash"] as const;
+const LIST_TASK_COLUMNS = ["backlog", "in_progress", "review", "on_hold", "trash"] as const;
 type ListTaskColumn = (typeof LIST_TASK_COLUMNS)[number];
 type TaskCommandTarget = { taskId?: string; column?: ListTaskColumn };
 
@@ -66,7 +66,13 @@ function parseListColumn(value: string | undefined): ListTaskColumn | undefined 
 	if (value === "done") {
 		return "trash";
 	}
-	if (value === "backlog" || value === "in_progress" || value === "review" || value === "trash") {
+	if (
+		value === "backlog" ||
+		value === "in_progress" ||
+		value === "review" ||
+		value === "on_hold" ||
+		value === "trash"
+	) {
 		return value;
 	}
 	throw new Error(`Invalid column "${value}". Expected one of: ${LIST_TASK_COLUMNS.join(", ")}, done.`);
@@ -778,7 +784,7 @@ interface TrashTaskMutationValue {
 }
 
 function columnCanHaveLiveTaskSession(columnId: ListTaskColumn): boolean {
-	return columnId === "in_progress" || columnId === "review";
+	return columnId === "in_progress" || columnId === "review" || columnId === "on_hold";
 }
 
 async function trashTaskById(input: {
@@ -1101,7 +1107,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option(
 			"--column <column>",
-			"Filter column: backlog | in_progress | review | done. trash is also accepted.",
+			"Filter column: backlog | in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.action(async (options: { projectPath?: string; column?: ListTaskColumn }) => {
@@ -1241,7 +1247,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--task-id <id>", "Task ID.")
 		.option(
 			"--column <column>",
-			"Column to move to done: backlog | in_progress | review | done. trash is also accepted.",
+			"Column to move to done: backlog | in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
@@ -1263,7 +1269,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--task-id <id>", "Task ID to permanently delete.")
 		.option(
 			"--column <column>",
-			"Column to bulk-delete: backlog | in_progress | review | done. trash is also accepted.",
+			"Column to bulk-delete: backlog | in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
@@ -1296,7 +1302,7 @@ export function registerTaskCommand(program: Command): void {
 				"  Once only one linked task remains in backlog, Kanban reorients the saved link",
 				"  so the backlog task is the waiting dependent task and the other task is the",
 				"  prerequisite.",
-				"  When the prerequisite finishes review and moves to done, the waiting backlog",
+				"  When the prerequisite moves from review or on hold to done, the waiting backlog",
 				"  task becomes ready to start.",
 				"",
 			].join("\n"),

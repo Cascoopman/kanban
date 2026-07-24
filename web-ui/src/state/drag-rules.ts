@@ -40,6 +40,12 @@ export function isAllowedCrossColumnCardMove(
 		return true;
 	}
 	if (
+		(fromColumnId === "review" && toColumnId === "on_hold") ||
+		(fromColumnId === "on_hold" && toColumnId === "review")
+	) {
+		return true;
+	}
+	if (
 		(fromColumnId === "in_progress" && toColumnId === "review") ||
 		(fromColumnId === "review" && toColumnId === "in_progress")
 	) {
@@ -73,7 +79,7 @@ export function isCardDropDisabled(
 	if (!activeDragSourceColumnId) {
 		return false;
 	}
-	if (columnId === "review") {
+	if (columnId === "review" || columnId === "on_hold") {
 		return !isAllowedCrossColumnCardMove(activeDragSourceColumnId, columnId, {
 			taskId: options?.activeDragTaskId,
 			programmaticCardMoveInFlight: options?.programmaticCardMoveInFlight,

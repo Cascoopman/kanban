@@ -55,8 +55,8 @@ function createBoard(): BoardData {
 	return {
 		columns: [
 			{
-				id: "review",
-				title: "Review",
+				id: "on_hold",
+				title: "On Hold",
 				cards: [
 					{
 						id: "task-1",
@@ -192,7 +192,7 @@ describe("useGitActions", () => {
 		}
 	});
 
-	it("sends commit prompts through the native cline chat API", async () => {
+	it("sends commit prompts for on-hold tasks through the native cline chat API", async () => {
 		const sendTaskSessionInput = vi.fn(async () => ({ ok: true }));
 		const sendTaskChatMessage = vi.fn(async () => ({ ok: true }));
 		let latestSnapshot: HookSnapshot | null = null;

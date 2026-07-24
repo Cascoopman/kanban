@@ -8,6 +8,10 @@ import type {
 
 export type BoardColumnId = RuntimeBoardColumnId;
 
+export function isReviewLikeColumnId(columnId: BoardColumnId | string): boolean {
+	return columnId === "review" || columnId === "on_hold";
+}
+
 export type TaskAutoReviewMode = RuntimeTaskAutoReviewMode;
 export type TaskImage = RuntimeTaskImage;
 

@@ -8,7 +8,13 @@ import { Button } from "@/components/ui/button";
 import { ColumnIndicator } from "@/components/ui/column-indicator";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { findCardColumnId, isCardDropDisabled } from "@/state/drag-rules";
-import type { BoardCard as BoardCardModel, BoardColumn, BoardColumnId, CardSelection } from "@/types";
+import {
+	type BoardCard as BoardCardModel,
+	type BoardColumn,
+	type BoardColumnId,
+	type CardSelection,
+	isReviewLikeColumnId,
+} from "@/types";
 
 function ColumnSection({
 	column,
@@ -353,13 +359,13 @@ export function ColumnContextPanel({
 							inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
 							onEditTask={column.id === "backlog" ? onEditTask : undefined}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
-							onCommitTask={column.id === "review" ? onCommitTask : undefined}
-							onOpenPrTask={column.id === "review" ? onOpenPrTask : undefined}
-							onMoveToTrashTask={column.id === "review" ? onMoveToTrashTask : undefined}
+							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
+							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
+							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
 							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
-							commitTaskLoadingById={column.id === "review" ? commitTaskLoadingById : undefined}
-							openPrTaskLoadingById={column.id === "review" ? openPrTaskLoadingById : undefined}
-							moveToTrashLoadingById={column.id === "review" ? moveToTrashLoadingById : undefined}
+							commitTaskLoadingById={isReviewLikeColumnId(column.id) ? commitTaskLoadingById : undefined}
+							openPrTaskLoadingById={isReviewLikeColumnId(column.id) ? openPrTaskLoadingById : undefined}
+							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							workspacePath={workspacePath}
 							defaultClineModelId={defaultClineModelId}

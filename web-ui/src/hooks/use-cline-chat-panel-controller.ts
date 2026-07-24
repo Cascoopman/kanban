@@ -7,6 +7,7 @@ import type { ClineChatActionResult } from "@/hooks/use-cline-chat-runtime-actio
 import { type ClineChatMessage, useClineChatSession } from "@/hooks/use-cline-chat-session";
 import type { RuntimeTaskImage, RuntimeTaskSessionMode, RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
+import { isReviewLikeColumnId } from "@/types";
 
 interface UseClineChatPanelControllerInput {
 	taskId: string;
@@ -76,7 +77,7 @@ export function useClineChatPanelController({
 	const canSend = Boolean(onSendMessage) && !isSending && !isCanceling;
 	const canCancel = Boolean(onCancelTurn) && summary?.state === "running" && !isCanceling;
 	const showReviewActions =
-		taskColumnId === "review" &&
+		isReviewLikeColumnId(taskColumnId) &&
 		(reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0 &&
 		Boolean(onCommit) &&
 		Boolean(onOpenPr);

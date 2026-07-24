@@ -252,6 +252,63 @@ describe("board dependency state", () => {
 		expect(getTaskColumnId(attemptedReviewMove.board, taskA)).toBe("in_progress");
 	});
 
+	it("allows manual drags between review and on hold", () => {
+		const fixture = createBacklogBoard(["Task A"]);
+		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const movedToReview = moveTaskToColumn(fixture.board, taskA, "review");
+		expect(movedToReview.moved).toBe(true);
+
+		const movedToOnHold = applyDragResult(movedToReview.board, {
+			draggableId: taskA,
+			type: "CARD",
+			source: { droppableId: "review", index: 0 },
+			destination: { droppableId: "on_hold", index: 0 },
+			mode: "SNAP",
+			reason: "DROP",
+			combine: null,
+		});
+		expect(movedToOnHold.moveEvent).toEqual({
+			taskId: taskA,
+			fromColumnId: "review",
+			toColumnId: "on_hold",
+		});
+		expect(getTaskColumnId(movedToOnHold.board, taskA)).toBe("on_hold");
+
+		const movedBackToReview = applyDragResult(movedToOnHold.board, {
+			draggableId: taskA,
+			type: "CARD",
+			source: { droppableId: "on_hold", index: 0 },
+			destination: { droppableId: "review", index: 0 },
+			mode: "SNAP",
+			reason: "DROP",
+			combine: null,
+		});
+		expect(movedBackToReview.moveEvent).toEqual({
+			taskId: taskA,
+			fromColumnId: "on_hold",
+			toColumnId: "review",
+		});
+		expect(getTaskColumnId(movedBackToReview.board, taskA)).toBe("review");
+	});
+
+	it("keeps manual in-progress to on-hold drags disabled", () => {
+		const fixture = createBacklogBoard(["Task A"]);
+		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const movedToInProgress = moveTaskToColumn(fixture.board, taskA, "in_progress");
+
+		const attemptedOnHoldMove = applyDragResult(movedToInProgress.board, {
+			draggableId: taskA,
+			type: "CARD",
+			source: { droppableId: "in_progress", index: 0 },
+			destination: { droppableId: "on_hold", index: 0 },
+			mode: "SNAP",
+			reason: "DROP",
+			combine: null,
+		});
+		expect(attemptedOnHoldMove.moveEvent).toBeUndefined();
+		expect(getTaskColumnId(attemptedOnHoldMove.board, taskA)).toBe("in_progress");
+	});
+
 	it("preserves manual backlog to in-progress drop positions", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
 		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
@@ -561,6 +618,14 @@ describe("board dependency state", () => {
 
 		const normalized = normalizeBoardData(rawBoard);
 		expect(normalized).not.toBeNull();
+		expect(normalized?.columns.map((column) => column.id)).toEqual([
+			"backlog",
+			"in_progress",
+			"review",
+			"on_hold",
+			"trash",
+		]);
+		expect(normalized?.columns.find((column) => column.id === "on_hold")?.cards).toEqual([]);
 		expect(normalized?.dependencies.map((dependency) => `${dependency.fromTaskId}->${dependency.toTaskId}`)).toEqual([
 			"b->a",
 			"c->a",

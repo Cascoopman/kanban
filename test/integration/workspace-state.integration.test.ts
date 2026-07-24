@@ -106,6 +106,13 @@ describe.sequential("workspace-state integration", () => {
 
 				const initial = await loadWorkspaceState(workspacePath);
 				expect(initial.revision).toBe(0);
+				expect(initial.board.columns.map((column) => column.id)).toEqual([
+					"backlog",
+					"in_progress",
+					"review",
+					"on_hold",
+					"trash",
+				]);
 
 				const firstSave = await saveWorkspaceState(workspacePath, {
 					board: createBoard("Task One"),

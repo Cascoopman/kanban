@@ -97,6 +97,7 @@ export function ProjectNavigationPanel({
 		? pendingProjectRemoval.taskCounts.backlog +
 			pendingProjectRemoval.taskCounts.in_progress +
 			pendingProjectRemoval.taskCounts.review +
+			pendingProjectRemoval.taskCounts.on_hold +
 			pendingProjectRemoval.taskCounts.trash
 		: 0;
 
@@ -726,6 +727,13 @@ function ProjectRow({
 			shortLabel: "R",
 			toneClassName: "bg-accent-2/20 text-accent-2",
 			count: project.taskCounts.review,
+		},
+		{
+			id: "on_hold",
+			title: "On Hold",
+			shortLabel: "OH",
+			toneClassName: "bg-status-gold/20 text-status-gold",
+			count: project.taskCounts.on_hold,
 		},
 		{
 			id: "trash",
