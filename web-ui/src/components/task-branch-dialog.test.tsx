@@ -53,14 +53,26 @@ describe("TaskBranchDialog", () => {
 		const textarea = document.body.querySelector("textarea");
 		expect(document.body.textContent).toContain("Create task");
 		expect(document.body.textContent).toContain("Create & start");
+		const buttons = Array.from(document.body.querySelectorAll("button"));
+		const createButton = buttons.find((button) => button.textContent?.includes("Create task"));
+		const createAndStartButton = buttons.find((button) => button.textContent?.includes("Create & start"));
+		expect(createButton?.querySelector(".lucide-command")).not.toBeNull();
+		expect(createButton?.querySelector(".lucide-corner-down-left")).not.toBeNull();
+		expect(createAndStartButton?.querySelector(".lucide-command")).not.toBeNull();
+		expect(createAndStartButton?.querySelector(".lucide-arrow-big-up")).not.toBeNull();
+		expect(createAndStartButton?.querySelector(".lucide-corner-down-left")).not.toBeNull();
 		await act(async () => {
 			textarea?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
 			textarea?.dispatchEvent(
 				new KeyboardEvent("keydown", { key: "Enter", metaKey: true, shiftKey: true, bubbles: true }),
 			);
+			textarea?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
+			textarea?.dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, shiftKey: true, bubbles: true }),
+			);
 		});
 
-		expect(onCreate).toHaveBeenCalledTimes(1);
-		expect(onCreateAndStart).toHaveBeenCalledTimes(1);
+		expect(onCreate).toHaveBeenCalledTimes(2);
+		expect(onCreateAndStart).toHaveBeenCalledTimes(2);
 	});
 });

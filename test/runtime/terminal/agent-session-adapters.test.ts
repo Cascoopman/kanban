@@ -642,12 +642,19 @@ describe("prepareAgentLaunch hook strategies", () => {
 			taskId: "task-codex-fork",
 			agentId: "codex",
 			binary: "codex",
-			args: [],
+			args: ["--cd", "/tmp/wrong-worktree"],
 			cwd: "/tmp/fork",
 			prompt: "Explore the alternative",
 			codexForkSessionId: "source-session-id",
 		});
-		expect(forkLaunch.args.slice(-3)).toEqual(["fork", "source-session-id", "Explore the alternative"]);
+		expect(forkLaunch.args.slice(-5)).toEqual([
+			"-C",
+			"/tmp/fork",
+			"fork",
+			"source-session-id",
+			"Explore the alternative",
+		]);
+		expect(forkLaunch.args).not.toContain("/tmp/wrong-worktree");
 
 		const resumeLaunch = await prepareAgentLaunch({
 			taskId: "task-codex-resume",
