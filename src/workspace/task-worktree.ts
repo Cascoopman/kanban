@@ -562,6 +562,58 @@ export async function ensureTaskWorktreeIfDoesntExist(options: {
 	}
 }
 
+export async function branchTaskWorktree(options: {
+	cwd: string;
+	sourceTaskId: string;
+	targetTaskId: string;
+	baseRef: string;
+}): Promise<RuntimeWorktreeEnsureResponse> {
+	const sourceTaskId = normalizeTaskIdForWorktreePath(options.sourceTaskId);
+	const targetTaskId = normalizeTaskIdForWorktreePath(options.targetTaskId);
+	try {
+		const context = await loadWorkspaceContext(options.cwd);
+		const sourceWorktreePath = getTaskWorktreePath(context.repoPath, sourceTaskId);
+		const sourceHeadCommit = await tryRunGit(sourceWorktreePath, ["rev-parse", "--verify", "HEAD"]);
+		if (!sourceHeadCommit) {
+			const ensured = await ensureTaskWorktreeIfDoesntExist({
+				cwd: options.cwd,
+				taskId: targetTaskId,
+				baseRef: options.baseRef,
+			});
+			return ensured.ok
+				? {
+						...ensured,
+						warning: "The source task has no worktree yet, so the branch started from its base ref.",
+					}
+				: ensured;
+		}
+
+		await captureTaskPatch({
+			repoPath: context.repoPath,
+			taskId: targetTaskId,
+			worktreePath: sourceWorktreePath,
+		});
+		const ensured = await ensureTaskWorktreeIfDoesntExist({
+			cwd: options.cwd,
+			taskId: targetTaskId,
+			baseRef: sourceHeadCommit,
+		});
+		if (!ensured.ok) {
+			await deleteTaskPatchFiles(targetTaskId);
+		}
+		return ensured;
+	} catch (error) {
+		await deleteTaskPatchFiles(targetTaskId).catch(() => {});
+		return {
+			ok: false,
+			path: null,
+			baseRef: options.baseRef.trim(),
+			baseCommit: null,
+			error: error instanceof Error ? error.message : String(error),
+		};
+	}
+}
+
 export async function deleteTaskWorktree(options: {
 	repoPath: string;
 	taskId: string;

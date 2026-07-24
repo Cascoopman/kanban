@@ -86,6 +86,8 @@ export interface StartTaskSessionRequest {
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
+	codexResumeSessionId?: string;
+	codexForkSessionId?: string;
 	cols?: number;
 	rows?: number;
 	env?: Record<string, string | undefined>;
@@ -332,6 +334,8 @@ export class TerminalSessionManager implements TerminalSessionService {
 			images: request.images,
 			startInPlanMode: request.startInPlanMode,
 			resumeFromTrash: request.resumeFromTrash,
+			codexResumeSessionId: request.codexResumeSessionId,
+			codexForkSessionId: request.codexForkSessionId,
 			env: request.env,
 			workspaceId: request.workspaceId,
 		});

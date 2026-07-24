@@ -636,6 +636,33 @@ describe("prepareAgentLaunch hook strategies", () => {
 		}
 	});
 
+	it("forks and resumes explicit Codex sessions", async () => {
+		setupTempHome();
+		const forkLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-fork",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp/fork",
+			prompt: "Explore the alternative",
+			codexForkSessionId: "source-session-id",
+		});
+		expect(forkLaunch.args.slice(-3)).toEqual(["fork", "source-session-id", "Explore the alternative"]);
+
+		const resumeLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-resume",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp/resume",
+			prompt: "Continue",
+			resumeFromTrash: true,
+			codexResumeSessionId: "target-session-id",
+		});
+		expect(resumeLaunch.args.slice(-3)).toEqual(["resume", "target-session-id", "Continue"]);
+		expect(resumeLaunch.args).not.toContain("--last");
+	});
+
 	it("applies autonomous mode flags in adapters for non-droid CLIs", async () => {
 		setupTempHome();
 

@@ -11,7 +11,12 @@ const agentRegistryMocks = vi.hoisted(() => ({
 }));
 
 const taskWorktreeMocks = vi.hoisted(() => ({
+	getTaskWorkspacePathInfo: vi.fn(),
 	resolveTaskCwd: vi.fn(),
+}));
+
+const codexSessionResolverMocks = vi.hoisted(() => ({
+	resolveCodexSessionIdForCwd: vi.fn(),
 }));
 
 const turnCheckpointMocks = vi.hoisted(() => ({
@@ -64,7 +69,12 @@ vi.mock("../../../src/terminal/agent-registry.js", () => ({
 }));
 
 vi.mock("../../../src/workspace/task-worktree.js", () => ({
+	getTaskWorkspacePathInfo: taskWorktreeMocks.getTaskWorkspacePathInfo,
 	resolveTaskCwd: taskWorktreeMocks.resolveTaskCwd,
+}));
+
+vi.mock("../../../src/terminal/codex-session-resolver.js", () => ({
+	resolveCodexSessionIdForCwd: codexSessionResolverMocks.resolveCodexSessionIdForCwd,
 }));
 
 vi.mock("../../../src/workspace/turn-checkpoints.js", () => ({
@@ -263,6 +273,9 @@ describe("createRuntimeApi startTaskSession", () => {
 		agentRegistryMocks.resolveAgentCommand.mockReset();
 		agentRegistryMocks.buildRuntimeConfigResponse.mockReset();
 		taskWorktreeMocks.resolveTaskCwd.mockReset();
+		taskWorktreeMocks.getTaskWorkspacePathInfo.mockReset();
+		codexSessionResolverMocks.resolveCodexSessionIdForCwd.mockReset();
+		codexSessionResolverMocks.resolveCodexSessionIdForCwd.mockResolvedValue(null);
 		turnCheckpointMocks.captureTaskTurnCheckpoint.mockReset();
 		oauthMocks.addLocalProvider.mockReset();
 		oauthMocks.ensureCustomProvidersLoaded.mockReset();
@@ -503,6 +516,61 @@ describe("createRuntimeApi startTaskSession", () => {
 			baseRef: "main",
 			ensure: true,
 		});
+	});
+
+	it("forks the source Codex session when starting a branched task", async () => {
+		taskWorktreeMocks.resolveTaskCwd.mockResolvedValue("/tmp/target-worktree");
+		taskWorktreeMocks.getTaskWorkspacePathInfo.mockResolvedValue({
+			taskId: "source-task",
+			path: "/tmp/source-worktree",
+			exists: true,
+			baseRef: "main",
+		});
+		codexSessionResolverMocks.resolveCodexSessionIdForCwd
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("source-session-id");
+		agentRegistryMocks.resolveAgentCommand.mockReturnValue({
+			agentId: "codex",
+			label: "OpenAI Codex",
+			command: "codex",
+			binary: "codex",
+			args: [],
+		});
+		const terminalManager = {
+			getSummary: vi.fn(() => null),
+			startTaskSession: vi.fn(async () => createSummary({ agentId: "codex" })),
+			applyTurnCheckpoint: vi.fn(),
+		};
+		const api = createTestRuntimeApi({
+			getActiveWorkspaceId: vi.fn(() => "workspace-1"),
+			loadScopedRuntimeConfig: vi.fn(async () => createRuntimeConfigState()),
+			setActiveRuntimeConfig: vi.fn(),
+			getScopedTerminalManager: vi.fn(async () => terminalManager as never),
+			getScopedClineTaskSessionService: vi.fn(async () => createClineTaskSessionServiceMock() as never),
+			resolveInteractiveShellCommand: vi.fn(),
+			runCommand: vi.fn(),
+		});
+
+		const response = await api.startTaskSession(
+			{ workspaceId: "workspace-1", workspacePath: "/tmp/repo" },
+			{
+				taskId: "target-task",
+				baseRef: "main",
+				prompt: "Explore a different implementation",
+				branchedFromTaskId: "source-task",
+				agentId: "codex",
+			},
+		);
+
+		expect(response.ok).toBe(true);
+		expect(codexSessionResolverMocks.resolveCodexSessionIdForCwd).toHaveBeenNthCalledWith(1, "/tmp/target-worktree");
+		expect(codexSessionResolverMocks.resolveCodexSessionIdForCwd).toHaveBeenNthCalledWith(2, "/tmp/source-worktree");
+		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
+			expect.objectContaining({
+				codexForkSessionId: "source-session-id",
+				codexResumeSessionId: undefined,
+			}),
+		);
 	});
 
 	it("routes cline start sessions to cline task session service", async () => {

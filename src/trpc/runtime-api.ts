@@ -45,8 +45,9 @@ import { isHomeAgentSessionId } from "../core/home-agent-session";
 import { resolveTaskTitle } from "../core/task-title.js";
 import { openInBrowser } from "../server/browser";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
+import { resolveCodexSessionIdForCwd } from "../terminal/codex-session-resolver";
 import type { TerminalSessionManager } from "../terminal/session-manager";
-import { resolveTaskCwd } from "../workspace/task-worktree";
+import { getTaskWorkspacePathInfo, resolveTaskCwd } from "../workspace/task-worktree";
 import { captureTaskTurnCheckpoint } from "../workspace/turn-checkpoints";
 import type { RuntimeTrpcContext, RuntimeTrpcWorkspaceScope } from "./app-router";
 
@@ -278,6 +279,21 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 						error: "No runnable agent command is configured. Open Settings, install a supported CLI, and select it.",
 					};
 				}
+				let codexResumeSessionId: string | undefined;
+				let codexForkSessionId: string | undefined;
+				if (resolved.agentId === "codex" && (body.resumeFromTrash || body.branchedFromTaskId)) {
+					const existingSessionId = await resolveCodexSessionIdForCwd(taskCwd);
+					if (existingSessionId) {
+						codexResumeSessionId = existingSessionId;
+					} else if (body.branchedFromTaskId) {
+						const sourceWorkspace = await getTaskWorkspacePathInfo({
+							cwd: workspaceScope.workspacePath,
+							taskId: body.branchedFromTaskId,
+							baseRef: body.baseRef,
+						});
+						codexForkSessionId = (await resolveCodexSessionIdForCwd(sourceWorkspace.path)) ?? undefined;
+					}
+				}
 				const summary = await terminalManager.startTaskSession({
 					taskId: body.taskId,
 					agentId: resolved.agentId,
@@ -289,6 +305,8 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					images: body.images,
 					startInPlanMode: body.startInPlanMode,
 					resumeFromTrash: body.resumeFromTrash,
+					codexResumeSessionId,
+					codexForkSessionId,
 					cols: body.cols,
 					rows: body.rows,
 					workspaceId: workspaceScope.workspaceId,

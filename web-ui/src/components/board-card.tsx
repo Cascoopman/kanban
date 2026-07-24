@@ -2,7 +2,7 @@ import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { formatClineToolCallLabel } from "@runtime-cline-tool-call-display";
 import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
-import { AlertCircle, AlertTriangle, Bot, GitBranch, Pencil, Play, RotateCcw, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bot, Copy, GitBranch, Pencil, Play, RotateCcw, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -222,6 +222,7 @@ export function BoardCard({
 	selected = false,
 	onClick,
 	onStart,
+	onBranch,
 	onMoveToTrash,
 	onRestoreFromTrash,
 	onSaveTitle,
@@ -246,6 +247,7 @@ export function BoardCard({
 	selected?: boolean;
 	onClick?: () => void;
 	onStart?: (taskId: string) => void;
+	onBranch?: (task: BoardCardModel) => void;
 	onMoveToTrash?: (taskId: string) => void;
 	onRestoreFromTrash?: (taskId: string) => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
@@ -606,6 +608,21 @@ export function BoardCard({
 										</p>
 									)}
 								</div>
+								{onBranch && !isTrashCard ? (
+									<Tooltip content="Branch task">
+										<Button
+											icon={<Copy size={13} />}
+											variant="ghost"
+											size="sm"
+											aria-label="Branch task"
+											onMouseDown={stopEvent}
+											onClick={(event) => {
+												stopEvent(event);
+												onBranch(card);
+											}}
+										/>
+									</Tooltip>
+								) : null}
 								{columnId === "backlog" ? (
 									<Button
 										icon={<Play size={14} />}
