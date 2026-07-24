@@ -1042,7 +1042,7 @@ export function RuntimeSettingsDialog({
 							Reset layout
 						</Button>
 						<p className="text-text-secondary text-[13px] mt-2 mb-0">
-							Reset sidebar, split pane, and terminal resize customizations back to their defaults.
+							Reset board columns, sidebar, split pane, and terminal customizations back to their defaults.
 						</p>
 					</div>
 					<div data-settings-section="project" />

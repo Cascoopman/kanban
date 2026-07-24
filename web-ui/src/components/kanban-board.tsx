@@ -14,6 +14,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { BoardColumn } from "@/components/board-column";
 import { DependencyOverlay } from "@/components/dependencies/dependency-overlay";
 import { useDependencyLinking } from "@/components/dependencies/use-dependency-linking";
+import { HiddenBoardColumn } from "@/components/hidden-board-column";
+import { useBoardColumnVisibility } from "@/hooks/use-board-column-visibility";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { canCreateTaskDependency } from "@/state/board-state";
 import { findCardColumnId, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
@@ -100,6 +102,7 @@ export function KanbanBoard({
 	const [activeDragSourceColumnId, setActiveDragSourceColumnId] = useState<BoardColumnId | null>(null);
 	const [programmaticCardMoveInFlight, setProgrammaticCardMoveInFlight] =
 		useState<ProgrammaticCardMoveInFlight | null>(null);
+	const { isColumnHidden, hideColumn, showColumn } = useBoardColumnVisibility();
 	const dependencyLinking = useDependencyLinking({
 		canLinkTasks: (fromTaskId, toTaskId) => canCreateTaskDependency(data, fromTaskId, toTaskId),
 		onCreateDependency,
@@ -204,6 +207,9 @@ export function KanbanBoard({
 	const requestProgrammaticCardMove = useCallback<RequestProgrammaticCardMove>(
 		(move) => {
 			const { taskId, toColumnId: targetColumnId } = move;
+			if (isColumnHidden(move.fromColumnId) || isColumnHidden(targetColumnId)) {
+				return false;
+			}
 			const board = latestDataRef.current;
 			const sourceColumnId = findCardColumnId(board.columns, taskId);
 			if (!sourceColumnId || sourceColumnId !== move.fromColumnId || sourceColumnId === targetColumnId) {
@@ -215,8 +221,9 @@ export function KanbanBoard({
 				return false;
 			}
 
-			const sourceOrderIndex = BOARD_COLUMN_ORDER.indexOf(sourceColumnId);
-			const targetOrderIndex = BOARD_COLUMN_ORDER.indexOf(targetColumnId);
+			const visibleColumnOrder = BOARD_COLUMN_ORDER.filter((columnId) => !isColumnHidden(columnId));
+			const sourceOrderIndex = visibleColumnOrder.indexOf(sourceColumnId);
+			const targetOrderIndex = visibleColumnOrder.indexOf(targetColumnId);
 			if (sourceOrderIndex < 0 || targetOrderIndex < 0) {
 				return false;
 			}
@@ -334,6 +341,7 @@ export function KanbanBoard({
 			clearProgrammaticCardMoveInFlight,
 			getElementClientCenter,
 			getProgrammaticTopTargetClientSelection,
+			isColumnHidden,
 		],
 	);
 
@@ -388,45 +396,50 @@ export function KanbanBoard({
 				className="kb-board kb-dependency-surface"
 				data-programmatic-card-move={programmaticCardMoveInFlight ? "true" : undefined}
 			>
-				{data.columns.map((column) => (
-					<BoardColumn
-						key={column.id}
-						column={column}
-						taskSessions={taskSessions}
-						onCreateTask={column.id === "backlog" ? onCreateTask : undefined}
-						onStartTask={column.id === "backlog" ? onStartTask : undefined}
-						onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
-						onStartAllTasks={column.id === "backlog" ? onStartAllTasks : undefined}
-						onClearTrash={column.id === "trash" ? onClearTrash : undefined}
-						editingTaskId={column.id === "backlog" ? editingTaskId : null}
-						inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
-						onEditTask={column.id === "backlog" ? onEditTask : undefined}
-						onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
-						onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
-						onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
-						onCancelAutomaticTaskAction={onCancelAutomaticTaskAction}
-						onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
-						onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
-						commitTaskLoadingById={isReviewLikeColumnId(column.id) ? commitTaskLoadingById : undefined}
-						openPrTaskLoadingById={isReviewLikeColumnId(column.id) ? openPrTaskLoadingById : undefined}
-						moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
-						activeDragTaskId={activeDragTaskId}
-						activeDragSourceColumnId={activeDragSourceColumnId}
-						programmaticCardMoveInFlight={programmaticCardMoveInFlight}
-						onDependencyPointerDown={dependencyLinking.onDependencyPointerDown}
-						onDependencyPointerEnter={dependencyLinking.onDependencyPointerEnter}
-						dependencySourceTaskId={dependencyLinking.draft?.sourceTaskId ?? null}
-						dependencyTargetTaskId={dependencyLinking.draft?.targetTaskId ?? null}
-						isDependencyLinking={dependencyLinking.draft !== null}
-						workspacePath={workspacePath}
-						defaultClineModelId={defaultClineModelId}
-						onCardClick={(card) => {
-							if (!dragOccurredRef.current) {
-								onCardSelect(card.id);
-							}
-						}}
-					/>
-				))}
+				{data.columns.map((column) =>
+					isColumnHidden(column.id) ? (
+						<HiddenBoardColumn key={column.id} column={column} onShow={() => showColumn(column.id)} />
+					) : (
+						<BoardColumn
+							key={column.id}
+							column={column}
+							taskSessions={taskSessions}
+							onCreateTask={column.id === "backlog" ? onCreateTask : undefined}
+							onStartTask={column.id === "backlog" ? onStartTask : undefined}
+							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
+							onStartAllTasks={column.id === "backlog" ? onStartAllTasks : undefined}
+							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
+							onHide={() => hideColumn(column.id)}
+							editingTaskId={column.id === "backlog" ? editingTaskId : null}
+							inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
+							onEditTask={column.id === "backlog" ? onEditTask : undefined}
+							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
+							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
+							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
+							onCancelAutomaticTaskAction={onCancelAutomaticTaskAction}
+							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
+							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
+							commitTaskLoadingById={isReviewLikeColumnId(column.id) ? commitTaskLoadingById : undefined}
+							openPrTaskLoadingById={isReviewLikeColumnId(column.id) ? openPrTaskLoadingById : undefined}
+							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
+							activeDragTaskId={activeDragTaskId}
+							activeDragSourceColumnId={activeDragSourceColumnId}
+							programmaticCardMoveInFlight={programmaticCardMoveInFlight}
+							onDependencyPointerDown={dependencyLinking.onDependencyPointerDown}
+							onDependencyPointerEnter={dependencyLinking.onDependencyPointerEnter}
+							dependencySourceTaskId={dependencyLinking.draft?.sourceTaskId ?? null}
+							dependencyTargetTaskId={dependencyLinking.draft?.targetTaskId ?? null}
+							isDependencyLinking={dependencyLinking.draft !== null}
+							workspacePath={workspacePath}
+							defaultClineModelId={defaultClineModelId}
+							onCardClick={(card) => {
+								if (!dragOccurredRef.current) {
+									onCardSelect(card.id);
+								}
+							}}
+						/>
+					),
+				)}
 				<DependencyOverlay
 					containerRef={boardRef}
 					dependencies={dependencies}
