@@ -1,4 +1,3 @@
-import { deriveTaskTitleFromPrompt } from "@runtime-task-title";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -8,6 +7,7 @@ import {
 	TASK_AUTO_REVIEW_MODE_STORAGE_KEY,
 	TASK_START_IN_PLAN_MODE_STORAGE_KEY,
 } from "@/hooks/app-utils";
+import { useTaskTitleDraft } from "@/hooks/use-task-title-draft";
 import type { RuntimeAgentId, RuntimeTaskClineSettings } from "@/runtime/types";
 import { addTaskToColumnWithResult, findCardSelection, updateTask, updateTaskTitle } from "@/state/board-state";
 import { toTelemetrySelectedAgentId, trackTaskCreated } from "@/telemetry/events";
@@ -36,6 +36,8 @@ interface CreateTaskOptions {
 
 export interface UseTaskEditorResult {
 	isInlineTaskCreateOpen: boolean;
+	newTaskTitle: string;
+	onNewTaskTitleChange: (value: string) => void;
 	newTaskPrompt: string;
 	setNewTaskPrompt: Dispatch<SetStateAction<string>>;
 	newTaskImages: TaskImage[];
@@ -95,6 +97,12 @@ export function useTaskEditor({
 }: UseTaskEditorInput): UseTaskEditorResult {
 	const [isInlineTaskCreateOpen, setIsInlineTaskCreateOpen] = useState(false);
 	const [newTaskPrompt, setNewTaskPrompt] = useState("");
+	const {
+		title: newTaskTitle,
+		explicitTitle: newTaskExplicitTitle,
+		onTitleChange: onNewTaskTitleChange,
+		resetTitle: resetNewTaskTitle,
+	} = useTaskTitleDraft(newTaskPrompt);
 	const [newTaskImages, setNewTaskImages] = useState<TaskImage[]>([]);
 	const [newTaskStartInPlanMode, setNewTaskStartInPlanMode] = useBooleanLocalStorageValue(
 		TASK_START_IN_PLAN_MODE_STORAGE_KEY,
@@ -207,20 +215,22 @@ export function useTaskEditor({
 		setEditTaskPrompt("");
 		setEditTaskImages([]);
 
+		resetNewTaskTitle();
 		setNewTaskAgentId(undefined);
 		setNewTaskClineSettings(undefined);
 		setIsInlineTaskCreateOpen(true);
-	}, []);
+	}, [resetNewTaskTitle]);
 
 	const handleCancelCreateTask = useCallback(() => {
 		setIsInlineTaskCreateOpen(false);
 
+		resetNewTaskTitle();
 		setNewTaskPrompt("");
 		setNewTaskImages([]);
 		setNewTaskBranchRef(resolvedDefaultTaskBranchRef);
 		setNewTaskAgentId(undefined);
 		setNewTaskClineSettings(undefined);
-	}, [resolvedDefaultTaskBranchRef]);
+	}, [resetNewTaskTitle, resolvedDefaultTaskBranchRef]);
 
 	const handleOpenEditTask = useCallback(
 		(task: BoardCard, options?: OpenEditTaskOptions) => {
@@ -342,9 +352,8 @@ export function useTaskEditor({
 				return null;
 			}
 			const baseRef = newTaskBranchRef || resolvedDefaultTaskBranchRef;
-			const title = deriveTaskTitleFromPrompt(prompt);
 			const created = addTaskToColumnWithResult(board, "backlog", {
-				title,
+				title: newTaskExplicitTitle,
 				prompt,
 				startInPlanMode: newTaskStartInPlanMode,
 				autoReviewEnabled: newTaskAutoReviewEnabled,
@@ -368,6 +377,7 @@ export function useTaskEditor({
 				}));
 			}
 
+			resetNewTaskTitle();
 			setNewTaskPrompt("");
 			setNewTaskImages([]);
 			setNewTaskBranchRef(baseRef);
@@ -389,6 +399,8 @@ export function useTaskEditor({
 			newTaskImages,
 			newTaskPrompt,
 			newTaskStartInPlanMode,
+			newTaskExplicitTitle,
+			resetNewTaskTitle,
 			resolvedDefaultTaskBranchRef,
 			selectedAgentId,
 			setBoard,
@@ -439,6 +451,7 @@ export function useTaskEditor({
 				}));
 			}
 
+			resetNewTaskTitle();
 			setNewTaskPrompt("");
 			setNewTaskImages([]);
 			setNewTaskBranchRef(baseRef);
@@ -459,6 +472,7 @@ export function useTaskEditor({
 			newTaskClineSettings,
 			newTaskImages,
 			newTaskStartInPlanMode,
+			resetNewTaskTitle,
 			resolvedDefaultTaskBranchRef,
 			selectedAgentId,
 			setBoard,
@@ -471,6 +485,7 @@ export function useTaskEditor({
 		setIsInlineTaskCreateOpen(false);
 		setEditingTaskId(null);
 
+		resetNewTaskTitle();
 		setNewTaskPrompt("");
 
 		setEditTaskPrompt("");
@@ -484,10 +499,12 @@ export function useTaskEditor({
 		setNewTaskImages([]);
 		setNewTaskAgentId(undefined);
 		setNewTaskClineSettings(undefined);
-	}, []);
+	}, [resetNewTaskTitle]);
 
 	return {
 		isInlineTaskCreateOpen,
+		newTaskTitle,
+		onNewTaskTitleChange,
 		newTaskPrompt,
 		setNewTaskPrompt,
 		newTaskImages,

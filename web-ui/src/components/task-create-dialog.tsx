@@ -1,6 +1,7 @@
 import * as RadixCheckbox from "@radix-ui/react-checkbox";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as RadixSwitch from "@radix-ui/react-switch";
+import { DEFAULT_TASK_TITLE_MAX_CHARS } from "@runtime-task-title";
 
 import {
 	ArrowBigUp,
@@ -98,6 +99,8 @@ function parseListItems(text: string): string[] {
 export function TaskCreateDialog({
 	open,
 	onOpenChange,
+	title,
+	onTitleChange,
 	prompt,
 	onPromptChange,
 	images,
@@ -129,6 +132,8 @@ export function TaskCreateDialog({
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	title: string;
+	onTitleChange: (value: string) => void;
 	prompt: string;
 	onPromptChange: (value: string) => void;
 	images: TaskImage[];
@@ -166,11 +171,14 @@ export function TaskCreateDialog({
 	const [createMore, setCreateMore] = useState(false);
 	const [composerResetKey, setComposerResetKey] = useState(0);
 	const [taskPrompts, setTaskPrompts] = useState<string[]>([]);
+	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 	const nextFocusIndexRef = useRef<number | null>(null);
 	const startInPlanModeId = useId();
 	const autoReviewEnabledId = useId();
 	const createMoreId = useId();
+	const titleInputId = useId();
+	const promptInputId = useId();
 	const [primaryStartAction, setPrimaryStartAction] = useRawLocalStorageValue<TaskCreateStartAction>(
 		LocalStorageKey.TaskCreatePrimaryStartAction,
 		DEFAULT_PRIMARY_START_ACTION,
@@ -213,6 +221,17 @@ export function TaskCreateDialog({
 			nextFocusIndexRef.current = null;
 		}
 	}, [open]);
+
+	useEffect(() => {
+		if (!open || mode !== "single") {
+			return;
+		}
+		const frame = window.requestAnimationFrame(() => {
+			titleInputRef.current?.focus();
+			titleInputRef.current?.select();
+		});
+		return () => window.cancelAnimationFrame(frame);
+	}, [composerResetKey, mode, open]);
 
 	// Handle pending focus after render
 	useEffect(() => {
@@ -418,7 +437,8 @@ export function TaskCreateDialog({
 		[open, mode, handleRunSingleStartAction, onCreateStartAndOpen],
 	);
 
-	const dialogTitle = mode === "multi" ? `New tasks${validTaskCount > 0 ? ` (${validTaskCount})` : ""}` : "New task";
+	const dialogTitle =
+		mode === "multi" ? `Create tasks${validTaskCount > 0 ? ` (${validTaskCount})` : ""}` : "Create task";
 
 	const taskCountLabel = validTaskCount === 1 ? "task" : "tasks";
 	const primaryStartLabel = effectivePrimaryStartAction === "start" ? "Start task" : "Start and open";
@@ -431,39 +451,65 @@ export function TaskCreateDialog({
 			<DialogHeader title={dialogTitle} icon={<PencilLine size={16} />} />
 			<DialogBody>
 				{mode === "single" ? (
-					<div>
-						<TaskPromptComposer
-							key={composerResetKey}
-							value={prompt}
-							onValueChange={onPromptChange}
-							images={images}
-							onImagesChange={onImagesChange}
-							onSubmit={handleCreateSingle}
-							onSubmitAndStart={() => handleRunSingleStartAction("start")}
-							placeholder="Describe the task..."
-							autoFocus
-							workspaceId={workspaceId}
-							showAttachImageButton={false}
-						/>
-						<div className="flex items-center justify-between mt-1.5">
-							<p className="text-[11px] text-text-tertiary">
-								Use <code className="rounded bg-surface-3 px-1 py-px font-mono text-[11px]">@file</code> to
-								reference files. Drag and drop or{" "}
-								<code className="rounded bg-surface-3 px-1 py-px font-mono text-[11px]">
-									{pasteShortcutLabel}
-								</code>{" "}
-								to add images.
+					<div className="flex flex-col gap-4">
+						<div>
+							<label htmlFor={titleInputId} className="mb-1.5 block text-[11px] font-medium text-text-secondary">
+								Title
+							</label>
+							<input
+								ref={titleInputRef}
+								id={titleInputId}
+								type="text"
+								value={title}
+								onChange={(event) => onTitleChange(event.currentTarget.value)}
+								placeholder="Generated from the prompt"
+								maxLength={DEFAULT_TASK_TITLE_MAX_CHARS}
+								className="h-10 w-full rounded-md border border-border-bright bg-surface-3 px-3 text-[15px] font-medium text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
+							/>
+							<p className="mb-0 mt-1 text-[11px] text-text-tertiary">
+								Leave blank to generate a title from the prompt.
 							</p>
-							{detectedItems.length >= 2 ? (
-								<button
-									type="button"
-									onClick={handleSplitIntoTasks}
-									className="inline-flex items-center gap-1.5 text-[12px] text-status-blue hover:text-[#86BEFF] cursor-pointer shrink-0"
-								>
-									<List size={12} />
-									Split into {detectedItems.length} tasks
-								</button>
-							) : null}
+						</div>
+						<div>
+							<label
+								htmlFor={promptInputId}
+								className="mb-1.5 block text-[11px] font-medium text-text-secondary"
+							>
+								Prompt
+							</label>
+							<TaskPromptComposer
+								key={composerResetKey}
+								id={promptInputId}
+								value={prompt}
+								onValueChange={onPromptChange}
+								images={images}
+								onImagesChange={onImagesChange}
+								onSubmit={handleCreateSingle}
+								onSubmitAndStart={() => handleRunSingleStartAction("start")}
+								placeholder="Describe the task..."
+								workspaceId={workspaceId}
+								showAttachImageButton={false}
+							/>
+							<div className="flex items-center justify-between mt-1.5">
+								<p className="text-[11px] text-text-tertiary">
+									Use <code className="rounded bg-surface-3 px-1 py-px font-mono text-[11px]">@file</code> to
+									reference files. Drag and drop or{" "}
+									<code className="rounded bg-surface-3 px-1 py-px font-mono text-[11px]">
+										{pasteShortcutLabel}
+									</code>{" "}
+									to add images.
+								</p>
+								{detectedItems.length >= 2 ? (
+									<button
+										type="button"
+										onClick={handleSplitIntoTasks}
+										className="inline-flex items-center gap-1.5 text-[12px] text-status-blue hover:text-[#86BEFF] cursor-pointer shrink-0"
+									>
+										<List size={12} />
+										Split into {detectedItems.length} tasks
+									</button>
+								) : null}
+							</div>
 						</div>
 					</div>
 				) : (

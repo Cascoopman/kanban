@@ -1,3 +1,4 @@
+import { DEFAULT_TASK_TITLE_MAX_CHARS } from "@runtime-task-title";
 import { ArrowBigUp, Command, Copy, CornerDownLeft, Play } from "lucide-react";
 import { type FormEvent, type KeyboardEvent, type ReactElement, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -20,6 +21,8 @@ function ButtonShortcut({ includeShift = false }: { includeShift?: boolean }): R
 export function TaskBranchDialog({
 	open,
 	sourceTask,
+	title,
+	onTitleChange,
 	prompt,
 	onPromptChange,
 	isPending,
@@ -29,6 +32,8 @@ export function TaskBranchDialog({
 }: {
 	open: boolean;
 	sourceTask: BoardCard | null;
+	title: string;
+	onTitleChange: (value: string) => void;
 	prompt: string;
 	onPromptChange: (value: string) => void;
 	isPending: boolean;
@@ -36,11 +41,16 @@ export function TaskBranchDialog({
 	onCreate: () => void;
 	onCreateAndStart: () => void;
 }): React.ReactElement {
-	const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	useEffect(() => {
-		if (open) {
-			textareaRef.current?.focus();
+		if (!open) {
+			return;
 		}
+		const frame = window.requestAnimationFrame(() => {
+			titleInputRef.current?.focus();
+			titleInputRef.current?.select();
+		});
+		return () => window.cancelAnimationFrame(frame);
 	}, [open]);
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -91,15 +101,29 @@ export function TaskBranchDialog({
 		<Dialog open={open} onOpenChange={onOpenChange} contentClassName="max-w-md">
 			<form onSubmit={handleSubmit}>
 				<DialogHeader title="Branch task" icon={<Copy size={15} />} />
-				<DialogBody className="space-y-3">
+				<DialogBody className="space-y-4">
 					<p className="text-sm text-text-secondary">
 						Create a new task from <span className="text-text-primary">{sourceTask?.title}</span>, including its
 						current Git state and Codex context when available.
 					</p>
 					<label className="block">
-						<span className="mb-1.5 block text-xs font-medium text-text-secondary">New task</span>
+						<span className="mb-1.5 block text-xs font-medium text-text-secondary">Title</span>
+						<input
+							ref={titleInputRef}
+							type="text"
+							value={title}
+							onChange={(event) => onTitleChange(event.currentTarget.value)}
+							placeholder="Generated from the prompt"
+							maxLength={DEFAULT_TASK_TITLE_MAX_CHARS}
+							className="h-10 w-full rounded-md border border-border-bright bg-surface-2 px-3 text-[15px] font-medium text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
+						/>
+						<span className="mt-1 block text-[11px] text-text-tertiary">
+							Leave blank to generate a title from the prompt.
+						</span>
+					</label>
+					<label className="block">
+						<span className="mb-1.5 block text-xs font-medium text-text-secondary">Prompt</span>
 						<textarea
-							ref={textareaRef}
 							value={prompt}
 							onChange={(event) => onPromptChange(event.currentTarget.value)}
 							onKeyDown={handlePromptKeyDown}

@@ -95,6 +95,7 @@ describe("useTaskBranching", () => {
 		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
 		expect(branch).toEqual(
 			expect.objectContaining({
+				title: "Try the alternative design",
 				prompt: "Try the alternative design",
 				agentId: "codex",
 				branchedFromTaskId: source.task.id,
@@ -103,6 +104,65 @@ describe("useTaskBranching", () => {
 		expect(showAppToastMock).toHaveBeenCalledWith(
 			expect.objectContaining({ intent: "success", message: "Task created." }),
 		);
+	});
+
+	it("uses a custom title for the branched task", async () => {
+		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
+			title: "Source task",
+			prompt: "Original work",
+			startInPlanMode: false,
+			autoReviewEnabled: false,
+			autoReviewMode: "commit",
+			baseRef: "main",
+		});
+		await act(async () => {
+			root.render(<Harness initialBoard={source.board} />);
+		});
+		await act(async () => {
+			latestSnapshot?.handleOpenBranchTask(source.task);
+			latestSnapshot?.onTitleChange("Alternative architecture");
+			latestSnapshot?.setPrompt("Try the alternative design. Keep the current worktree state.");
+		});
+		await act(async () => {
+			await latestSnapshot?.handleCreateBranch();
+		});
+
+		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
+		expect(branch).toEqual(
+			expect.objectContaining({
+				title: "Alternative architecture",
+				prompt: "Try the alternative design. Keep the current worktree state.",
+			}),
+		);
+	});
+
+	it("previews the derived title until the branch title is customized", async () => {
+		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
+			title: "Source task",
+			prompt: "Original work",
+			startInPlanMode: false,
+			autoReviewEnabled: false,
+			autoReviewMode: "commit",
+			baseRef: "main",
+		});
+		await act(async () => {
+			root.render(<Harness initialBoard={source.board} />);
+		});
+		await act(async () => {
+			latestSnapshot?.handleOpenBranchTask(source.task);
+		});
+		expect(latestSnapshot?.title).toBe("New task");
+
+		await act(async () => {
+			latestSnapshot?.setPrompt("Explore another implementation. Preserve the original task.");
+		});
+		expect(latestSnapshot?.title).toBe("Explore another implementation.");
+
+		await act(async () => {
+			latestSnapshot?.onTitleChange("Custom branch title");
+			latestSnapshot?.setPrompt("A changed prompt that should not replace the title.");
+		});
+		expect(latestSnapshot?.title).toBe("Custom branch title");
 	});
 
 	it("starts the branched task after adding it to the backlog", async () => {
