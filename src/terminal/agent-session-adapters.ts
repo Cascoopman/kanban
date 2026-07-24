@@ -36,6 +36,7 @@ export interface AgentAdapterLaunchInput {
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
+	resumeExistingSession?: boolean;
 	codexResumeSessionId?: string;
 	codexForkSessionId?: string;
 	env?: Record<string, string | undefined>;
@@ -48,6 +49,10 @@ export type AgentOutputTransitionDetector = (
 ) => SessionTransitionEvent | null;
 
 export type AgentOutputTransitionInspectionPredicate = (summary: RuntimeTaskSessionSummary) => boolean;
+
+function shouldResumeAgentSession(input: AgentAdapterLaunchInput): boolean {
+	return input.resumeFromTrash === true || input.resumeExistingSession === true;
+}
 
 export interface PreparedAgentLaunch {
 	binary?: string;
@@ -624,7 +629,7 @@ const claudeAdapter: AgentSessionAdapter = {
 		) {
 			args.push("--permission-mode", "auto");
 		}
-		if (input.resumeFromTrash && !hasCliOption(args, "--continue")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
 			args.push("--continue");
 		}
 		if (input.startInPlanMode) {
@@ -755,7 +760,7 @@ const codexAdapter: AgentSessionAdapter = {
 			codexArgs.push("resume", input.codexResumeSessionId);
 		} else if (input.codexForkSessionId) {
 			codexArgs.push("fork", input.codexForkSessionId);
-		} else if (input.resumeFromTrash) {
+		} else if (shouldResumeAgentSession(input)) {
 			if (!codexArgs.includes("resume")) {
 				codexArgs.push("resume");
 			}
@@ -819,7 +824,7 @@ const geminiAdapter: AgentSessionAdapter = {
 			args.push("--yolo");
 		}
 
-		if (input.resumeFromTrash && !hasCliOption(args, "--resume")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--resume")) {
 			args.push("--resume", "latest");
 		}
 
@@ -1120,7 +1125,7 @@ const opencodeAdapter: AgentSessionAdapter = {
 		const args = [...input.args];
 		const env: Record<string, string | undefined> = {};
 		const baseConfigPath = await resolveOpenCodeBaseConfigPath(input.env?.OPENCODE_CONFIG);
-		if (input.resumeFromTrash && !hasCliOption(args, "--continue")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
 			args.push("--continue");
 		}
 
@@ -1187,7 +1192,7 @@ const droidAdapter: AgentSessionAdapter = {
 		const args = [...input.args];
 		const env: Record<string, string | undefined> = {};
 
-		if (input.resumeFromTrash && !hasCliOption(args, "--resume") && !hasCliOption(args, "-r")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--resume") && !hasCliOption(args, "-r")) {
 			args.push("--resume");
 		}
 
@@ -1273,7 +1278,7 @@ const kiroAdapter: AgentSessionAdapter = {
 			args.push("--trust-all-tools");
 		}
 
-		if (input.resumeFromTrash && !hasCliOption(args, "--resume") && !hasCliOption(args, "-r")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--resume") && !hasCliOption(args, "-r")) {
 			args.push("--resume");
 		}
 
@@ -1387,7 +1392,7 @@ const clineAdapter: AgentSessionAdapter = {
 			args.push("--auto-approve-all");
 		}
 
-		if (input.resumeFromTrash && !hasCliOption(args, "--continue")) {
+		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
 			args.push("--continue");
 		}
 

@@ -47,6 +47,7 @@ import { useKanbanAccessGate } from "@/hooks/use-kanban-access-gate";
 import { useOpenWorkspace } from "@/hooks/use-open-workspace";
 import { parseRemovedProjectPathFromStreamError, useProjectNavigation } from "@/hooks/use-project-navigation";
 import { useProjectUiState } from "@/hooks/use-project-ui-state";
+import { useResumeInterruptedTaskSessions } from "@/hooks/use-resume-interrupted-task-sessions";
 import { useReviewReadyNotifications } from "@/hooks/use-review-ready-notifications";
 import { useShortcutActions } from "@/hooks/use-shortcut-actions";
 import { useStartupOnboarding } from "@/hooks/use-startup-onboarding";
@@ -227,6 +228,14 @@ export default function App(): ReactElement {
 		setBoard,
 		setSessions,
 		setCanPersistWorkspaceState,
+	});
+	useResumeInterruptedTaskSessions({
+		board,
+		sessions,
+		currentProjectId,
+		workspaceHydrationNonce,
+		isWorkspaceMetadataPending,
+		startTaskSession,
 	});
 	const { selectedTaskId, selectedCard, setSelectedTaskId, handleBack } = useDetailTaskNavigation({
 		board,

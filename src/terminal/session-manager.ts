@@ -86,6 +86,7 @@ export interface StartTaskSessionRequest {
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
+	resumeExistingSession?: Extract<RuntimeTaskSessionState, "running" | "awaiting_review">;
 	codexResumeSessionId?: string;
 	codexForkSessionId?: string;
 	cols?: number;
@@ -246,8 +247,17 @@ export class TerminalSessionManager implements TerminalSessionService {
 
 	hydrateFromRecord(record: Record<string, RuntimeTaskSessionSummary>): void {
 		for (const [taskId, summary] of Object.entries(record)) {
+			const hydratedSummary = summary.state === "running"
+				? {
+						...cloneSummary(summary),
+						state: "interrupted" as const,
+						pid: null,
+						reviewReason: "interrupted" as const,
+						updatedAt: now(),
+					}
+				: cloneSummary(summary);
 			this.entries.set(taskId, {
-				summary: cloneSummary(summary),
+				summary: hydratedSummary,
 				active: null,
 				terminalStateMirror: null,
 				listenerIdCounter: 1,
@@ -334,6 +344,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 			images: request.images,
 			startInPlanMode: request.startInPlanMode,
 			resumeFromTrash: request.resumeFromTrash,
+			resumeExistingSession: request.resumeExistingSession !== undefined,
 			codexResumeSessionId: request.codexResumeSessionId,
 			codexForkSessionId: request.codexForkSessionId,
 			env: request.env,
@@ -534,14 +545,15 @@ export class TerminalSessionManager implements TerminalSessionService {
 		entry.terminalStateMirror = terminalStateMirror;
 
 		const startedAt = now();
+		const resumedState = request.resumeFromTrash ? "awaiting_review" : (request.resumeExistingSession ?? "running");
 		updateSummary(entry, {
-			state: request.resumeFromTrash ? "awaiting_review" : "running",
+			state: resumedState,
 			agentId: request.agentId,
 			workspacePath: request.cwd,
 			pid: session.pid,
 			startedAt,
 			lastOutputAt: null,
-			reviewReason: request.resumeFromTrash ? "attention" : null,
+			reviewReason: resumedState === "awaiting_review" ? "attention" : null,
 			exitCode: null,
 			lastHookAt: null,
 			latestHookActivity: null,
