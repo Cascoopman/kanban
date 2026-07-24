@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { KanbanBoard, type RequestProgrammaticCardMove } from "@/components/kanban-board";
+import { LocalStorageKey } from "@/storage/local-storage-store";
 import type { BoardData } from "@/types";
 
 const dndMock = vi.hoisted(() => ({
@@ -38,8 +39,15 @@ vi.mock("@hello-pangea/dnd", async () => {
 });
 
 vi.mock("@/components/board-column", () => ({
-	BoardColumn: ({ column }: { column: BoardData["columns"][number] }): React.ReactElement => (
+	BoardColumn: ({
+		column,
+		onHide,
+	}: {
+		column: BoardData["columns"][number];
+		onHide?: () => void;
+	}): React.ReactElement => (
 		<section data-column-id={column.id}>
+			<button type="button" aria-label={`Hide ${column.title} column`} onClick={onHide} />
 			<div className="kb-column-cards">
 				{column.cards.map((card) => (
 					<div key={card.id} data-task-id={card.id} />
@@ -81,6 +89,7 @@ describe("KanbanBoard", () => {
 	let previousActEnvironment: boolean | undefined;
 
 	beforeEach(() => {
+		window.localStorage.clear();
 		vi.useFakeTimers();
 		vi.spyOn(performance, "now").mockImplementation(() => Date.now());
 		vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
@@ -224,5 +233,194 @@ describe("KanbanBoard", () => {
 		});
 
 		expect(boardElement?.dataset.programmaticCardMove).toBe("true");
+	});
+
+	it("hides and restores any combination of columns while persisting the layout preference", async () => {
+		const board: BoardData = {
+			columns: [
+				{ id: "backlog", title: "Backlog", cards: [] },
+				{ id: "in_progress", title: "In Progress", cards: [] },
+				{ id: "review", title: "Review", cards: [] },
+				{ id: "on_hold", title: "On Hold", cards: [] },
+				{ id: "trash", title: "Done", cards: [] },
+			],
+			dependencies: [],
+		};
+
+		await act(async () => {
+			root.render(
+				<KanbanBoard
+					data={board}
+					taskSessions={{}}
+					onCardSelect={() => {}}
+					onCreateTask={() => {}}
+					dependencies={[]}
+					onDragEnd={() => {}}
+				/>,
+			);
+		});
+
+		const hideDoneButton = container.querySelector<HTMLButtonElement>('button[aria-label="Hide Done column"]');
+		expect(hideDoneButton).not.toBeNull();
+
+		await act(async () => {
+			hideDoneButton?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="trash"]')).toBeNull();
+		expect(container.querySelector('button[aria-label="Show Done column"]')).not.toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("trash");
+
+		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="Hide Review column"]')?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
+		expect(container.querySelector('[data-column-id="trash"]')).toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review,trash");
+
+		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="Show Done column"]')?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="trash"]')).not.toBeNull();
+		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review");
+
+		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="Show Review column"]')?.click();
+		});
+
+		expect(container.querySelector('[data-column-id="review"]')).not.toBeNull();
+		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("");
+	});
+
+	it("skips programmatic animation when a move targets a hidden column", async () => {
+		window.localStorage.setItem(LocalStorageKey.BoardHiddenColumns, "in_progress");
+		const board: BoardData = {
+			columns: [
+				{
+					id: "backlog",
+					title: "Backlog",
+					cards: [
+						{
+							id: "source-task",
+							title: "Source task",
+							prompt: "Source task",
+							startInPlanMode: false,
+							baseRef: "main",
+							createdAt: 1,
+							updatedAt: 1,
+						},
+					],
+				},
+				{ id: "in_progress", title: "In Progress", cards: [] },
+			],
+			dependencies: [],
+		};
+		let requestMove: RequestProgrammaticCardMove | null = null;
+
+		await act(async () => {
+			root.render(
+				<KanbanBoard
+					data={board}
+					taskSessions={{}}
+					onCardSelect={() => {}}
+					onCreateTask={() => {}}
+					dependencies={[]}
+					onDragEnd={() => {}}
+					onRequestProgrammaticCardMoveReady={(nextRequestMove) => {
+						requestMove = nextRequestMove;
+					}}
+				/>,
+			);
+		});
+
+		let started = true;
+		await act(async () => {
+			started =
+				requestMove?.({
+					taskId: "source-task",
+					fromColumnId: "backlog",
+					toColumnId: "in_progress",
+					insertAtTop: true,
+				}) ?? false;
+		});
+
+		expect(started).toBe(false);
+		expect(container.querySelector<HTMLElement>(".kb-board")?.dataset.programmaticCardMove).toBeUndefined();
+	});
+
+	it("counts only visible columns during programmatic horizontal moves", async () => {
+		window.localStorage.setItem(LocalStorageKey.BoardHiddenColumns, "review,on_hold");
+		const dragActions = {
+			isActive: vi.fn(() => true),
+			moveRight: vi.fn(),
+			moveLeft: vi.fn(),
+			drop: vi.fn(),
+			cancel: vi.fn(),
+		};
+		const preDrag = {
+			snapLift: vi.fn(() => dragActions),
+			isActive: vi.fn(() => true),
+			abort: vi.fn(),
+		};
+		dndMock.sensorApi = {
+			tryGetLock: vi.fn(() => preDrag),
+		};
+		const board: BoardData = {
+			columns: [
+				{ id: "backlog", title: "Backlog", cards: [] },
+				{
+					id: "in_progress",
+					title: "In Progress",
+					cards: [
+						{
+							id: "source-task",
+							title: "Source task",
+							prompt: "Source task",
+							startInPlanMode: false,
+							baseRef: "main",
+							createdAt: 1,
+							updatedAt: 1,
+						},
+					],
+				},
+				{ id: "review", title: "Review", cards: [] },
+				{ id: "on_hold", title: "On Hold", cards: [] },
+				{ id: "trash", title: "Done", cards: [] },
+			],
+			dependencies: [],
+		};
+		let requestMove: RequestProgrammaticCardMove | null = null;
+
+		await act(async () => {
+			root.render(
+				<KanbanBoard
+					data={board}
+					taskSessions={{}}
+					onCardSelect={() => {}}
+					onCreateTask={() => {}}
+					dependencies={[]}
+					onDragEnd={() => {}}
+					onRequestProgrammaticCardMoveReady={(nextRequestMove) => {
+						requestMove = nextRequestMove;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requestMove?.({
+				taskId: "source-task",
+				fromColumnId: "in_progress",
+				toColumnId: "trash",
+				insertAtTop: false,
+			});
+			vi.runAllTimers();
+		});
+
+		expect(dragActions.moveRight).toHaveBeenCalledTimes(1);
+		expect(dragActions.drop).toHaveBeenCalledTimes(1);
 	});
 });
