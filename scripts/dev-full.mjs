@@ -7,6 +7,7 @@ import { createServer, connect } from "node:net";
 import { access } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { buildAgentRuntimeEnv } from "./agent-runtime-env.mjs";
 
 const isWindows = process.platform === "win32";
 
@@ -90,8 +91,8 @@ console.log(`\n  Runtime port: ${runtimePort}`);
 console.log(`  Web UI:       http://127.0.0.1:${webUiPort}\n`);
 
 const env = {
+	...buildAgentRuntimeEnv(process.env, [join(process.cwd(), "node_modules", ".bin")]),
 	NODE_ENV: "development",
-	...process.env,
 	KANBAN_RUNTIME_PORT: String(runtimePort),
 	KANBAN_WEB_UI_PORT: String(webUiPort),
 };
