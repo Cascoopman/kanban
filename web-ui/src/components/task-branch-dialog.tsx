@@ -1,10 +1,21 @@
-import { Copy, Play } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, useEffect, useRef } from "react";
+import { ArrowBigUp, Command, Copy, CornerDownLeft, Play } from "lucide-react";
+import { type FormEvent, type KeyboardEvent, type ReactElement, useEffect, useRef } from "react";
+import { useHotkeys } from "react-hotkeys-hook";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import type { BoardCard } from "@/types";
+
+function ButtonShortcut({ includeShift = false }: { includeShift?: boolean }): ReactElement {
+	return (
+		<span className="ml-1.5 inline-flex items-center gap-0.5" aria-hidden>
+			<Command size={12} />
+			{includeShift ? <ArrowBigUp size={12} /> : null}
+			<CornerDownLeft size={12} />
+		</span>
+	);
+}
 
 export function TaskBranchDialog({
 	open,
@@ -54,6 +65,28 @@ export function TaskBranchDialog({
 		onCreate();
 	};
 
+	useHotkeys(
+		"mod+enter, mod+shift+enter",
+		(event) => {
+			if (isPending || !prompt.trim()) {
+				return;
+			}
+			if (event.shiftKey) {
+				onCreateAndStart();
+				return;
+			}
+			onCreate();
+		},
+		{
+			enabled: open,
+			enableOnFormTags: true,
+			enableOnContentEditable: true,
+			ignoreEventWhen: (event) => event.defaultPrevented,
+			preventDefault: true,
+		},
+		[open, isPending, onCreate, onCreateAndStart, prompt],
+	);
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} contentClassName="max-w-md">
 			<form onSubmit={handleSubmit}>
@@ -86,7 +119,10 @@ export function TaskBranchDialog({
 							disabled={isPending || !prompt.trim()}
 							icon={isPending ? <Spinner size={14} /> : <Copy size={14} />}
 						>
-							Create task
+							<span className="inline-flex items-center">
+								Create task
+								<ButtonShortcut />
+							</span>
 						</Button>
 						<Button
 							type="button"
@@ -95,7 +131,10 @@ export function TaskBranchDialog({
 							icon={isPending ? <Spinner size={14} /> : <Play size={14} />}
 							onClick={onCreateAndStart}
 						>
-							Create &amp; start
+							<span className="inline-flex items-center">
+								Create &amp; start
+								<ButtonShortcut includeShift />
+							</span>
 						</Button>
 					</div>
 				</DialogFooter>

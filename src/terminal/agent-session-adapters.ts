@@ -134,6 +134,31 @@ function hasCliOption(args: string[], optionName: string): boolean {
 	return false;
 }
 
+function removeCliOptionWithValue(args: string[], optionNames: readonly string[]): void {
+	let index = 0;
+	while (index < args.length) {
+		const arg = args[index];
+		const exactOption = optionNames.includes(arg);
+		const inlineOption = optionNames.some(
+			(optionName) =>
+				arg.startsWith(`${optionName}=`) ||
+				(optionName.startsWith("-") &&
+					!optionName.startsWith("--") &&
+					arg.startsWith(optionName) &&
+					arg !== optionName),
+		);
+		if (exactOption) {
+			args.splice(index, Math.min(2, args.length - index));
+			continue;
+		}
+		if (inlineOption) {
+			args.splice(index, 1);
+			continue;
+		}
+		index += 1;
+	}
+}
+
 function getClineHookScriptPath(
 	hooksDir: string,
 	hookName: "Notification" | "TaskComplete" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse",
@@ -759,7 +784,8 @@ const codexAdapter: AgentSessionAdapter = {
 		if (input.codexResumeSessionId) {
 			codexArgs.push("resume", input.codexResumeSessionId);
 		} else if (input.codexForkSessionId) {
-			codexArgs.push("fork", input.codexForkSessionId);
+			removeCliOptionWithValue(codexArgs, ["-C", "--cd"]);
+			codexArgs.push("-C", input.cwd, "fork", input.codexForkSessionId);
 		} else if (shouldResumeAgentSession(input)) {
 			if (!codexArgs.includes("resume")) {
 				codexArgs.push("resume");
