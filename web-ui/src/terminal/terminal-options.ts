@@ -13,6 +13,19 @@ const TERMINAL_WORD_SEPARATOR = " ()[]{}',\"`";
 const TERMINAL_FONT_FAMILY =
 	"'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'SF Mono', Menlo, Monaco, 'Courier New', monospace";
 
+function openTerminalLink(value: string): void {
+	try {
+		const url = new URL(value);
+		if (url.protocol !== "http:" && url.protocol !== "https:") {
+			return;
+		}
+
+		window.open(url.href, "_blank", "noopener,noreferrer");
+	} catch {
+		// Ignore malformed links emitted by terminal applications.
+	}
+}
+
 export function createKanbanTerminalOptions({
 	cursorColor,
 	isMacPlatform,
@@ -33,6 +46,9 @@ export function createKanbanTerminalOptions({
 		fontWeightBold: "bold",
 		letterSpacing: 0,
 		lineHeight: 1,
+		linkHandler: {
+			activate: (_event, value) => openTerminalLink(value),
+		},
 		macOptionClickForcesSelection: isMacPlatform,
 		macOptionIsMeta: isMacPlatform,
 		rightClickSelectsWord: false,
