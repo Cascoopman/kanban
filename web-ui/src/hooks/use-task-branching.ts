@@ -1,8 +1,8 @@
-import { deriveTaskTitleFromPrompt } from "@runtime-task-title";
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useState } from "react";
 
 import { notifyError, showAppToast } from "@/components/app-toaster";
+import { useTaskTitleDraft } from "@/hooks/use-task-title-draft";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 import { addTaskToColumnWithResult, findCardSelection, type TaskDraft } from "@/state/board-state";
 import type { BoardCard, BoardData } from "@/types";
@@ -20,15 +20,17 @@ export function useTaskBranching({
 }) {
 	const [sourceTask, setSourceTask] = useState<BoardCard | null>(null);
 	const [prompt, setPrompt] = useState("");
+	const { title, explicitTitle, onTitleChange, resetTitle } = useTaskTitleDraft(prompt);
 	const [isPending, setIsPending] = useState(false);
 	const [pendingStartTaskId, setPendingStartTaskId] = useState<string | null>(null);
 
 	useEffect(() => {
 		setSourceTask(null);
 		setPrompt("");
+		resetTitle();
 		setIsPending(false);
 		setPendingStartTaskId(null);
-	}, [currentProjectId]);
+	}, [currentProjectId, resetTitle]);
 
 	useEffect(() => {
 		if (!pendingStartTaskId || !onStartTask) {
@@ -42,17 +44,25 @@ export function useTaskBranching({
 		setPendingStartTaskId(null);
 	}, [board, onStartTask, pendingStartTaskId]);
 
-	const handleOpenBranchTask = useCallback((task: BoardCard) => {
-		setSourceTask(task);
-		setPrompt("");
-	}, []);
-
-	const handleOpenChange = useCallback((open: boolean) => {
-		if (!open) {
-			setSourceTask(null);
+	const handleOpenBranchTask = useCallback(
+		(task: BoardCard) => {
+			setSourceTask(task);
 			setPrompt("");
-		}
-	}, []);
+			resetTitle();
+		},
+		[resetTitle],
+	);
+
+	const handleOpenChange = useCallback(
+		(open: boolean) => {
+			if (!open) {
+				setSourceTask(null);
+				setPrompt("");
+				resetTitle();
+			}
+		},
+		[resetTitle],
+	);
 
 	const handleCreateBranch = useCallback(
 		async (options: { start?: boolean } = {}) => {
@@ -61,7 +71,7 @@ export function useTaskBranching({
 				return;
 			}
 			const draft: TaskDraft = {
-				title: deriveTaskTitleFromPrompt(normalizedPrompt),
+				title: explicitTitle,
 				prompt: normalizedPrompt,
 				startInPlanMode: sourceTask.startInPlanMode,
 				autoReviewEnabled: sourceTask.autoReviewEnabled,
@@ -102,17 +112,20 @@ export function useTaskBranching({
 				}
 				setSourceTask(null);
 				setPrompt("");
+				resetTitle();
 			} catch (error) {
 				notifyError(error instanceof Error ? error.message : String(error));
 			} finally {
 				setIsPending(false);
 			}
 		},
-		[board, currentProjectId, isPending, onStartTask, prompt, setBoard, sourceTask],
+		[board, currentProjectId, explicitTitle, isPending, onStartTask, prompt, resetTitle, setBoard, sourceTask],
 	);
 
 	return {
 		sourceTask,
+		title,
+		onTitleChange,
 		prompt,
 		setPrompt,
 		isPending,

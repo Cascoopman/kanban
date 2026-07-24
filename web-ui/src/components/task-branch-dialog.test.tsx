@@ -40,6 +40,8 @@ describe("TaskBranchDialog", () => {
 				<TaskBranchDialog
 					open
 					sourceTask={sourceTask}
+					title="New task"
+					onTitleChange={() => {}}
 					prompt="Try another approach"
 					onPromptChange={() => {}}
 					isPending={false}
@@ -74,5 +76,39 @@ describe("TaskBranchDialog", () => {
 
 		expect(onCreate).toHaveBeenCalledTimes(2);
 		expect(onCreateAndStart).toHaveBeenCalledTimes(2);
+	});
+
+	it("opens with the title focused and selected before the prompt", async () => {
+		await act(async () => {
+			root.render(
+				<TaskBranchDialog
+					open
+					sourceTask={sourceTask}
+					title="New task"
+					onTitleChange={() => {}}
+					prompt=""
+					onPromptChange={() => {}}
+					isPending={false}
+					onOpenChange={() => {}}
+					onCreate={() => {}}
+					onCreateAndStart={() => {}}
+				/>,
+			);
+		});
+		await act(async () => {
+			await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+		});
+
+		const titleInput = document.body.querySelector<HTMLInputElement>('input[value="New task"]');
+		const promptInput = document.body.querySelector<HTMLTextAreaElement>("textarea");
+		expect(titleInput).not.toBeNull();
+		expect(promptInput).not.toBeNull();
+		if (!titleInput || !promptInput) {
+			throw new Error("Expected the title and prompt fields to render.");
+		}
+		expect(document.activeElement).toBe(titleInput);
+		expect(titleInput.selectionStart).toBe(0);
+		expect(titleInput.selectionEnd).toBe("New task".length);
+		expect(titleInput.compareDocumentPosition(promptInput) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 	});
 });

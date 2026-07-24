@@ -298,6 +298,8 @@ export default function App(): ReactElement {
 
 	const {
 		isInlineTaskCreateOpen,
+		newTaskTitle,
+		onNewTaskTitleChange,
 		newTaskPrompt,
 		setNewTaskPrompt,
 		newTaskImages,
@@ -1128,6 +1130,8 @@ export default function App(): ReactElement {
 				<TaskCreateDialog
 					open={isInlineTaskCreateOpen}
 					onOpenChange={handleCreateDialogOpenChange}
+					title={newTaskTitle}
+					onTitleChange={onNewTaskTitleChange}
 					prompt={newTaskPrompt}
 					onPromptChange={setNewTaskPrompt}
 					images={newTaskImages}
@@ -1160,6 +1164,8 @@ export default function App(): ReactElement {
 				<TaskBranchDialog
 					open={taskBranching.sourceTask !== null}
 					sourceTask={taskBranching.sourceTask}
+					title={taskBranching.title}
+					onTitleChange={taskBranching.onTitleChange}
 					prompt={taskBranching.prompt}
 					onPromptChange={taskBranching.setPrompt}
 					isPending={taskBranching.isPending}
