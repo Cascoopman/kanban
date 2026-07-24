@@ -237,17 +237,20 @@ export default function App(): ReactElement {
 		isWorkspaceMetadataPending,
 		startTaskSession,
 	});
-	const { selectedTaskId, selectedCard, setSelectedTaskId, handleBack } = useDetailTaskNavigation({
-		board,
-		currentProjectId,
-		isAwaitingWorkspaceSnapshot,
-		isInitialRuntimeLoad,
-		isProjectSwitching,
-		isWorkspaceMetadataPending,
-		onDetailClosed: () => {
-			setIsGitHistoryOpen(false);
+	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectSelect, handleBack } = useDetailTaskNavigation(
+		{
+			board,
+			currentProjectId,
+			isAwaitingWorkspaceSnapshot,
+			isInitialRuntimeLoad,
+			isProjectSwitching,
+			isWorkspaceMetadataPending,
+			onSelectProject: handleSelectProject,
+			onDetailClosed: () => {
+				setIsGitHistoryOpen(false);
+			},
 		},
-	});
+	);
 
 	useEffect(() => {
 		replaceWorkspaceMetadata(workspaceMetadata);
@@ -821,35 +824,31 @@ export default function App(): ReactElement {
 	return (
 		<LayoutCustomizationsProvider onResetBottomTerminalLayoutCustomizations={resetBottomTerminalLayoutCustomizations}>
 			<div className="flex h-[100svh] min-w-0 overflow-hidden">
-				{!selectedCard ? (
-					<ProjectNavigationPanel
-						projects={displayedProjects}
-						isLoadingProjects={isProjectListLoading}
-						currentProjectId={navigationCurrentProjectId}
-						removingProjectId={removingProjectId}
-						activeSection={homeSidebarSection}
-						onActiveSectionChange={setHomeSidebarSection}
-						canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
-						agentSectionContent={homeSidebarAgentPanel}
-						selectedAgentId={settingsRuntimeProjectConfig?.selectedAgentId ?? null}
-						clineProviderSettings={settingsRuntimeProjectConfig?.clineProviderSettings ?? null}
-						featurebaseFeedbackState={featurebaseFeedbackState}
-						onSelectProject={(projectId) => {
-							void handleSelectProject(projectId);
-						}}
-						onRemoveProject={handleRemoveProject}
-						onAddProject={() => {
-							void handleAddProject();
-						}}
-						sidebarWidth={sidebarLayout.sidebarWidth}
-						setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
-						isCollapsed={sidebarLayout.isCollapsed}
-						setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
-					/>
-				) : null}
+				<ProjectNavigationPanel
+					projects={displayedProjects}
+					isLoadingProjects={isProjectListLoading}
+					currentProjectId={navigationCurrentProjectId}
+					removingProjectId={removingProjectId}
+					activeSection={homeSidebarSection}
+					onActiveSectionChange={setHomeSidebarSection}
+					canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
+					agentSectionContent={homeSidebarAgentPanel}
+					selectedAgentId={settingsRuntimeProjectConfig?.selectedAgentId ?? null}
+					clineProviderSettings={settingsRuntimeProjectConfig?.clineProviderSettings ?? null}
+					featurebaseFeedbackState={featurebaseFeedbackState}
+					onSelectProject={handleProjectSelect}
+					onRemoveProject={handleRemoveProject}
+					onAddProject={() => {
+						void handleAddProject();
+					}}
+					sidebarWidth={sidebarLayout.sidebarWidth}
+					setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
+					isCollapsed={sidebarLayout.isCollapsed}
+					setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
+				/>
 				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 					<TopBar
-						onToggleSidebar={!selectedCard ? handleToggleSidebar : undefined}
+						onToggleSidebar={handleToggleSidebar}
 						onBack={selectedCard ? handleBack : undefined}
 						workspacePath={navbarWorkspacePath}
 						isWorkspacePathLoading={shouldShowProjectLoadingState}
