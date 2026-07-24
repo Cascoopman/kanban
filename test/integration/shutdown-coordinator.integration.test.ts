@@ -57,7 +57,7 @@ function createCard(taskId: string) {
 	};
 }
 
-function createBoard(taskIds: { inProgress?: string[]; review?: string[] }): RuntimeBoardData {
+function createBoard(taskIds: { inProgress?: string[]; review?: string[]; onHold?: string[] }): RuntimeBoardData {
 	return {
 		columns: [
 			{ id: "backlog", title: "Backlog", cards: [] },
@@ -70,6 +70,11 @@ function createBoard(taskIds: { inProgress?: string[]; review?: string[] }): Run
 				id: "review",
 				title: "Review",
 				cards: (taskIds.review ?? []).map((taskId) => createCard(taskId)),
+			},
+			{
+				id: "on_hold",
+				title: "On Hold",
+				cards: (taskIds.onHold ?? []).map((taskId) => createCard(taskId)),
 			},
 			{ id: "trash", title: "Done", cards: [] },
 		],
@@ -111,10 +116,12 @@ describe.sequential("shutdown coordinator integration", () => {
 					board: createBoard({
 						inProgress: ["managed-running", "managed-missing-session"],
 						review: ["managed-idle"],
+						onHold: ["managed-on-hold"],
 					}),
 					sessions: {
 						"managed-running": createSession("managed-running", "running"),
 						"managed-idle": createSession("managed-idle", "idle"),
+						"managed-on-hold": createSession("managed-on-hold", "awaiting_review"),
 					},
 					expectedRevision: managedInitial.revision,
 				});
@@ -133,11 +140,20 @@ describe.sequential("shutdown coordinator integration", () => {
 
 				let didCloseRuntimeServer = false;
 				const managedTerminalManager = {
-					markInterruptedAndStopAll: () => [createSession("managed-running", "running")],
-					listSummaries: () => [createSession("managed-running", "running")],
+					markInterruptedAndStopAll: () => [
+						createSession("managed-running", "running"),
+						createSession("managed-on-hold", "awaiting_review"),
+					],
+					listSummaries: () => [
+						createSession("managed-running", "running"),
+						createSession("managed-on-hold", "awaiting_review"),
+					],
 					getSummary: (taskId: string) => {
 						if (taskId === "managed-running") {
 							return createSession("managed-running", "running");
+						}
+						if (taskId === "managed-on-hold") {
+							return createSession("managed-on-hold", "awaiting_review");
 						}
 						if (taskId === "managed-idle") {
 							return createSession("managed-idle", "idle");
@@ -167,13 +183,16 @@ describe.sequential("shutdown coordinator integration", () => {
 				const managedInProgress =
 					managedAfter.board.columns.find((column) => column.id === "in_progress")?.cards ?? [];
 				const managedReview = managedAfter.board.columns.find((column) => column.id === "review")?.cards ?? [];
+				const managedOnHold = managedAfter.board.columns.find((column) => column.id === "on_hold")?.cards ?? [];
 				const managedTrash = managedAfter.board.columns.find((column) => column.id === "trash")?.cards ?? [];
 				expect(managedInProgress.map((card) => card.id).sort()).toEqual(
 					["managed-missing-session", "managed-running"].sort(),
 				);
 				expect(managedReview.map((card) => card.id)).toEqual(["managed-idle"]);
+				expect(managedOnHold.map((card) => card.id)).toEqual(["managed-on-hold"]);
 				expect(managedTrash).toEqual([]);
 				expect(managedAfter.sessions["managed-running"]?.state).toBe("interrupted");
+				expect(managedAfter.sessions["managed-on-hold"]?.state).toBe("interrupted");
 				expect(managedAfter.sessions["managed-idle"]?.state).toBe("idle");
 				expect(managedAfter.sessions["managed-missing-session"]).toBeUndefined();
 
