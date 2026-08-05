@@ -703,10 +703,8 @@ describe("prepareAgentLaunch hook strategies", () => {
 			cwd: "/tmp",
 			prompt: "",
 		});
-		const permissionModeIndex = claudeLaunch.args.indexOf("--permission-mode");
-		expect(permissionModeIndex).toBeGreaterThan(-1);
-		expect(claudeLaunch.args[permissionModeIndex + 1]).toBe("auto");
-		expect(claudeLaunch.args).not.toContain("--dangerously-skip-permissions");
+		expect(claudeLaunch.args).toContain("--dangerously-skip-permissions");
+		expect(claudeLaunch.args).not.toContain("--permission-mode");
 		expect(claudeLaunch.env.CLAUDE_CODE_ENABLE_AUTO_MODE).toBe("1");
 
 		const codexLaunch = await prepareAgentLaunch({
