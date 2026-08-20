@@ -48,13 +48,13 @@ function selectiveBuildMinifyPlugin(): Plugin {
 }
 
 export default defineConfig({
-	// OpenCode broke in production because esbuild minification corrupted xterm's
-	// requestMode handling. We isolate all @xterm code into its own chunk and leave
-	// that chunk unminified, while still minifying the rest of the app here.
+	// Some full-screen terminal UIs break in production when esbuild minification
+	// corrupts xterm's requestMode handling. Isolate all @xterm code into its own
+	// unminified chunk while still minifying the rest of the app here.
 	// Compared with leaving the entire frontend unminified, this saves about
 	// 770 KB raw and 108.5 KB gzipped across emitted frontend assets.
 	// Compared with fully minifying everything, this costs about 545 KB raw and
-	// 58.5 KB gzipped, which is the current tradeoff for keeping OpenCode stable.
+	// 58.5 KB gzipped, which is the current full-screen TUI compatibility tradeoff.
 	plugins: [tailwindcss(), react(), selectiveBuildMinifyPlugin()],
 	envPrefix: ["VITE_", "POSTHOG_"],
 	define: {
@@ -62,7 +62,7 @@ export default defineConfig({
 	},
 	build: {
 		// esbuild minification corrupts xterm's DECRQM requestMode helper in the
-		// production bundle, which breaks full-screen TUIs like OpenCode at runtime.
+		// production bundle, which breaks full-screen terminal UIs at runtime.
 		// Keep xterm unminified, but selectively minify the rest of the app below.
 		minify: false,
 		sourcemap: true,
@@ -81,7 +81,6 @@ export default defineConfig({
 		alias: {
 			"@": resolve(__dirname, "src"),
 			"@runtime-agent-catalog": resolve(__dirname, "../src/core/agent-catalog.ts"),
-			"@runtime-cline-tool-call-display": resolve(__dirname, "../src/cline-sdk/cline-tool-call-display.ts"),
 			"@runtime-home-agent-session": resolve(__dirname, "../src/core/home-agent-session.ts"),
 			"@runtime-shortcuts": resolve(__dirname, "../src/config/shortcut-utils.ts"),
 			"@runtime-task-id": resolve(__dirname, "../src/core/task-id.ts"),

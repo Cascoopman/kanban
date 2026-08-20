@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { runtimeBoardCardSchema, runtimeTaskSessionSummarySchema } from "../../src/core/api-contract";
 import {
 	parseHookIngestRequest,
 	parseTaskSessionStartRequest,
@@ -89,5 +90,43 @@ describe("parseTaskSessionStartRequest", () => {
 			resumeFromTrash: true,
 			resumeExistingSession: "running",
 		});
+	});
+});
+
+describe("legacy persisted agent compatibility", () => {
+	it("discards unsupported card agent IDs and retired provider settings", () => {
+		const parsed = runtimeBoardCardSchema.parse({
+			id: "task-1",
+			prompt: "Continue legacy task",
+			startInPlanMode: false,
+			agentId: "retired-agent",
+			clineSettings: {
+				providerId: "anthropic",
+				modelId: "legacy-model",
+			},
+			baseRef: "main",
+			createdAt: 1,
+			updatedAt: 2,
+		});
+
+		expect(parsed.agentId).toBeUndefined();
+		expect(parsed).not.toHaveProperty("clineSettings");
+	});
+
+	it("normalizes unsupported persisted session agent IDs to null", () => {
+		const parsed = runtimeTaskSessionSummarySchema.parse({
+			taskId: "task-1",
+			state: "interrupted",
+			agentId: "retired-agent",
+			workspacePath: "/tmp/worktree",
+			pid: null,
+			startedAt: 1,
+			updatedAt: 2,
+			lastOutputAt: 2,
+			reviewReason: "interrupted",
+			exitCode: null,
+		});
+
+		expect(parsed.agentId).toBeNull();
 	});
 });

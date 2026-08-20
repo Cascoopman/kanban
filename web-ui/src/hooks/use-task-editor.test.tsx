@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTaskEditor } from "@/hooks/use-task-editor";
-import type { RuntimeAgentId, RuntimeTaskClineSettings } from "@/runtime/types";
+import type { RuntimeAgentId } from "@/runtime/types";
 import type { BoardCard, BoardData, TaskAutoReviewMode, TaskImage } from "@/types";
 
 function createTask(taskId: string, prompt: string, createdAt: number, overrides: Partial<BoardCard> = {}): BoardCard {
@@ -36,11 +36,11 @@ function createBoard(tasks: BoardCard[] = []): BoardData {
 interface HookSnapshot {
 	board: BoardData;
 	isInlineTaskCreateOpen: boolean;
+	newTaskTitle: string;
 	newTaskPrompt: string;
 	newTaskImages: TaskImage[];
 	newTaskBranchRef: string;
 	newTaskAgentId: RuntimeAgentId | undefined;
-	newTaskClineSettings: RuntimeTaskClineSettings | undefined;
 	editingTaskId: string | null;
 	editTaskPrompt: string;
 	editTaskStartInPlanMode: boolean;
@@ -48,6 +48,7 @@ interface HookSnapshot {
 	handleOpenCreateTask: () => void;
 	handleCreateTask: (options?: { keepDialogOpen?: boolean }) => string | null;
 	handleCreateTasks: (prompts: string[], options?: { keepDialogOpen?: boolean }) => string[];
+	onNewTaskTitleChange: (value: string) => void;
 	setNewTaskPrompt: (value: string) => void;
 	setNewTaskImages: (value: TaskImage[]) => void;
 	handleOpenEditTask: (task: BoardCard) => void;
@@ -57,7 +58,6 @@ interface HookSnapshot {
 	setEditTaskAutoReviewEnabled: (value: boolean) => void;
 	setEditTaskAutoReviewMode: (value: TaskAutoReviewMode) => void;
 	setNewTaskAgentId: (value: RuntimeAgentId | undefined) => void;
-	setNewTaskClineSettings: (value: RuntimeTaskClineSettings | undefined) => void;
 }
 
 function requireSnapshot(snapshot: HookSnapshot | null): HookSnapshot {
@@ -93,11 +93,11 @@ function HookHarness({
 		onSnapshot({
 			board,
 			isInlineTaskCreateOpen: editor.isInlineTaskCreateOpen,
+			newTaskTitle: editor.newTaskTitle,
 			newTaskPrompt: editor.newTaskPrompt,
 			newTaskImages: editor.newTaskImages,
 			newTaskBranchRef: editor.newTaskBranchRef,
 			newTaskAgentId: editor.newTaskAgentId,
-			newTaskClineSettings: editor.newTaskClineSettings,
 			editingTaskId: editor.editingTaskId,
 			editTaskPrompt: editor.editTaskPrompt,
 			editTaskStartInPlanMode: editor.editTaskStartInPlanMode,
@@ -105,6 +105,7 @@ function HookHarness({
 			handleOpenCreateTask: editor.handleOpenCreateTask,
 			handleCreateTask: editor.handleCreateTask,
 			handleCreateTasks: editor.handleCreateTasks,
+			onNewTaskTitleChange: editor.onNewTaskTitleChange,
 			setNewTaskPrompt: editor.setNewTaskPrompt,
 			setNewTaskImages: editor.setNewTaskImages,
 			handleOpenEditTask: editor.handleOpenEditTask,
@@ -114,7 +115,6 @@ function HookHarness({
 			setEditTaskAutoReviewEnabled: editor.setEditTaskAutoReviewEnabled,
 			setEditTaskAutoReviewMode: editor.setEditTaskAutoReviewMode,
 			setNewTaskAgentId: editor.setNewTaskAgentId,
-			setNewTaskClineSettings: editor.setNewTaskClineSettings,
 		});
 	}, [
 		board,
@@ -129,14 +129,15 @@ function HookHarness({
 		editor.handleSaveAndStartEditedTask,
 		editor.isEditTaskStartInPlanModeDisabled,
 		editor.isInlineTaskCreateOpen,
+		editor.newTaskTitle,
 		editor.newTaskPrompt,
 		editor.newTaskImages,
 		editor.newTaskBranchRef,
 		editor.newTaskAgentId,
-		editor.newTaskClineSettings,
 		editor.setEditTaskAutoReviewEnabled,
 		editor.setEditTaskAutoReviewMode,
 		editor.setEditTaskPrompt,
+		editor.onNewTaskTitleChange,
 		editor.setNewTaskImages,
 		editor.setNewTaskPrompt,
 		onSnapshot,
@@ -316,11 +317,6 @@ describe("useTaskEditor", () => {
 		});
 		await act(async () => {
 			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
-			requireSnapshot(latestSnapshot).setNewTaskClineSettings({
-				providerId: "provider-abc",
-				modelId: "model-xyz",
-				reasoningEffort: "low",
-			});
 		});
 
 		await act(async () => {});
@@ -335,11 +331,99 @@ describe("useTaskEditor", () => {
 		const snapshot = requireSnapshot(latestSnapshot);
 		expect(createdTaskId).toBeTruthy();
 		expect(snapshot.isInlineTaskCreateOpen).toBe(true);
+		expect(snapshot.newTaskTitle).toBe("New task");
 		expect(snapshot.newTaskPrompt).toBe("");
 		expect(snapshot.newTaskBranchRef).toBe("main");
 		expect(snapshot.newTaskAgentId).toBeUndefined();
-		expect(snapshot.newTaskClineSettings).toBeUndefined();
 		expect(snapshot.board.columns[0]?.cards.some((card) => card.prompt === "Create another task")).toBe(true);
+	});
+
+	it("previews the prompt-derived title until the user customizes it", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					initialBoard={createBoard()}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleOpenCreateTask();
+		});
+		expect(requireSnapshot(latestSnapshot).newTaskTitle).toBe("New task");
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Implement the title field. Include focus behavior.");
+		});
+
+		expect(requireSnapshot(latestSnapshot).newTaskTitle).toBe("Implement the title field.");
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleCreateTask();
+		});
+
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Implement the title field.");
+	});
+
+	it("uses a custom title instead of deriving one from the prompt", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					initialBoard={createBoard()}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleOpenCreateTask();
+			requireSnapshot(latestSnapshot).onNewTaskTitleChange("Title-first task creation");
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Implement the title field. Include focus behavior.");
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleCreateTask();
+		});
+
+		const createdTask = requireSnapshot(latestSnapshot).board.columns[0]?.cards[0];
+		expect(createdTask?.title).toBe("Title-first task creation");
+		expect(createdTask?.prompt).toBe("Implement the title field. Include focus behavior.");
+	});
+
+	it("falls back to the prompt-derived title when the custom title is cleared", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					initialBoard={createBoard()}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleOpenCreateTask();
+			requireSnapshot(latestSnapshot).onNewTaskTitleChange("");
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Use the existing fallback. Keep the title optional.");
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleCreateTask();
+		});
+
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Use the existing fallback.");
 	});
 	it("copies attached images to each split task and clears the draft images", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
@@ -396,42 +480,7 @@ describe("useTaskEditor", () => {
 		expect(requireSnapshot(latestSnapshot).newTaskImages).toEqual([]);
 	});
 
-	it("persists reasoning-only task overrides when model/provider stay inherited", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					initialBoard={createBoard()}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).setNewTaskPrompt("Reasoning override only");
-			requireSnapshot(latestSnapshot).setNewTaskClineSettings({
-				reasoningEffort: "low",
-			});
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleCreateTask();
-		});
-
-		const createdCard = requireSnapshot(latestSnapshot).board.columns[0]?.cards[0];
-		expect(createdCard?.clineSettings).toEqual({
-			reasoningEffort: "low",
-		});
-	});
-
-	it("preserves per-task agent/model override fields on each split task", async () => {
+	it("preserves per-task agent overrides on each split task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -451,11 +500,6 @@ describe("useTaskEditor", () => {
 
 		await act(async () => {
 			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
-			requireSnapshot(latestSnapshot).setNewTaskClineSettings({
-				providerId: "provider-abc",
-				modelId: "model-xyz",
-				reasoningEffort: "medium",
-			});
 		});
 
 		let createdTaskIds: string[] = [];
@@ -468,11 +512,6 @@ describe("useTaskEditor", () => {
 		expect(backlogCards).toHaveLength(3);
 		for (const card of backlogCards) {
 			expect(card.agentId).toBe("codex");
-			expect(card.clineSettings).toEqual({
-				providerId: "provider-abc",
-				modelId: "model-xyz",
-				reasoningEffort: "medium",
-			});
 		}
 	});
 });

@@ -1,17 +1,14 @@
 // Frontend facade for task-scoped runtime actions.
 // It owns how the board and detail view start, stop, resize, and route task
-// sessions across native Cline and PTY-backed agents.
+// sessions across terminal-backed agents.
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback } from "react";
 
 import { notifyError } from "@/components/app-toaster";
 import { selectNewestTaskSessionSummary } from "@/hooks/home-sidebar-agent-panel-session-summary";
-import { type ClineChatActionResult, useClineChatRuntimeActions } from "@/hooks/use-cline-chat-runtime-actions";
 import { estimateTaskSessionGeometry } from "@/runtime/task-session-geometry";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 import type {
-	RuntimeTaskChatMessage,
-	RuntimeTaskSessionMode,
 	RuntimeTaskSessionSummary,
 	RuntimeTaskWorkspaceInfoResponse,
 	RuntimeWorktreeDeleteResponse,
@@ -60,14 +57,6 @@ export interface UseTaskSessionsResult {
 		text: string,
 		options?: SendTerminalInputOptions,
 	) => Promise<SendTaskSessionInputResult>;
-	sendTaskChatMessage: (
-		taskId: string,
-		text: string,
-		options?: { mode?: RuntimeTaskSessionMode },
-	) => Promise<ClineChatActionResult>;
-	abortTaskChatTurn: (taskId: string) => Promise<ClineChatActionResult>;
-	cancelTaskChatTurn: (taskId: string) => Promise<ClineChatActionResult>;
-	fetchTaskChatMessages: (taskId: string) => Promise<RuntimeTaskChatMessage[] | null>;
 	cleanupTaskWorkspace: (taskId: string) => Promise<RuntimeWorktreeDeleteResponse | null>;
 	fetchTaskWorkspaceInfo: (task: BoardCard) => Promise<RuntimeTaskWorkspaceInfoResponse | null>;
 }
@@ -110,16 +99,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 		},
 		[setSessions],
 	);
-	const {
-		sendTaskChatMessage,
-		loadTaskChatMessages: fetchTaskChatMessages,
-		abortTaskChatTurn,
-		cancelTaskChatTurn,
-	} = useClineChatRuntimeActions({
-		currentProjectId,
-		onSessionSummary: upsertSession,
-	});
-
 	const ensureTaskWorkspace = useCallback(
 		async (task: BoardCard): Promise<EnsureTaskWorkspaceResult> => {
 			if (!currentProjectId) {
@@ -164,7 +143,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				const payload = await trpcClient.runtime.startTaskSession.mutate({
 					taskId: task.id,
 					prompt: kickoffPrompt,
-					taskTitle: task.title,
 					images: isResumingSession ? undefined : task.images,
 					startInPlanMode: isResumingSession ? undefined : task.startInPlanMode,
 					resumeFromTrash: options?.resumeFromTrash,
@@ -173,7 +151,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 					cols: geometry.cols,
 					rows: geometry.rows,
 					agentId: task.agentId,
-					clineSettings: task.clineSettings,
 					branchedFromTaskId: task.branchedFromTaskId,
 				});
 				if (!payload.ok || !payload.summary) {
@@ -298,10 +275,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 		startTaskSession,
 		stopTaskSession,
 		sendTaskSessionInput,
-		sendTaskChatMessage,
-		abortTaskChatTurn,
-		cancelTaskChatTurn,
-		fetchTaskChatMessages,
 		cleanupTaskWorkspace,
 		fetchTaskWorkspaceInfo,
 	};

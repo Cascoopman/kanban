@@ -9,7 +9,6 @@ interface UseStartupOnboardingOptions {
 	currentProjectId: string | null;
 	runtimeProjectConfig: RuntimeConfigResponse | null;
 	isRuntimeProjectConfigLoading: boolean;
-	isTaskAgentReady: boolean | null;
 	refreshRuntimeProjectConfig: () => void;
 	refreshSettingsRuntimeProjectConfig: () => void;
 }
@@ -24,7 +23,6 @@ export interface UseStartupOnboardingResult {
 	handleOpenStartupOnboardingDialog: () => void;
 	handleCloseStartupOnboardingDialog: () => void;
 	handleSelectOnboardingAgent: (agentId: RuntimeAgentId) => Promise<AgentSelectionResult>;
-	handleOnboardingClineSetupSaved: () => void;
 }
 
 export function useStartupOnboarding(options: UseStartupOnboardingOptions): UseStartupOnboardingResult {
@@ -103,16 +101,10 @@ export function useStartupOnboarding(options: UseStartupOnboardingOptions): UseS
 		[currentProjectId, refreshRuntimeProjectConfig, refreshSettingsRuntimeProjectConfig],
 	);
 
-	const handleOnboardingClineSetupSaved = useCallback(() => {
-		refreshRuntimeProjectConfig();
-		refreshSettingsRuntimeProjectConfig();
-	}, [refreshRuntimeProjectConfig, refreshSettingsRuntimeProjectConfig]);
-
 	return {
 		isStartupOnboardingDialogOpen,
 		handleOpenStartupOnboardingDialog,
 		handleCloseStartupOnboardingDialog,
 		handleSelectOnboardingAgent,
-		handleOnboardingClineSetupSaved,
 	};
 }

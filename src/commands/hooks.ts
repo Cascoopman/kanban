@@ -14,9 +14,7 @@ import {
 	resolveCodexRolloutFinalMessageForCwd,
 	startCodexSessionWatcher,
 } from "./hook-events/codex-hook-events";
-import { enrichDroidReviewMetadata } from "./hook-events/droid-hook-events";
 import { asRecord, normalizeWhitespace, readNestedString, readStringField } from "./hook-events/hook-utils";
-import { normalizeKiroHookMetadata } from "./hook-events/kiro-hook-events";
 
 export {
 	createCodexWatcherState,
@@ -35,7 +33,7 @@ interface HooksIngestArgs {
 	payload?: Record<string, unknown> | null;
 }
 
-interface HookCommandMetadataOptionValues {
+export interface HookCommandMetadataOptionValues {
 	source?: string;
 	activityText?: string;
 	toolName?: string;
@@ -275,12 +273,6 @@ export function inferHookSourceFromPayload(payload: Record<string, unknown> | nu
 	if (normalizedTranscriptPath?.includes("/.claude/")) {
 		return "claude";
 	}
-	if (normalizedTranscriptPath?.includes("/.kiro/")) {
-		return "kiro";
-	}
-	if (normalizedTranscriptPath?.includes("/.factory/")) {
-		return "droid";
-	}
 	if (payload && readStringField(payload, "type") === "agent-turn-complete") {
 		return "codex";
 	}
@@ -293,19 +285,6 @@ function normalizeHookMetadata(
 	flagMetadata: Partial<RuntimeTaskHookActivity>,
 ): Partial<RuntimeTaskHookActivity> | undefined {
 	const inferredSource = inferHookSourceFromPayload(payload);
-	const sourceHint = flagMetadata.source ?? inferredSource;
-	if (sourceHint?.toLowerCase() === "kiro") {
-		const kiroMetadata = normalizeKiroHookMetadata({
-			event,
-			payload,
-			flagMetadata,
-			sourceHint,
-		});
-		if (kiroMetadata) {
-			return kiroMetadata;
-		}
-	}
-
 	const hookEventName = payload
 		? (readStringField(payload, "hook_event_name") ??
 			readStringField(payload, "hookEventName") ??
@@ -498,8 +477,7 @@ async function runHooksNotify(
 	try {
 		const stdinPayload = await readStdinText();
 		const parsedArgs = parseHooksIngestArgs(event, options, payloadArg, stdinPayload);
-		const codexEnrichedArgs = await enrichCodexReviewMetadata(parsedArgs, process.cwd());
-		const args = await enrichDroidReviewMetadata(codexEnrichedArgs);
+		const args = await enrichCodexReviewMetadata(parsedArgs, process.cwd());
 		await ingestHookEvent(args);
 	} catch {
 		// Best effort only.
@@ -518,20 +496,7 @@ async function readStdinText(): Promise<string> {
 	return chunks.join("");
 }
 
-function mapGeminiHookEvent(eventName: string): RuntimeHookEvent | null {
-	if (eventName === "AfterAgent") {
-		return "to_review";
-	}
-	if (eventName === "BeforeAgent") {
-		return "to_in_progress";
-	}
-	if (eventName === "AfterTool" || eventName === "BeforeTool" || eventName === "Notification") {
-		return "activity";
-	}
-	return null;
-}
-
-async function runCodexHookSubcommand(
+export async function runCodexHookSubcommand(
 	event: RuntimeHookEvent,
 	options: HookCommandMetadataOptionValues,
 	payloadArg: string | undefined,
@@ -552,43 +517,6 @@ async function runCodexHookSubcommand(
 	} catch {
 		// Best effort only.
 	}
-}
-
-async function runGeminiHookSubcommand(): Promise<void> {
-	let payload = "";
-	try {
-		payload = await readStdinText();
-	} catch {
-		payload = "";
-	}
-
-	let hookEventName = "";
-	let payloadRecord: Record<string, unknown> | null = null;
-	try {
-		const parsed = JSON.parse(payload || "{}") as { hook_event_name?: unknown };
-		payloadRecord = asRecord(parsed);
-		hookEventName =
-			typeof parsed.hook_event_name === "string"
-				? parsed.hook_event_name
-				: payloadRecord && typeof payloadRecord.hookEventName === "string"
-					? payloadRecord.hookEventName
-					: "";
-	} catch {
-		hookEventName = "";
-		payloadRecord = null;
-	}
-
-	process.stdout.write("{}\n");
-
-	const mappedEvent = mapGeminiHookEvent(hookEventName);
-	if (!mappedEvent) {
-		return;
-	}
-	const metadata = normalizeHookMetadata(mappedEvent, payloadRecord, {
-		source: "gemini",
-		hookEventName: hookEventName || undefined,
-	});
-	spawnBackgroundKanban(appendMetadataFlags(["hooks", "notify", "--event", mappedEvent], metadata));
 }
 
 export function buildCodexWrapperChildArgs(agentArgs: string[]): string[] {
@@ -720,8 +648,7 @@ async function runHooksIngest(
 	try {
 		const stdinPayload = await readStdinText();
 		const parsedArgs = parseHooksIngestArgs(event, options, payloadArg, stdinPayload);
-		const codexEnrichedArgs = await enrichCodexReviewMetadata(parsedArgs, process.cwd());
-		args = await enrichDroidReviewMetadata(codexEnrichedArgs);
+		args = await enrichCodexReviewMetadata(parsedArgs, process.cwd());
 	} catch (error) {
 		process.stderr.write(`kanban hooks ingest: ${formatError(error)}\n`);
 		process.exitCode = 1;
@@ -778,13 +705,6 @@ export function registerHooksCommand(program: Command): void {
 				await runHooksNotify(options.event, options, payload);
 			},
 		);
-
-	hooks
-		.command("gemini-hook")
-		.description("Gemini hook entrypoint.")
-		.action(async () => {
-			await runGeminiHookSubcommand();
-		});
 
 	hooks
 		.command("codex-hook [payload]")

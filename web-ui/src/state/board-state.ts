@@ -3,7 +3,8 @@ import { createShortTaskId } from "@runtime-task-id";
 import * as runtimeTaskState from "@runtime-task-state";
 
 import { createInitialBoardData } from "@/data/board-data";
-import type { RuntimeAgentId, RuntimeClineReasoningEffort, RuntimeTaskClineSettings } from "@/runtime/types";
+import { isSupportedAgentId } from "@/runtime/supported-agents";
+import type { RuntimeAgentId } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
 import {
 	type BoardCard,
@@ -27,7 +28,6 @@ export interface TaskDraft {
 	autoReviewMode?: TaskAutoReviewMode;
 	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
-	clineSettings?: RuntimeTaskClineSettings;
 	branchedFromTaskId?: string;
 	baseRef: string;
 }
@@ -98,53 +98,6 @@ function normalizeTaskImages(rawImages: unknown): TaskImage[] | undefined {
 	return images.length > 0 ? images : undefined;
 }
 
-function normalizeTaskClineReasoningEffort(rawReasoningEffort: unknown): RuntimeClineReasoningEffort | undefined {
-	if (
-		rawReasoningEffort === "low" ||
-		rawReasoningEffort === "medium" ||
-		rawReasoningEffort === "high" ||
-		rawReasoningEffort === "xhigh"
-	) {
-		return rawReasoningEffort;
-	}
-	return undefined;
-}
-
-function normalizeTaskClineSettings(input: {
-	rawSettings?: unknown;
-	legacyProviderId?: unknown;
-	legacyModelId?: unknown;
-	legacyReasoningEffort?: unknown;
-}): RuntimeTaskClineSettings | undefined {
-	if (input.rawSettings && typeof input.rawSettings === "object") {
-		const settings = input.rawSettings as {
-			providerId?: unknown;
-			modelId?: unknown;
-			reasoningEffort?: unknown;
-		};
-		const providerId = typeof settings.providerId === "string" ? settings.providerId.trim() : "";
-		const modelId = typeof settings.modelId === "string" ? settings.modelId.trim() : "";
-		const reasoningEffort = normalizeTaskClineReasoningEffort(settings.reasoningEffort);
-		return {
-			...(providerId ? { providerId } : {}),
-			...(modelId ? { modelId } : {}),
-			...(reasoningEffort ? { reasoningEffort } : {}),
-		};
-	}
-
-	const legacyProviderId = typeof input.legacyProviderId === "string" ? input.legacyProviderId.trim() : "";
-	const legacyModelId = typeof input.legacyModelId === "string" ? input.legacyModelId.trim() : "";
-	const reasoningEffort = normalizeTaskClineReasoningEffort(input.legacyReasoningEffort);
-	if (!legacyProviderId && !legacyModelId && input.legacyReasoningEffort !== "default" && !reasoningEffort) {
-		return undefined;
-	}
-	return {
-		...(legacyProviderId ? { providerId: legacyProviderId } : {}),
-		...(legacyModelId ? { modelId: legacyModelId } : {}),
-		...(reasoningEffort ? { reasoningEffort } : {}),
-	};
-}
-
 function normalizeCard(rawCard: unknown): BoardCard | null {
 	if (!rawCard || typeof rawCard !== "object") {
 		return null;
@@ -160,10 +113,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		images?: unknown;
 		baseRef?: unknown;
 		agentId?: unknown;
-		clineSettings?: unknown;
-		clineProviderId?: unknown;
-		clineModelId?: unknown;
-		clineReasoningEffort?: unknown;
 		branchedFromTaskId?: unknown;
 		createdAt?: unknown;
 		updatedAt?: unknown;
@@ -180,13 +129,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	if (!title) {
 		return null;
 	}
-	const clineSettings = normalizeTaskClineSettings({
-		rawSettings: card.clineSettings,
-		legacyProviderId: card.clineProviderId,
-		legacyModelId: card.clineModelId,
-		legacyReasoningEffort: card.clineReasoningEffort,
-	});
-
 	const now = Date.now();
 
 	return {
@@ -200,8 +142,7 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		),
 		images: normalizeTaskImages(card.images),
 		baseRef,
-		...(typeof card.agentId === "string" && card.agentId ? { agentId: card.agentId as RuntimeAgentId } : {}),
-		...(clineSettings !== undefined ? { clineSettings } : {}),
+		...(typeof card.agentId === "string" && isSupportedAgentId(card.agentId) ? { agentId: card.agentId } : {}),
 		...(typeof card.branchedFromTaskId === "string" && card.branchedFromTaskId.trim()
 			? { branchedFromTaskId: card.branchedFromTaskId.trim() }
 			: {}),
@@ -352,7 +293,6 @@ export function addTaskToColumnWithResult(
 			autoReviewMode: draft.autoReviewMode,
 			images: draft.images,
 			agentId: draft.agentId,
-			clineSettings: draft.clineSettings,
 			branchedFromTaskId: draft.branchedFromTaskId,
 			baseRef: draft.baseRef,
 		},
@@ -551,7 +491,6 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 							? draft.images.map((image) => ({ ...image }))
 							: undefined,
 				agentId: draft.agentId,
-				clineSettings: draft.clineSettings,
 				baseRef,
 				updatedAt: Date.now(),
 			};
@@ -582,79 +521,7 @@ export function updateTaskTitle(
 		autoReviewMode: selection.card.autoReviewMode,
 		images: selection.card.images,
 		agentId: selection.card.agentId,
-		clineSettings: selection.card.clineSettings,
 		baseRef: selection.card.baseRef,
-	});
-}
-
-export function applyTaskDetailClineSettingsSelection(
-	board: BoardData,
-	taskId: string,
-	settings: {
-		agentId?: RuntimeAgentId;
-		clineSettings?: RuntimeTaskClineSettings | null;
-	},
-): { board: BoardData; updated: boolean } {
-	const selection = findCardSelection(board, taskId);
-	if (!selection) {
-		return { board, updated: false };
-	}
-
-	const hasExplicitTaskAgentSettings =
-		selection.card.agentId === "cline" || selection.card.clineSettings !== undefined;
-	if (!hasExplicitTaskAgentSettings) {
-		return { board, updated: false };
-	}
-
-	return updateTask(board, taskId, {
-		prompt: selection.card.prompt,
-		startInPlanMode: selection.card.startInPlanMode,
-		autoReviewEnabled: selection.card.autoReviewEnabled,
-		autoReviewMode: selection.card.autoReviewMode,
-		images: selection.card.images,
-		agentId: settings.agentId,
-		clineSettings: settings.clineSettings ?? undefined,
-		baseRef: selection.card.baseRef,
-	});
-}
-
-export function applyTaskDetailClineSettingsChange(
-	board: BoardData,
-	taskId: string,
-	change: {
-		providerId: string;
-		modelId: string;
-		reasoningEffort: RuntimeClineReasoningEffort | "";
-	},
-	defaults: {
-		providerId?: string | null;
-		modelId?: string | null;
-	},
-): { board: BoardData; updated: boolean } {
-	const selection = findCardSelection(board, taskId);
-	if (!selection) {
-		return { board, updated: false };
-	}
-
-	const hasExplicitTaskAgentSettings =
-		selection.card.agentId === "cline" || selection.card.clineSettings !== undefined;
-	if (!hasExplicitTaskAgentSettings) {
-		return { board, updated: false };
-	}
-
-	const nextTaskProviderId = change.providerId.trim() || defaults.providerId?.trim() || "";
-	const nextTaskModelId = change.modelId.trim() || defaults.modelId?.trim() || "";
-	if (!nextTaskProviderId || !nextTaskModelId) {
-		return { board, updated: false };
-	}
-
-	return applyTaskDetailClineSettingsSelection(board, taskId, {
-		agentId: "cline",
-		clineSettings: {
-			providerId: nextTaskProviderId,
-			modelId: nextTaskModelId,
-			...(change.reasoningEffort ? { reasoningEffort: change.reasoningEffort } : {}),
-		},
 	});
 }
 
@@ -671,7 +538,6 @@ export function disableTaskAutoReview(board: BoardData, taskId: string): { board
 		autoReviewMode: DEFAULT_TASK_AUTO_REVIEW_MODE,
 		images: selection.card.images,
 		agentId: selection.card.agentId,
-		clineSettings: selection.card.clineSettings,
 		baseRef: selection.card.baseRef,
 	});
 }

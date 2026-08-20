@@ -99,7 +99,7 @@ function createSummary(
 	return {
 		taskId: "task-1",
 		state,
-		agentId: "cline",
+		agentId: "codex",
 		workspacePath: "/tmp/worktree",
 		pid: null,
 		startedAt: 1,
@@ -292,135 +292,6 @@ describe("BoardCard", () => {
 		expect(container.textContent).toContain("~/.cline/worktrees/trash-task-1/kanban");
 	});
 
-	it("shows formatted agent override details with model name and reasoning effort", async () => {
-		mockWorkspaceSnapshot = {
-			taskId: "task-1",
-			path: "/tmp/worktrees/task-1",
-			branch: "feature/override",
-			isDetached: false,
-			headCommit: "1234567890abcdef",
-			changedFiles: 2,
-			additions: 5,
-			deletions: 1,
-		};
-
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						agentId: "cline",
-						clineSettings: {
-							modelId: "openai/gpt-5.5",
-							reasoningEffort: "low",
-						},
-					})}
-					index={0}
-					columnId="review"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("Cline");
-		expect(container.textContent).toContain("GPT-5.5 (Low)");
-		expect(container.textContent).not.toContain("openai/gpt-5.5");
-	});
-
-	it("shows the task-level indicator for reasoning-only overrides", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						clineSettings: {
-							reasoningEffort: "low",
-						},
-					})}
-					index={0}
-					columnId="backlog"
-					defaultClineModelId="openai/gpt-5.5"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("GPT-5.5 (Low)");
-	});
-
-	it("shows a fallback indicator for reasoning-only overrides without a resolved default model", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						clineSettings: {
-							reasoningEffort: "low",
-						},
-					})}
-					index={0}
-					columnId="backlog"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("Default model (Low)");
-	});
-
-	it("shows explicit default reasoning metadata for reasoning-only task overrides", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						agentId: "cline",
-						clineSettings: {},
-					})}
-					index={0}
-					columnId="backlog"
-					defaultClineModelId="openai/gpt-5.5"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("GPT-5.5 (Default)");
-		expect(container.textContent).not.toContain("GPT-5.5 (High)");
-	});
-
-	it("does not mislabel provider-only overrides as the global default model", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						clineSettings: {
-							providerId: "groq",
-						},
-					})}
-					index={0}
-					columnId="backlog"
-					defaultClineModelId="openai/gpt-5.5"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("Provider: groq");
-		expect(container.textContent).not.toContain("GPT-5.5");
-	});
-
-	it("does not show inherited global reasoning for explicit model overrides using default effort", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({
-						agentId: "cline",
-						clineSettings: {
-							modelId: "openai/gpt-5.5",
-						},
-					})}
-					index={0}
-					columnId="backlog"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("GPT-5.5");
-		expect(container.textContent).not.toContain("GPT-5.5 (High)");
-	});
-
 	it("shows tool input details in the session preview text", async () => {
 		await act(async () => {
 			root.render(
@@ -431,7 +302,7 @@ describe("BoardCard", () => {
 					sessionSummary={{
 						taskId: "task-1",
 						state: "running",
-						agentId: "cline",
+						agentId: "codex",
 						workspacePath: "/tmp/worktree",
 						pid: null,
 						startedAt: Date.now(),
@@ -447,7 +318,7 @@ describe("BoardCard", () => {
 							finalMessage: null,
 							hookEventName: "tool_call",
 							notificationType: null,
-							source: "cline-sdk",
+							source: "codex",
 						},
 						latestTurnCheckpoint: null,
 						previousTurnCheckpoint: null,
@@ -456,11 +327,11 @@ describe("BoardCard", () => {
 			);
 		});
 
-		expect(container.textContent).toContain("Read(src/index.ts)");
+		expect(container.textContent).toContain("Read: src/index.ts");
 		expect(container.textContent).not.toContain("Using Read");
 	});
 
-	it("shows non-cline tool activity in the compact tool label format", async () => {
+	it("shows tool activity in the compact tool label format", async () => {
 		await act(async () => {
 			root.render(
 				<BoardCard
@@ -483,7 +354,7 @@ describe("BoardCard", () => {
 			);
 		});
 
-		expect(container.textContent).toContain("Read(src/index.ts)");
+		expect(container.textContent).toContain("Read: src/index.ts");
 		expect(container.textContent).not.toContain("Completed Read");
 	});
 
@@ -495,7 +366,7 @@ describe("BoardCard", () => {
 					index={0}
 					columnId="in_progress"
 					sessionSummary={createSummary("running", {
-						agentId: "kiro",
+						agentId: "claude",
 						latestHookActivity: {
 							activityText: "Using fs_write: src/index.ts",
 							toolName: "fs_write",
@@ -503,14 +374,14 @@ describe("BoardCard", () => {
 							finalMessage: null,
 							hookEventName: "preToolUse",
 							notificationType: null,
-							source: "kiro",
+							source: "claude",
 						},
 					})}
 				/>,
 			);
 		});
 
-		expect(container.textContent).toContain("fs_write(src/index.ts)");
+		expect(container.textContent).toContain("fs_write: src/index.ts");
 	});
 
 	it("parses codex tool activity into the compact tool label format", async () => {
@@ -536,7 +407,7 @@ describe("BoardCard", () => {
 			);
 		});
 
-		expect(container.textContent).toContain("Read(src/index.ts)");
+		expect(container.textContent).toContain("Read: src/index.ts");
 		expect(container.textContent).not.toContain("Calling Read");
 	});
 
@@ -548,7 +419,7 @@ describe("BoardCard", () => {
 					index={0}
 					columnId="review"
 					sessionSummary={createSummary("awaiting_review", {
-						agentId: "kiro",
+						agentId: "claude",
 						latestHookActivity: {
 							activityText: "Waiting for review",
 							toolName: "fs_write",
@@ -556,7 +427,7 @@ describe("BoardCard", () => {
 							finalMessage: null,
 							hookEventName: "stop",
 							notificationType: null,
-							source: "kiro",
+							source: "claude",
 						},
 					})}
 				/>,
@@ -565,45 +436,6 @@ describe("BoardCard", () => {
 
 		expect(container.textContent).toContain("Waiting for review");
 		expect(container.textContent).not.toContain("fs_write");
-	});
-
-	it("keeps showing the last cline tool label during assistant streaming", async () => {
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard()}
-					index={0}
-					columnId="in_progress"
-					sessionSummary={{
-						taskId: "task-1",
-						state: "running",
-						agentId: "cline",
-						workspacePath: "/tmp/worktree",
-						pid: null,
-						startedAt: Date.now(),
-						updatedAt: Date.now(),
-						lastOutputAt: Date.now(),
-						reviewReason: null,
-						exitCode: null,
-						lastHookAt: Date.now(),
-						latestHookActivity: {
-							activityText: "Agent active",
-							toolName: "Read",
-							toolInputSummary: "src/index.ts",
-							finalMessage: "Looking at the file now",
-							hookEventName: "assistant_delta",
-							notificationType: null,
-							source: "cline-sdk",
-						},
-						latestTurnCheckpoint: null,
-						previousTurnCheckpoint: null,
-					}}
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("Read(src/index.ts)");
-		expect(container.textContent).not.toContain("Thinking...");
 	});
 
 	it("renders a new card description before the async measure observer reports width", async () => {
@@ -641,7 +473,7 @@ describe("BoardCard", () => {
 								finalMessage: preview,
 								hookEventName: "assistant_delta",
 								notificationType: null,
-								source: "cline-sdk",
+								source: "codex",
 							},
 						})}
 					/>
@@ -678,7 +510,7 @@ describe("BoardCard", () => {
 							finalMessage: preview,
 							hookEventName: "assistant_delta",
 							notificationType: null,
-							source: "cline-sdk",
+							source: "codex",
 						},
 					})}
 				/>,
@@ -711,7 +543,7 @@ describe("BoardCard", () => {
 							finalMessage: "Reviewing the final diff",
 							hookEventName: "assistant_delta",
 							notificationType: null,
-							source: "cline-sdk",
+							source: "codex",
 						},
 					})}
 				/>,

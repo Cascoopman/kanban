@@ -36,17 +36,6 @@ function createRuntimeConfigResponse(selectedAgentId: RuntimeConfigResponse["sel
 			},
 		],
 		shortcuts: [],
-		clineProviderSettings: {
-			providerId: null,
-			modelId: null,
-			baseUrl: null,
-			apiKeyConfigured: false,
-			oauthProvider: null,
-			oauthAccessTokenConfigured: false,
-			oauthRefreshTokenConfigured: false,
-			oauthAccountId: null,
-			oauthExpiresAt: null,
-		},
 		commitPromptTemplate: "",
 		openPrPromptTemplate: "",
 		commitPromptTemplateDefault: "",
@@ -58,20 +47,17 @@ function HookHarness({
 	currentProjectId,
 	runtimeProjectConfig,
 	isRuntimeProjectConfigLoading,
-	isTaskAgentReady,
 	onSnapshot,
 }: {
 	currentProjectId: string | null;
 	runtimeProjectConfig: RuntimeConfigResponse | null;
 	isRuntimeProjectConfigLoading: boolean;
-	isTaskAgentReady: boolean | null;
 	onSnapshot: (snapshot: HookSnapshot) => void;
 }): null {
 	const snapshot = useStartupOnboarding({
 		currentProjectId,
 		runtimeProjectConfig,
 		isRuntimeProjectConfigLoading,
-		isTaskAgentReady,
 		refreshRuntimeProjectConfig: () => {},
 		refreshSettingsRuntimeProjectConfig: () => {},
 	});
@@ -122,7 +108,6 @@ describe("useStartupOnboarding", () => {
 					currentProjectId={null}
 					runtimeProjectConfig={null}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={null}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
@@ -146,9 +131,8 @@ describe("useStartupOnboarding", () => {
 			root.render(
 				<HookHarness
 					currentProjectId={null}
-					runtimeProjectConfig={createRuntimeConfigResponse("cline")}
+					runtimeProjectConfig={createRuntimeConfigResponse("claude")}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={false}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
@@ -177,7 +161,6 @@ describe("useStartupOnboarding", () => {
 					currentProjectId={null}
 					runtimeProjectConfig={null}
 					isRuntimeProjectConfigLoading={true}
-					isTaskAgentReady={null}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
@@ -202,9 +185,8 @@ describe("useStartupOnboarding", () => {
 			root.render(
 				<HookHarness
 					currentProjectId={"project-1"}
-					runtimeProjectConfig={createRuntimeConfigResponse("cline")}
+					runtimeProjectConfig={createRuntimeConfigResponse("claude")}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={false}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
@@ -228,9 +210,8 @@ describe("useStartupOnboarding", () => {
 			root.render(
 				<HookHarness
 					currentProjectId={null}
-					runtimeProjectConfig={createRuntimeConfigResponse("cline")}
+					runtimeProjectConfig={createRuntimeConfigResponse("claude")}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={false}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
@@ -262,9 +243,8 @@ describe("useStartupOnboarding", () => {
 			root.render(
 				<HookHarness
 					currentProjectId={"project-1"}
-					runtimeProjectConfig={createRuntimeConfigResponse("cline")}
+					runtimeProjectConfig={createRuntimeConfigResponse("claude")}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={false}
 					onSnapshot={(nextSnapshot) => {
 						latestSnapshot = nextSnapshot;
 					}}
@@ -291,7 +271,6 @@ describe("useStartupOnboarding", () => {
 					currentProjectId={"project-1"}
 					runtimeProjectConfig={createRuntimeConfigResponse("codex")}
 					isRuntimeProjectConfigLoading={false}
-					isTaskAgentReady={true}
 					onSnapshot={(snapshot) => {
 						latestSnapshot = snapshot;
 					}}
