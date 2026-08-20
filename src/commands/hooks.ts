@@ -33,7 +33,7 @@ interface HooksIngestArgs {
 	payload?: Record<string, unknown> | null;
 }
 
-interface HookCommandMetadataOptionValues {
+export interface HookCommandMetadataOptionValues {
 	source?: string;
 	activityText?: string;
 	toolName?: string;
@@ -496,7 +496,7 @@ async function readStdinText(): Promise<string> {
 	return chunks.join("");
 }
 
-async function runCodexHookSubcommand(
+export async function runCodexHookSubcommand(
 	event: RuntimeHookEvent,
 	options: HookCommandMetadataOptionValues,
 	payloadArg: string | undefined,
