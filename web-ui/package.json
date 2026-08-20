@@ -65,6 +65,10 @@
     "vitest": "^4.1.0"
   },
   "overrides": {
-    "protobufjs": "7.5.8"
+    "dompurify": ">=3.4.13 <4",
+    "nanoid@<4": ">=3.3.18 <4",
+    "postcss": ">=8.5.23 <9",
+    "protobufjs": ">=7.6.1 <8",
+    "ws": ">=8.21.0 <9"
   }
 }
