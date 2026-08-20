@@ -37,16 +37,23 @@ function createBoard(): BoardData {
 interface HookSnapshot {
 	selectedTaskId: string | null;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
+	handleProjectSelect: (projectId: string) => void;
 }
 
 function HookHarness({
 	board,
 	currentProjectId,
+	isProjectSwitching = false,
+	isWorkspaceMetadataPending = false,
+	onSelectProject = () => {},
 	onDetailClosed,
 	onSnapshot,
 }: {
 	board: BoardData;
 	currentProjectId: string | null;
+	isProjectSwitching?: boolean;
+	isWorkspaceMetadataPending?: boolean;
+	onSelectProject?: (projectId: string) => void;
 	onDetailClosed?: () => void;
 	onSnapshot: (snapshot: HookSnapshot) => void;
 }): null {
@@ -55,8 +62,9 @@ function HookHarness({
 		currentProjectId,
 		isAwaitingWorkspaceSnapshot: false,
 		isInitialRuntimeLoad: false,
-		isProjectSwitching: false,
-		isWorkspaceMetadataPending: false,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+		onSelectProject,
 		onDetailClosed,
 	});
 
@@ -64,8 +72,9 @@ function HookHarness({
 		onSnapshot({
 			selectedTaskId: navigation.selectedTaskId,
 			setSelectedTaskId: navigation.setSelectedTaskId,
+			handleProjectSelect: navigation.handleProjectSelect,
 		});
-	}, [navigation.selectedTaskId, navigation.setSelectedTaskId, onSnapshot]);
+	}, [navigation.handleProjectSelect, navigation.selectedTaskId, navigation.setSelectedTaskId, onSnapshot]);
 
 	return null;
 }
@@ -175,5 +184,101 @@ describe("useDetailTaskNavigation", () => {
 
 		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBeNull();
 		expect(onDetailClosed).toHaveBeenCalled();
+	});
+
+	it("opens the highest-priority top task after switching projects from detail view", () => {
+		const sourceBoard = createBoard();
+		const destinationBoard: BoardData = {
+			columns: [
+				{ id: "backlog", title: "Backlog", cards: [] },
+				{
+					id: "in_progress",
+					title: "In Progress",
+					cards: [
+						{
+							id: "in-progress-top",
+							title: "In progress",
+							prompt: "",
+							startInPlanMode: false,
+							baseRef: "main",
+							createdAt: 1,
+							updatedAt: 1,
+						},
+					],
+				},
+				{
+					id: "review",
+					title: "Review",
+					cards: [
+						{
+							id: "review-top",
+							title: "Review",
+							prompt: "",
+							startInPlanMode: false,
+							baseRef: "main",
+							createdAt: 1,
+							updatedAt: 1,
+						},
+					],
+				},
+				{ id: "trash", title: "Done", cards: [] },
+			],
+			dependencies: [],
+		};
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSelectProject = vi.fn();
+
+		act(() => {
+			root.render(
+				<HookHarness
+					board={sourceBoard}
+					currentProjectId="project-1"
+					onSelectProject={onSelectProject}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+		act(() => {
+			requireSnapshot(latestSnapshot).setSelectedTaskId("task-1");
+		});
+		act(() => {
+			requireSnapshot(latestSnapshot).handleProjectSelect("project-2");
+		});
+
+		expect(onSelectProject).toHaveBeenCalledWith("project-2");
+		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBeNull();
+
+		act(() => {
+			root.render(
+				<HookHarness
+					board={destinationBoard}
+					currentProjectId="project-2"
+					isWorkspaceMetadataPending
+					onSelectProject={onSelectProject}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBeNull();
+
+		act(() => {
+			root.render(
+				<HookHarness
+					board={destinationBoard}
+					currentProjectId="project-2"
+					onSelectProject={onSelectProject}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBe("review-top");
 	});
 });
