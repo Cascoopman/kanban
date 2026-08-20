@@ -346,6 +346,12 @@ export function GitCommitDiffPanel({
 						const rows = diffSource ? getFileRows(diffSource, path) : [];
 						const commitFile = getCommitFile(diffSource, path);
 						const isBinaryFile = isBinaryFilePath(path);
+						const workspaceFile =
+							diffSource?.type === "working-copy"
+								? (diffSource.files.find((file) => file.path === path) ?? null)
+								: null;
+						const isContentOmitted =
+							!isBinaryFile && workspaceFile?.oldText === null && workspaceFile.newText === null;
 
 						return (
 							<section
@@ -412,9 +418,13 @@ export function GitCommitDiffPanel({
 													Renamed from <code className="font-mono">{commitFile.previousPath}</code>
 												</div>
 											) : null}
-											{!isBinaryFile && rows.length > 0 ? (
+											{isBinaryFile || isContentOmitted ? (
+												<div className="p-3 text-xs text-text-tertiary">
+													{isBinaryFile ? "Binary file not shown." : "File content not shown."}
+												</div>
+											) : rows.length > 0 ? (
 												<ReadOnlyUnifiedDiff rows={rows} path={path} />
-											) : !isBinaryFile ? (
+											) : (
 												<div
 													style={{
 														padding: "12px",
@@ -424,7 +434,7 @@ export function GitCommitDiffPanel({
 												>
 													No textual diff available.
 												</div>
-											) : null}
+											)}
 										</div>
 									</div>
 								) : null}

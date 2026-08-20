@@ -239,7 +239,7 @@ describe("DiffViewerPanel", () => {
 		expect(container.querySelector(".kb-diff-row-removed")).toBeNull();
 	});
 
-	it("does not render diff rows for binary file paths", async () => {
+	it("explains why binary file contents are omitted", async () => {
 		const workspaceFiles: RuntimeWorkspaceFileChange[] = [
 			{
 				path: "assets/logo.png",
@@ -265,6 +265,35 @@ describe("DiffViewerPanel", () => {
 
 		expect(container.textContent).toContain("assets/logo.png");
 		expect(container.textContent).toContain("Binary");
+		expect(container.querySelector(".kb-diff-row")).toBeNull();
+		expect(container.textContent).toContain("Binary file not shown.");
+	});
+
+	it("explains when text content is omitted by the server", async () => {
+		const workspaceFiles: RuntimeWorkspaceFileChange[] = [
+			{
+				path: "large.txt",
+				status: "modified",
+				additions: 100,
+				deletions: 100,
+				oldText: null,
+				newText: null,
+			},
+		];
+
+		await act(async () => {
+			root.render(
+				<DiffViewerPanel
+					workspaceFiles={workspaceFiles}
+					selectedPath={null}
+					onSelectedPathChange={() => {}}
+					comments={new Map<string, DiffLineComment>()}
+					onCommentsChange={() => {}}
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain("File content not shown.");
 		expect(container.querySelector(".kb-diff-row")).toBeNull();
 	});
 

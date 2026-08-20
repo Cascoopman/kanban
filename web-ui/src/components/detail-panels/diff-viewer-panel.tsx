@@ -26,6 +26,7 @@ interface FileDiffGroup {
 	entries: Array<{
 		id: string;
 		isBinary: boolean;
+		contentOmitted: boolean;
 		oldText: string | null;
 		newText: string;
 	}>;
@@ -530,17 +531,21 @@ export function DiffViewerPanel({
 	const programmaticScrollClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const diffEntries = useMemo(() => {
-		return (workspaceFiles ?? []).map((file, index) => ({
-			id: `workspace-${file.path}-${index}`,
-			path: file.path,
-			isBinary: isBinaryFilePath(file.path),
-			oldText: file.oldText,
-			newText: file.newText ?? "",
-			additions: file.additions,
-			deletions: file.deletions,
-			timestamp: 0,
-			toolTitle: `${file.status} (${file.additions}+/${file.deletions}-)`,
-		}));
+		return (workspaceFiles ?? []).map((file, index) => {
+			const isBinary = isBinaryFilePath(file.path);
+			return {
+				id: `workspace-${file.path}-${index}`,
+				path: file.path,
+				isBinary,
+				contentOmitted: !isBinary && file.oldText === null && file.newText === null,
+				oldText: file.oldText,
+				newText: file.newText ?? "",
+				additions: file.additions,
+				deletions: file.deletions,
+				timestamp: 0,
+				toolTitle: `${file.status} (${file.additions}+/${file.deletions}-)`,
+			};
+		});
 	}, [workspaceFiles]);
 
 	const groupedByPath = useMemo((): FileDiffGroup[] => {
@@ -562,6 +567,7 @@ export function DiffViewerPanel({
 			group.entries.push({
 				id: entry.id,
 				isBinary: entry.isBinary,
+				contentOmitted: entry.contentOmitted,
 				oldText: entry.oldText,
 				newText: entry.newText,
 			});
@@ -889,7 +895,11 @@ export function DiffViewerPanel({
 										>
 											{group.entries.map((entry) => (
 												<div key={entry.id} className="kb-diff-entry">
-													{entry.isBinary ? null : viewMode === "split" ? (
+													{entry.isBinary || entry.contentOmitted ? (
+														<div className="p-3 text-xs text-text-tertiary">
+															{entry.isBinary ? "Binary file not shown." : "File content not shown."}
+														</div>
+													) : viewMode === "split" ? (
 														<SplitDiff
 															path={group.path}
 															oldText={entry.oldText}

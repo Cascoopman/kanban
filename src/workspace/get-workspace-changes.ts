@@ -6,9 +6,10 @@ import type {
 	RuntimeWorkspaceFileChange,
 	RuntimeWorkspaceFileStatus,
 } from "../core/api-contract";
-import { getGitStdout } from "./git-utils";
+import { getGitStdout, runGit } from "./git-utils";
 
 const WORKSPACE_CHANGES_CACHE_MAX_ENTRIES = 128;
+const MAX_DIFF_TEXT_BYTES = 5 * 1024 * 1024;
 
 interface WorkspaceChangesCacheEntry {
 	stateKey: string;
@@ -38,6 +39,12 @@ interface ChangesFromRefInput {
 interface DiffStat {
 	additions: number;
 	deletions: number;
+	isBinary: boolean;
+}
+
+interface TextReadResult {
+	text: string | null;
+	omitted: boolean;
 }
 
 interface FileFingerprint {
@@ -166,39 +173,62 @@ function pruneWorkspaceChangesCache(): void {
 	}
 }
 
-async function readHeadFile(repoRoot: string, path: string): Promise<string | null> {
+const EMPTY_TEXT_READ: TextReadResult = { text: null, omitted: false };
+
+async function readGitFile(repoRoot: string, ref: string, path: string): Promise<TextReadResult> {
 	try {
-		return await getGitStdout(["show", `HEAD:${path}`], repoRoot);
+		const sizeOutput = await getGitStdout(["cat-file", "-s", `${ref}:${path}`], repoRoot);
+		const size = Number.parseInt(sizeOutput, 10);
+		if (Number.isFinite(size) && size > MAX_DIFF_TEXT_BYTES) {
+			return { text: null, omitted: true };
+		}
+		return { text: await getGitStdout(["show", `${ref}:${path}`], repoRoot), omitted: false };
 	} catch {
-		return null;
+		return EMPTY_TEXT_READ;
 	}
 }
 
-async function readFileAtRef(repoRoot: string, ref: string, path: string): Promise<string | null> {
+async function readWorkingTreeFile(repoRoot: string, path: string): Promise<TextReadResult> {
 	try {
-		return await getGitStdout(["show", `${ref}:${path}`], repoRoot);
+		const absolutePath = join(repoRoot, path);
+		const fileStat = await stat(absolutePath);
+		if (fileStat.size > MAX_DIFF_TEXT_BYTES) {
+			return { text: null, omitted: true };
+		}
+		return { text: await readFile(absolutePath, "utf8"), omitted: false };
 	} catch {
-		return null;
+		return EMPTY_TEXT_READ;
 	}
 }
 
-async function readWorkingTreeFile(repoRoot: string, path: string): Promise<string | null> {
-	try {
-		return await readFile(join(repoRoot, path), "utf8");
-	} catch {
+function parseDiffStatOutput(output: string): DiffStat | null {
+	const firstLine = output
+		.split("\n")
+		.map((line) => line.trim())
+		.find(Boolean);
+	if (!firstLine) {
 		return null;
 	}
+	const [addedRaw, deletedRaw] = firstLine.split("\t");
+	const isBinary = addedRaw === "-" && deletedRaw === "-";
+	const additions = Number.parseInt(addedRaw ?? "", 10);
+	const deletions = Number.parseInt(deletedRaw ?? "", 10);
+	return {
+		additions: Number.isFinite(additions) ? additions : 0,
+		deletions: Number.isFinite(deletions) ? deletions : 0,
+		isBinary,
+	};
 }
 
 function fallbackStats(oldText: string | null, newText: string | null): DiffStat {
 	if (oldText == null && newText == null) {
-		return { additions: 0, deletions: 0 };
+		return { additions: 0, deletions: 0, isBinary: false };
 	}
 	if (oldText == null) {
-		return { additions: toLineCount(newText ?? ""), deletions: 0 };
+		return { additions: toLineCount(newText ?? ""), deletions: 0, isBinary: false };
 	}
 	if (newText == null) {
-		return { additions: 0, deletions: toLineCount(oldText) };
+		return { additions: 0, deletions: toLineCount(oldText), isBinary: false };
 	}
 
 	const oldLines = toLineCount(oldText);
@@ -206,29 +236,25 @@ function fallbackStats(oldText: string | null, newText: string | null): DiffStat
 	return {
 		additions: Math.max(newLines - oldLines, 0),
 		deletions: Math.max(oldLines - newLines, 0),
+		isBinary: false,
 	};
 }
 
 async function readDiffStat(repoRoot: string, path: string): Promise<DiffStat | null> {
 	try {
 		const output = await getGitStdout(["diff", "--numstat", "HEAD", "--", path], repoRoot);
-		const firstLine = output
-			.split("\n")
-			.map((line) => line.trim())
-			.find(Boolean);
-		if (!firstLine) {
-			return null;
-		}
-		const [addedRaw, deletedRaw] = firstLine.split("\t");
-		const additions = Number.parseInt(addedRaw ?? "", 10);
-		const deletions = Number.parseInt(deletedRaw ?? "", 10);
-		return {
-			additions: Number.isFinite(additions) ? additions : 0,
-			deletions: Number.isFinite(deletions) ? deletions : 0,
-		};
+		return parseDiffStatOutput(output);
 	} catch {
 		return null;
 	}
+}
+
+async function readUntrackedDiffStat(repoRoot: string, path: string): Promise<DiffStat | null> {
+	const result = await runGit(repoRoot, ["diff", "--numstat", "--no-index", "--", "/dev/null", path]);
+	if (!result.ok && result.exitCode !== 1) {
+		return null;
+	}
+	return parseDiffStatOutput(result.stdout);
 }
 
 async function readDiffStatBetweenRefs(
@@ -239,20 +265,7 @@ async function readDiffStatBetweenRefs(
 ): Promise<DiffStat | null> {
 	try {
 		const output = await getGitStdout(["diff", "--numstat", fromRef, toRef, "--", path], repoRoot);
-		const firstLine = output
-			.split("\n")
-			.map((line) => line.trim())
-			.find(Boolean);
-		if (!firstLine) {
-			return null;
-		}
-		const [addedRaw, deletedRaw] = firstLine.split("\t");
-		const additions = Number.parseInt(addedRaw ?? "", 10);
-		const deletions = Number.parseInt(deletedRaw ?? "", 10);
-		return {
-			additions: Number.isFinite(additions) ? additions : 0,
-			deletions: Number.isFinite(deletions) ? deletions : 0,
-		};
+		return parseDiffStatOutput(output);
 	} catch {
 		return null;
 	}
@@ -261,20 +274,7 @@ async function readDiffStatBetweenRefs(
 async function readDiffStatFromRef(repoRoot: string, fromRef: string, path: string): Promise<DiffStat | null> {
 	try {
 		const output = await getGitStdout(["diff", "--numstat", fromRef, "--", path], repoRoot);
-		const firstLine = output
-			.split("\n")
-			.map((line) => line.trim())
-			.find(Boolean);
-		if (!firstLine) {
-			return null;
-		}
-		const [addedRaw, deletedRaw] = firstLine.split("\t");
-		const additions = Number.parseInt(addedRaw ?? "", 10);
-		const deletions = Number.parseInt(deletedRaw ?? "", 10);
-		return {
-			additions: Number.isFinite(additions) ? additions : 0,
-			deletions: Number.isFinite(deletions) ? deletions : 0,
-		};
+		return parseDiffStatOutput(output);
 	} catch {
 		return null;
 	}
@@ -282,20 +282,27 @@ async function readDiffStatFromRef(repoRoot: string, fromRef: string, path: stri
 
 async function buildFileChange(repoRoot: string, entry: NameStatusEntry): Promise<RuntimeWorkspaceFileChange> {
 	const basePath = entry.previousPath ?? entry.path;
-	const oldText =
-		entry.status === "added" || entry.status === "untracked" ? null : await readHeadFile(repoRoot, basePath);
-	const newText = entry.status === "deleted" ? null : await readWorkingTreeFile(repoRoot, entry.path);
 	const stats =
 		entry.status === "untracked"
-			? { additions: toLineCount(newText ?? ""), deletions: 0 }
-			: ((await readDiffStat(repoRoot, entry.path)) ?? fallbackStats(oldText, newText));
+			? await readUntrackedDiffStat(repoRoot, entry.path)
+			: await readDiffStat(repoRoot, entry.path);
+	const oldFile =
+		stats?.isBinary || entry.status === "added" || entry.status === "untracked"
+			? EMPTY_TEXT_READ
+			: await readGitFile(repoRoot, "HEAD", basePath);
+	const newFile =
+		stats?.isBinary || entry.status === "deleted" ? EMPTY_TEXT_READ : await readWorkingTreeFile(repoRoot, entry.path);
+	const omitText = stats?.isBinary === true || oldFile.omitted || newFile.omitted;
+	const oldText = omitText ? null : oldFile.text;
+	const newText = omitText ? null : newFile.text;
+	const resolvedStats = stats ?? fallbackStats(oldText, newText);
 
 	return {
 		path: entry.path,
 		previousPath: entry.previousPath,
 		status: entry.status,
-		additions: stats.additions,
-		deletions: stats.deletions,
+		additions: resolvedStats.additions,
+		deletions: resolvedStats.deletions,
 		oldText,
 		newText,
 	};
@@ -308,17 +315,22 @@ async function buildFileChangeBetweenRefs(
 	toRef: string,
 ): Promise<RuntimeWorkspaceFileChange> {
 	const basePath = entry.previousPath ?? entry.path;
-	const oldText = entry.status === "added" ? null : await readFileAtRef(repoRoot, fromRef, basePath);
-	const newText = entry.status === "deleted" ? null : await readFileAtRef(repoRoot, toRef, entry.path);
-	const stats =
-		(await readDiffStatBetweenRefs(repoRoot, fromRef, toRef, entry.path)) ?? fallbackStats(oldText, newText);
+	const stats = await readDiffStatBetweenRefs(repoRoot, fromRef, toRef, entry.path);
+	const oldFile =
+		stats?.isBinary || entry.status === "added" ? EMPTY_TEXT_READ : await readGitFile(repoRoot, fromRef, basePath);
+	const newFile =
+		stats?.isBinary || entry.status === "deleted" ? EMPTY_TEXT_READ : await readGitFile(repoRoot, toRef, entry.path);
+	const omitText = stats?.isBinary === true || oldFile.omitted || newFile.omitted;
+	const oldText = omitText ? null : oldFile.text;
+	const newText = omitText ? null : newFile.text;
+	const resolvedStats = stats ?? fallbackStats(oldText, newText);
 
 	return {
 		path: entry.path,
 		previousPath: entry.previousPath,
 		status: entry.status,
-		additions: stats.additions,
-		deletions: stats.deletions,
+		additions: resolvedStats.additions,
+		deletions: resolvedStats.deletions,
 		oldText,
 		newText,
 	};
@@ -330,22 +342,27 @@ async function buildFileChangeFromRef(
 	fromRef: string,
 ): Promise<RuntimeWorkspaceFileChange> {
 	const basePath = entry.previousPath ?? entry.path;
-	const oldText =
-		entry.status === "added" || entry.status === "untracked"
-			? null
-			: await readFileAtRef(repoRoot, fromRef, basePath);
-	const newText = entry.status === "deleted" ? null : await readWorkingTreeFile(repoRoot, entry.path);
 	const stats =
 		entry.status === "untracked"
-			? { additions: toLineCount(newText ?? ""), deletions: 0 }
-			: ((await readDiffStatFromRef(repoRoot, fromRef, entry.path)) ?? fallbackStats(oldText, newText));
+			? await readUntrackedDiffStat(repoRoot, entry.path)
+			: await readDiffStatFromRef(repoRoot, fromRef, entry.path);
+	const oldFile =
+		stats?.isBinary || entry.status === "added" || entry.status === "untracked"
+			? EMPTY_TEXT_READ
+			: await readGitFile(repoRoot, fromRef, basePath);
+	const newFile =
+		stats?.isBinary || entry.status === "deleted" ? EMPTY_TEXT_READ : await readWorkingTreeFile(repoRoot, entry.path);
+	const omitText = stats?.isBinary === true || oldFile.omitted || newFile.omitted;
+	const oldText = omitText ? null : oldFile.text;
+	const newText = omitText ? null : newFile.text;
+	const resolvedStats = stats ?? fallbackStats(oldText, newText);
 
 	return {
 		path: entry.path,
 		previousPath: entry.previousPath,
 		status: entry.status,
-		additions: stats.additions,
-		deletions: stats.deletions,
+		additions: resolvedStats.additions,
+		deletions: resolvedStats.deletions,
 		oldText,
 		newText,
 	};
