@@ -110,14 +110,8 @@ export class AppMenu {
 			submenu: [
 				{
 					label: "Kanban Documentation",
-					click: () => openExternalSafe("https://github.com/cline/kanban"),
+					click: () => openExternalSafe("https://www.npmjs.com/package/kanban"),
 				},
-				{
-					label: "Report Issue",
-					click: () =>
-						openExternalSafe("https://github.com/cline/kanban/issues"),
-				},
-
 			],
 		};
 

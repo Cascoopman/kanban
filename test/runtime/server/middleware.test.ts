@@ -1,10 +1,12 @@
 import type { IncomingMessage } from "node:http";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
+import { getKanbanRuntimeOrigin, getKanbanRuntimePort } from "../../../src/core/runtime-endpoint";
 import { evaluateCors, evaluateHost, handleSocketUpgrade } from "../../../src/server/middleware";
 
-const ALLOWED_ORIGIN = "http://127.0.0.1:3484";
-const ALLOWED_HOSTS = new Set(["localhost:3484", "127.0.0.1:3484"]);
+const RUNTIME_PORT = getKanbanRuntimePort();
+const ALLOWED_ORIGIN = getKanbanRuntimeOrigin();
+const ALLOWED_HOSTS = new Set([`localhost:${RUNTIME_PORT}`, `127.0.0.1:${RUNTIME_PORT}`]);
 
 function makeFakeRequest(headers: Partial<IncomingMessage["headers"]>, method = "GET"): IncomingMessage {
 	return { method, headers } as IncomingMessage;
@@ -106,19 +108,27 @@ describe("evaluateHost", () => {
 	});
 
 	it("allows requests whose Host is in the allowlist", () => {
-		expect(evaluateHost({ hostHeader: "127.0.0.1:3484", allowedHosts: ALLOWED_HOSTS })).toEqual({ kind: "allow" });
-		expect(evaluateHost({ hostHeader: "localhost:3484", allowedHosts: ALLOWED_HOSTS })).toEqual({ kind: "allow" });
+		expect(evaluateHost({ hostHeader: `127.0.0.1:${RUNTIME_PORT}`, allowedHosts: ALLOWED_HOSTS })).toEqual({
+			kind: "allow",
+		});
+		expect(evaluateHost({ hostHeader: `localhost:${RUNTIME_PORT}`, allowedHosts: ALLOWED_HOSTS })).toEqual({
+			kind: "allow",
+		});
 	});
 
 	it("normalises Host header casing before comparing", () => {
-		expect(evaluateHost({ hostHeader: "LocalHost:3484", allowedHosts: ALLOWED_HOSTS })).toEqual({ kind: "allow" });
+		expect(evaluateHost({ hostHeader: `LocalHost:${RUNTIME_PORT}`, allowedHosts: ALLOWED_HOSTS })).toEqual({
+			kind: "allow",
+		});
 	});
 
 	it("rejects DNS rebinding attempts via a foreign Host header", () => {
-		expect(evaluateHost({ hostHeader: "attacker.example.com:3484", allowedHosts: ALLOWED_HOSTS })).toEqual({
-			kind: "reject",
-			host: "attacker.example.com:3484",
-		});
+		expect(evaluateHost({ hostHeader: `attacker.example.com:${RUNTIME_PORT}`, allowedHosts: ALLOWED_HOSTS })).toEqual(
+			{
+				kind: "reject",
+				host: `attacker.example.com:${RUNTIME_PORT}`,
+			},
+		);
 	});
 
 	it("rejects when the port doesn't match", () => {
@@ -132,7 +142,7 @@ describe("evaluateHost", () => {
 describe("handleSocketUpgrade", () => {
 	it("passes through upgrades whose Host and Origin are both allowed", () => {
 		const socket = new PassThrough();
-		const request = makeFakeRequest({ host: "127.0.0.1:3484", origin: ALLOWED_ORIGIN });
+		const request = makeFakeRequest({ host: `127.0.0.1:${RUNTIME_PORT}`, origin: ALLOWED_ORIGIN });
 		const result = handleSocketUpgrade(request, socket);
 		expect(result).toEqual({ end: false });
 		expect(socket.destroyed).toBe(false);
@@ -144,7 +154,7 @@ describe("handleSocketUpgrade", () => {
 		socket.on("data", (chunk) => {
 			written.push(chunk as Buffer);
 		});
-		const request = makeFakeRequest({ host: "127.0.0.1:3484", origin: "http://evil.example.com" });
+		const request = makeFakeRequest({ host: `127.0.0.1:${RUNTIME_PORT}`, origin: "http://evil.example.com" });
 		const result = handleSocketUpgrade(request, socket);
 		expect(result).toEqual({ end: true });
 		expect(socket.destroyed).toBe(true);
@@ -153,7 +163,7 @@ describe("handleSocketUpgrade", () => {
 
 	it("rejects upgrades whose Host header doesn't match the allowlist", () => {
 		const socket = new PassThrough();
-		const request = makeFakeRequest({ host: "attacker.example.com:3484", origin: ALLOWED_ORIGIN });
+		const request = makeFakeRequest({ host: `attacker.example.com:${RUNTIME_PORT}`, origin: ALLOWED_ORIGIN });
 		const result = handleSocketUpgrade(request, socket);
 		expect(result).toEqual({ end: true });
 		expect(socket.destroyed).toBe(true);

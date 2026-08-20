@@ -148,7 +148,7 @@ kanban
 
 After local code changes, run `npm run build` again before using the linked command.
 
-When switching between worktrees, re-run `npm run link` from the worktree you want to test so the global `kanban` binary points at the right `dist/cli.js`. For sidebar agent automation guidance, inspect `src/prompts/append-system-prompt.ts`.
+When switching between worktrees, re-run `npm run link` from the worktree you want to test so the global `kanban` binary points at the right `dist/cli.js`.
 
 Remove the global link:
 
@@ -231,11 +231,11 @@ The web UI reads PostHog settings at build time:
 
 Local development:
 - Set these in `web-ui/.env.local` (see `web-ui/.env.example`).
-- If `POSTHOG_KEY` is missing, telemetry does not initialize.
+- If `POSTHOG_KEY` or `POSTHOG_HOST` is missing, telemetry does not initialize.
 
 Release builds:
 - The publish workflow injects `POSTHOG_KEY` and `POSTHOG_HOST` from GitHub Secrets.
-- `POSTHOG_HOST` is optional and defaults to `https://data.cline.bot`.
+- `POSTHOG_HOST` is required when telemetry is enabled.
 
 Result:
 - Official releases have telemetry enabled.

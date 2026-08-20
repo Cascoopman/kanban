@@ -172,7 +172,7 @@ function categorizeProcess(entry, rootPids, processByPid, categoryByPid) {
 		category = "runtime";
 	} else if (isKanbanHook(entry.command)) {
 		category = "hook";
-	} else if (/(?:codex|claude|cline|opencode|gemini|kiro|droid)/i.test(entry.command)) {
+	} else if (/(?:codex|claude|opencode|gemini|kiro|droid)/i.test(entry.command)) {
 		category = "agent";
 	} else {
 		const parent = processByPid.get(entry.ppid);

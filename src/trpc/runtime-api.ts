@@ -22,7 +22,6 @@ import {
 	parseTaskSessionStartRequest,
 	parseTaskSessionStopRequest,
 } from "../core/api-validation";
-import { isHomeAgentSessionId } from "../core/home-agent-session";
 import { openInBrowser } from "../server/browser";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
 import { resolveCodexSessionIdForCwd } from "../terminal/codex-session-resolver";
@@ -67,11 +66,7 @@ async function resolveExistingTaskCwdOrEnsure(options: {
 }
 
 export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrpcContext["runtimeApi"] {
-	const debugResetTargetPaths = [
-		join(homedir(), ".cline", "data"),
-		join(homedir(), ".cline", "kanban"),
-		join(homedir(), ".cline", "worktrees"),
-	] as const;
+	const debugResetTargetPaths = [join(homedir(), ".kanban")] as const;
 
 	const buildConfigResponse = (runtimeConfig: RuntimeConfigState) => buildRuntimeConfigResponse(runtimeConfig);
 
@@ -119,14 +114,12 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 				const body = parseTaskSessionStartRequest(input);
 				const shouldResumeSession = body.resumeFromTrash || body.resumeExistingSession !== undefined;
 				const scopedRuntimeConfig = await deps.loadScopedRuntimeConfig(workspaceScope);
-				const taskCwd = isHomeAgentSessionId(body.taskId)
-					? workspaceScope.workspacePath
-					: await resolveExistingTaskCwdOrEnsure({
-							cwd: workspaceScope.workspacePath,
-							taskId: body.taskId,
-							baseRef: body.baseRef,
-						});
-				const shouldCaptureTurnCheckpoint = !shouldResumeSession && !isHomeAgentSessionId(body.taskId);
+				const taskCwd = await resolveExistingTaskCwdOrEnsure({
+					cwd: workspaceScope.workspacePath,
+					taskId: body.taskId,
+					baseRef: body.baseRef,
+				});
+				const shouldCaptureTurnCheckpoint = !shouldResumeSession;
 
 				// Per-task config source-of-truth precedence:
 				//

@@ -75,7 +75,7 @@ Task details and the home sidebar both render terminal-backed agent sessions. Sw
 
 Only `claude` and `codex` are valid runtime agent IDs. Persisted configuration or board data containing a retired agent ID is normalized to a supported default or treated as having no task override so older workspaces remain readable.
 
-Kanban continues to use `.cline/kanban` and `.cline/worktrees` as existing storage locations. Those paths are compatibility names for Kanban data and do not indicate support for the Cline coding agent.
+Kanban stores its global state under `~/.kanban`, task worktrees under `~/.kanban/worktrees`, and project configuration under `<project>/.kanban/config.json`.
 
 ## Design Rules
 

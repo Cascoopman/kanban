@@ -958,7 +958,7 @@ export function RuntimeSettingsDialog({
 					>
 						{config?.projectConfigPath
 							? formatPathForDisplay(config.projectConfigPath)
-							: "<project>/.cline/kanban/config.json"}
+							: "<project>/.kanban/config.json"}
 						{config?.projectConfigPath ? <ExternalLink size={12} className="inline ml-1.5 align-middle" /> : null}
 					</p>
 					<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
@@ -1067,7 +1067,7 @@ export function RuntimeSettingsDialog({
 					variant="ghost"
 					className="mr-auto mt-[3px]"
 					icon={<ExternalLink size={14} />}
-					onClick={() => window.open("https://docs.cline.bot/kanban/overview", "_blank")}
+					onClick={() => window.open("https://www.npmjs.com/package/kanban", "_blank")}
 				>
 					Read the docs
 				</Button>

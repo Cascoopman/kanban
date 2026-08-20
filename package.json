@@ -13,15 +13,7 @@
     "task-management",
     "typescript"
   ],
-  "homepage": "https://github.com/cline/kanban",
-  "bugs": {
-    "url": "https://github.com/cline/kanban/issues"
-  },
-  "author": "Cline",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/cline/kanban"
-  },
+  "author": "Kanban contributors",
   "type": "module",
   "bin": {
     "kanban": "dist/cli.js"

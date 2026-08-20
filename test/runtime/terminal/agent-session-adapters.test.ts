@@ -95,43 +95,8 @@ describe("prepareAgentLaunch", () => {
 		expect(getCodexConfigOverrideValues(launch.args, "features.codex_hooks")).toEqual([]);
 		expect(launchCommand).not.toContain("codex-wrapper");
 		expect(launchCommand).not.toContain("notify=");
-		const wrapperPath = join(homedir(), ".cline", "kanban", "hooks", "codex", "codex-wrapper.mjs");
+		const wrapperPath = join(homedir(), ".kanban", "hooks", "codex", "codex-wrapper.mjs");
 		expect(existsSync(wrapperPath)).toBe(false);
-	});
-
-	it("appends Kanban sidebar instructions for home Claude sessions", async () => {
-		setupTempHome();
-		setKanbanProcessContext();
-		const launch = await prepareAgentLaunch({
-			taskId: "__home_agent__:workspace-1:claude",
-			agentId: "claude",
-			binary: "claude",
-			args: [],
-			cwd: "/tmp",
-			prompt: "",
-		});
-
-		const appendPromptIndex = launch.args.indexOf("--append-system-prompt");
-		expect(appendPromptIndex).toBeGreaterThanOrEqual(0);
-		expect(launch.args[appendPromptIndex + 1]).toContain("Kanban sidebar agent");
-	});
-
-	it("appends Kanban sidebar instructions for home Codex sessions", async () => {
-		setupTempHome();
-		setKanbanProcessContext();
-		const launch = await prepareAgentLaunch({
-			taskId: "__home_agent__:workspace-1:codex",
-			agentId: "codex",
-			binary: "codex",
-			args: [],
-			cwd: "/tmp",
-			prompt: "",
-		});
-
-		const developerInstructions = getCodexConfigOverrideValues(launch.args, "developer_instructions");
-		expect(developerInstructions).toHaveLength(1);
-		expect(developerInstructions[0]).toContain("Kanban sidebar agent");
-		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["false"]);
 	});
 
 	it("preserves an explicit Codex update-check override", async () => {
@@ -160,7 +125,7 @@ describe("prepareAgentLaunch", () => {
 			workspaceId: "workspace-1",
 		});
 
-		const settingsPath = join(homedir(), ".cline", "kanban", "hooks", "claude", "settings.json");
+		const settingsPath = join(homedir(), ".kanban", "hooks", "claude", "settings.json");
 		const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as { hooks?: Record<string, unknown> };
 		expect(settings.hooks?.PermissionRequest).toBeDefined();
 		expect(settings.hooks?.PreToolUse).toBeDefined();

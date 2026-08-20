@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback } from "react";
 
 import { notifyError } from "@/components/app-toaster";
-import { selectNewestTaskSessionSummary } from "@/hooks/home-sidebar-agent-panel-session-summary";
+import { selectNewestTaskSessionSummary } from "@/hooks/task-session-summary";
 import { estimateTaskSessionGeometry } from "@/runtime/task-session-geometry";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 import type {

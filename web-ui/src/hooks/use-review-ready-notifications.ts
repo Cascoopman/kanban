@@ -58,7 +58,6 @@ function showReadyForReviewNotification(taskId: string, notificationTitle: strin
 		const notification = new Notification(notificationTitle, {
 			body: notificationBody,
 			tag: `task-ready-for-review-${taskId}`,
-			icon: "/assets/icon-notification.png",
 		});
 		notification.onclick = () => {
 			if (typeof window !== "undefined") {
