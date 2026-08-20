@@ -1,6 +1,6 @@
-import type { RuntimeTaskAutoReviewMode, RuntimeTaskWorkspaceInfoResponse } from "@/runtime/types";
+import type { RuntimeTaskWorkspaceInfoResponse } from "@/runtime/types";
 
-export type TaskGitAction = Extract<RuntimeTaskAutoReviewMode, "commit" | "pr">;
+export type TaskGitAction = "commit" | "pr";
 
 interface TaskGitPromptVariable {
 	key: string;

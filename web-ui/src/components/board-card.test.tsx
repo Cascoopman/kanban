@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { act, useState } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -83,8 +83,6 @@ function createCard(overrides?: Partial<Parameters<typeof BoardCard>[0]["card"]>
 		title: "Review API changes",
 		prompt: "Review API changes",
 		startInPlanMode: false,
-		autoReviewEnabled: false,
-		autoReviewMode: "commit" as const,
 		baseRef: "main",
 		createdAt: 1,
 		updatedAt: 1,
@@ -113,29 +111,6 @@ function createSummary(
 		previousTurnCheckpoint: null,
 		...overrides,
 	};
-}
-
-function Harness(): React.ReactElement {
-	const [card, setCard] = useState(
-		createCard({
-			autoReviewEnabled: true,
-			autoReviewMode: "pr",
-		}),
-	);
-
-	return (
-		<BoardCard
-			card={card}
-			index={0}
-			columnId="backlog"
-			onCancelAutomaticAction={() => {
-				setCard((currentCard) => ({
-					...currentCard,
-					autoReviewEnabled: false,
-				}));
-			}}
-		/>
-	);
 }
 
 describe("BoardCard", () => {
@@ -178,27 +153,6 @@ describe("BoardCard", () => {
 			(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 				previousActEnvironment;
 		}
-	});
-
-	it("shows a mode-specific cancel button and hides it after canceling auto review", async () => {
-		await act(async () => {
-			root.render(<Harness />);
-		});
-
-		const cancelButton = Array.from(container.querySelectorAll("button")).find(
-			(button) => button.textContent?.trim() === "Cancel Auto-PR",
-		);
-		expect(cancelButton).toBeDefined();
-
-		await act(async () => {
-			cancelButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-			cancelButton?.click();
-		});
-
-		const nextCancelButton = Array.from(container.querySelectorAll("button")).find((button) =>
-			button.textContent?.includes("Cancel Auto-"),
-		);
-		expect(nextCancelButton).toBeUndefined();
 	});
 
 	it("shows a loading state on the review done button while moving to done", async () => {

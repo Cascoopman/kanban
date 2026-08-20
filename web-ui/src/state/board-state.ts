@@ -6,17 +6,14 @@ import { createInitialBoardData } from "@/data/board-data";
 import { isSupportedAgentId } from "@/runtime/supported-agents";
 import type { RuntimeAgentId } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import {
-	type BoardCard,
-	type BoardColumn,
-	type BoardColumnId,
-	type BoardData,
-	type BoardDependency,
-	type CardSelection,
-	DEFAULT_TASK_AUTO_REVIEW_MODE,
-	resolveTaskAutoReviewMode,
-	type TaskAutoReviewMode,
-	type TaskImage,
+import type {
+	BoardCard,
+	BoardColumn,
+	BoardColumnId,
+	BoardData,
+	BoardDependency,
+	CardSelection,
+	TaskImage,
 } from "@/types";
 
 export interface TaskDraft {
@@ -24,8 +21,6 @@ export interface TaskDraft {
 	title?: string;
 	prompt: string;
 	startInPlanMode?: boolean;
-	autoReviewEnabled?: boolean;
-	autoReviewMode?: TaskAutoReviewMode;
 	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
 	branchedFromTaskId?: string;
@@ -108,8 +103,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		title?: unknown;
 		prompt?: unknown;
 		startInPlanMode?: unknown;
-		autoReviewEnabled?: unknown;
-		autoReviewMode?: unknown;
 		images?: unknown;
 		baseRef?: unknown;
 		agentId?: unknown;
@@ -136,10 +129,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 		title,
 		prompt,
 		startInPlanMode: typeof card.startInPlanMode === "boolean" ? card.startInPlanMode : false,
-		autoReviewEnabled: typeof card.autoReviewEnabled === "boolean" ? card.autoReviewEnabled : false,
-		autoReviewMode: resolveTaskAutoReviewMode(
-			typeof card.autoReviewMode === "string" ? (card.autoReviewMode as TaskAutoReviewMode) : undefined,
-		),
 		images: normalizeTaskImages(card.images),
 		baseRef,
 		...(typeof card.agentId === "string" && isSupportedAgentId(card.agentId) ? { agentId: card.agentId } : {}),
@@ -289,8 +278,6 @@ export function addTaskToColumnWithResult(
 			title: draft.title,
 			prompt,
 			startInPlanMode: draft.startInPlanMode,
-			autoReviewEnabled: draft.autoReviewEnabled,
-			autoReviewMode: draft.autoReviewMode,
 			images: draft.images,
 			agentId: draft.agentId,
 			branchedFromTaskId: draft.branchedFromTaskId,
@@ -482,8 +469,6 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 				title: title || card.title,
 				prompt,
 				startInPlanMode: Boolean(draft.startInPlanMode),
-				autoReviewEnabled: Boolean(draft.autoReviewEnabled),
-				autoReviewMode: resolveTaskAutoReviewMode(draft.autoReviewMode ?? DEFAULT_TASK_AUTO_REVIEW_MODE),
 				images:
 					draft.images === undefined
 						? card.images
@@ -517,25 +502,6 @@ export function updateTaskTitle(
 		title,
 		prompt: selection.card.prompt,
 		startInPlanMode: selection.card.startInPlanMode,
-		autoReviewEnabled: selection.card.autoReviewEnabled,
-		autoReviewMode: selection.card.autoReviewMode,
-		images: selection.card.images,
-		agentId: selection.card.agentId,
-		baseRef: selection.card.baseRef,
-	});
-}
-
-export function disableTaskAutoReview(board: BoardData, taskId: string): { board: BoardData; updated: boolean } {
-	const selection = findCardSelection(board, taskId);
-	if (!selection) {
-		return { board, updated: false };
-	}
-
-	return updateTask(board, taskId, {
-		prompt: selection.card.prompt,
-		startInPlanMode: selection.card.startInPlanMode,
-		autoReviewEnabled: false,
-		autoReviewMode: DEFAULT_TASK_AUTO_REVIEW_MODE,
 		images: selection.card.images,
 		agentId: selection.card.agentId,
 		baseRef: selection.card.baseRef,

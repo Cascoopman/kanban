@@ -8,9 +8,8 @@ import { BranchSelectDropdown, type BranchSelectOption } from "@/components/bran
 import { TaskAgentModelPicker, useTaskAgentModelPicker } from "@/components/task-agent-model-picker";
 import { TaskPromptComposer } from "@/components/task-prompt-composer";
 import { Button } from "@/components/ui/button";
-import { NativeSelect } from "@/components/ui/native-select";
 import type { RuntimeAgentId } from "@/runtime/types";
-import type { TaskAutoReviewMode, TaskImage } from "@/types";
+import type { TaskImage } from "@/types";
 import { pasteShortcutLabel } from "@/utils/platform";
 import { useDocumentEvent, useMeasure } from "@/utils/react-use";
 
@@ -18,11 +17,6 @@ export type TaskInlineCardMode = "create" | "edit";
 
 export type TaskBranchOption = BranchSelectOption;
 
-const AUTO_REVIEW_MODE_OPTIONS: Array<{ value: TaskAutoReviewMode; label: string }> = [
-	{ value: "commit", label: "Make commit" },
-	{ value: "pr", label: "Make PR" },
-];
-const AUTO_REVIEW_MODE_SELECT_WIDTH_CH = 16;
 const COMPACT_ACTIONS_WIDTH_THRESHOLD_PX = 280;
 
 function ButtonShortcut({ includeShift = false }: { includeShift?: boolean }): ReactElement {
@@ -55,10 +49,6 @@ export function TaskInlineCreateCard({
 	onCancel,
 	startInPlanMode,
 	onStartInPlanModeChange,
-	autoReviewEnabled,
-	onAutoReviewEnabledChange,
-	autoReviewMode,
-	onAutoReviewModeChange,
 	startInPlanModeDisabled = false,
 	workspaceId,
 	branchRef,
@@ -82,10 +72,6 @@ export function TaskInlineCreateCard({
 	onCancel?: () => void;
 	startInPlanMode: boolean;
 	onStartInPlanModeChange: (value: boolean) => void;
-	autoReviewEnabled: boolean;
-	onAutoReviewEnabledChange: (value: boolean) => void;
-	autoReviewMode: TaskAutoReviewMode;
-	onAutoReviewModeChange: (value: TaskAutoReviewMode) => void;
 	startInPlanModeDisabled?: boolean;
 	workspaceId: string | null;
 	branchRef: string;
@@ -101,8 +87,6 @@ export function TaskInlineCreateCard({
 }): ReactElement {
 	const promptId = `${idPrefix}-prompt-input`;
 	const planModeId = `${idPrefix}-plan-mode-toggle`;
-	const autoReviewEnabledId = `${idPrefix}-auto-review-enabled-toggle`;
-	const autoReviewModeId = `${idPrefix}-auto-review-mode-select`;
 	const branchSelectId = `${idPrefix}-branch-select`;
 	const actionLabel = mode === "edit" ? "Save" : "Create";
 	const [measureRef, cardRect] = useMeasure<HTMLDivElement>();
@@ -246,41 +230,6 @@ export function TaskInlineCreateCard({
 					/>
 				</div>
 
-				<div className="flex items-center gap-2 flex-wrap">
-					<label
-						htmlFor={autoReviewEnabledId}
-						className="flex items-center gap-2 text-[12px] text-text-primary cursor-pointer select-none"
-					>
-						<RadixCheckbox.Root
-							id={autoReviewEnabledId}
-							aria-label="Enable automatic review action"
-							checked={autoReviewEnabled}
-							onCheckedChange={(checked) => onAutoReviewEnabledChange(checked === true)}
-							className="flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-sm border border-border-bright bg-surface-3 data-[state=checked]:bg-accent data-[state=checked]:border-accent"
-						>
-							<RadixCheckbox.Indicator>
-								<Check size={10} className="text-white" />
-							</RadixCheckbox.Indicator>
-						</RadixCheckbox.Root>
-						<span>Automatically</span>
-					</label>
-					<NativeSelect
-						id={autoReviewModeId}
-						size="sm"
-						value={autoReviewMode}
-						onChange={(event) => onAutoReviewModeChange(event.currentTarget.value as TaskAutoReviewMode)}
-						style={{
-							width: `${AUTO_REVIEW_MODE_SELECT_WIDTH_CH}ch`,
-							maxWidth: "100%",
-						}}
-					>
-						{AUTO_REVIEW_MODE_OPTIONS.map((option) => (
-							<option key={option.value} value={option.value}>
-								{option.label}
-							</option>
-						))}
-					</NativeSelect>
-				</div>
 				{onAgentIdChange ? (
 					<TaskAgentModelPicker agentId={agentId} onAgentIdChange={onAgentIdChange} agentOptions={agentOptions} />
 				) : null}

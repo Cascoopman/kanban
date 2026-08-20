@@ -28,8 +28,6 @@ function createTask(
 		title,
 		prompt: title,
 		startInPlanMode: false,
-		autoReviewEnabled: false,
-		autoReviewMode: "commit",
 		agentId,
 		baseRef: "main",
 	});

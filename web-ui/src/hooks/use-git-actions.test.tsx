@@ -63,8 +63,6 @@ function createBoard(): BoardData {
 						title: "Ship it",
 						prompt: "Ship it",
 						startInPlanMode: false,
-						autoReviewEnabled: false,
-						autoReviewMode: "commit",
 						baseRef: "main",
 						createdAt: 1,
 						updatedAt: 1,

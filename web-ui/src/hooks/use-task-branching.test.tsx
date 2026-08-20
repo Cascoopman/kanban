@@ -73,8 +73,6 @@ describe("useTaskBranching", () => {
 			title: "Source task",
 			prompt: "Original work",
 			startInPlanMode: true,
-			autoReviewEnabled: true,
-			autoReviewMode: "commit",
 			agentId: "codex",
 			baseRef: "main",
 		});
@@ -111,8 +109,6 @@ describe("useTaskBranching", () => {
 			title: "Source task",
 			prompt: "Original work",
 			startInPlanMode: false,
-			autoReviewEnabled: false,
-			autoReviewMode: "commit",
 			baseRef: "main",
 		});
 		await act(async () => {
@@ -141,8 +137,6 @@ describe("useTaskBranching", () => {
 			title: "Source task",
 			prompt: "Original work",
 			startInPlanMode: false,
-			autoReviewEnabled: false,
-			autoReviewMode: "commit",
 			baseRef: "main",
 		});
 		await act(async () => {
@@ -170,8 +164,6 @@ describe("useTaskBranching", () => {
 			title: "Source task",
 			prompt: "Original work",
 			startInPlanMode: false,
-			autoReviewEnabled: false,
-			autoReviewMode: "commit",
 			agentId: "codex",
 			baseRef: "main",
 		});

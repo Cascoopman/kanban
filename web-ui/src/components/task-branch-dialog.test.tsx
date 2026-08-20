@@ -10,8 +10,6 @@ const sourceTask: BoardCard = {
 	title: "Source task",
 	prompt: "Original work",
 	startInPlanMode: false,
-	autoReviewEnabled: false,
-	autoReviewMode: "commit",
 	baseRef: "main",
 	createdAt: 1,
 	updatedAt: 1,

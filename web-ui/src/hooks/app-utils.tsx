@@ -1,18 +1,9 @@
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { LocalStorageKey } from "@/storage/local-storage-store";
-import type { BoardData, TaskAutoReviewMode } from "@/types";
+import type { BoardData } from "@/types";
 
 export const TASK_START_IN_PLAN_MODE_STORAGE_KEY = LocalStorageKey.TaskStartInPlanMode;
-export const TASK_AUTO_REVIEW_ENABLED_STORAGE_KEY = LocalStorageKey.TaskAutoReviewEnabled;
-export const TASK_AUTO_REVIEW_MODE_STORAGE_KEY = LocalStorageKey.TaskAutoReviewMode;
 const DETAIL_TASK_QUERY_PARAM = "task";
-
-export function normalizeStoredTaskAutoReviewMode(value: string): TaskAutoReviewMode | null {
-	if (value === "commit" || value === "pr") {
-		return value;
-	}
-	return null;
-}
 
 export interface SearchableTask {
 	id: string;

@@ -73,13 +73,6 @@ export const runtimeBoardColumnIdSchema = z.union([
 ]);
 export type RuntimeBoardColumnId = z.infer<typeof runtimeBoardColumnIdEnum>;
 
-const runtimeTaskAutoReviewModeEnum = z.enum(["commit", "pr"]);
-export const runtimeTaskAutoReviewModeSchema = z.union([
-	runtimeTaskAutoReviewModeEnum,
-	z.enum(["move_to_trash", "move_to_done"]).transform(() => "commit" as const),
-]);
-export type RuntimeTaskAutoReviewMode = z.infer<typeof runtimeTaskAutoReviewModeEnum>;
-
 export const runtimeTaskImageSchema = z.object({
 	id: z.string(),
 	data: z.string(),
@@ -94,8 +87,6 @@ export const runtimeBoardCardSchema = z
 		title: z.string().optional(),
 		prompt: z.string(),
 		startInPlanMode: z.boolean(),
-		autoReviewEnabled: z.boolean().optional(),
-		autoReviewMode: runtimeTaskAutoReviewModeSchema.optional(),
 		images: z.array(runtimeTaskImageSchema).optional(),
 		agentId: runtimePersistedOptionalAgentIdSchema,
 		branchedFromTaskId: z.string().optional(),
