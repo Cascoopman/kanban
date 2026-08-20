@@ -7,7 +7,7 @@ import type {
 import { getGitSyncSummary, probeGitWorkspaceState } from "../workspace/git-sync";
 import { getTaskWorkspacePathInfo } from "../workspace/task-worktree";
 
-const WORKSPACE_METADATA_POLL_INTERVAL_MS = 1_000;
+const WORKSPACE_METADATA_POLL_INTERVAL_MS = 5_000;
 
 interface TrackedTaskWorkspace {
 	taskId: string;

@@ -9,6 +9,7 @@ import type {
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 import { getRuntimeHomePath, getTaskWorktreesHomePath, loadWorkspaceContext } from "../state/workspace-state";
 import { getGitCommandErrorMessage, getGitStdout, readGitHeadInfo, runGit } from "./git-utils";
+import { resolveLatestTaskBaseCommit } from "./task-base-ref";
 import { getWorkspaceFolderLabelForWorktreePath, normalizeTaskIdForWorktreePath } from "./task-worktree-path";
 import { listTurbopackNodeModulesSymlinkSkipPaths } from "./task-worktree-turbopack";
 
@@ -62,28 +63,6 @@ async function pathExists(path: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
-}
-
-function isMissingInitialCommitError(message: string): boolean {
-	const normalizedMessage = message.trim().toLowerCase();
-	if (!normalizedMessage) {
-		return false;
-	}
-
-	return (
-		normalizedMessage.includes("needed a single revision") ||
-		normalizedMessage.includes("ambiguous argument") ||
-		normalizedMessage.includes("unknown revision or path not in the working tree") ||
-		normalizedMessage.includes("bad revision")
-	);
-}
-
-function getWorktreeBaseRefResolutionErrorMessage(baseRef: string, errorMessage: string): string {
-	if (!isMissingInitialCommitError(errorMessage)) {
-		return errorMessage;
-	}
-
-	return `This repository does not have an initial commit yet, so Kanban cannot create a task worktree from base ref "${baseRef}". Create an initial commit, then try moving the task to in progress again.`;
 }
 
 async function tryRunGit(cwd: string, args: string[]): Promise<string | null> {
@@ -481,24 +460,7 @@ export async function ensureTaskWorktreeIfDoesntExist(options: {
 				};
 			}
 
-			const baseRefResult = await runGit(context.repoPath, [
-				"rev-parse",
-				"--verify",
-				`${requestedBaseRef}^{commit}`,
-			]);
-			if (!baseRefResult.ok) {
-				return {
-					ok: false,
-					path: null,
-					baseRef: requestedBaseRef,
-					baseCommit: null,
-					error: getWorktreeBaseRefResolutionErrorMessage(
-						requestedBaseRef,
-						baseRefResult.stderr || baseRefResult.output,
-					),
-				};
-			}
-			const requestedBaseCommit = baseRefResult.stdout;
+			const requestedBaseCommit = await resolveLatestTaskBaseCommit(context.repoPath, requestedBaseRef);
 
 			const storedPatch = await findTaskPatch(taskId);
 			let baseCommit = storedPatch?.commit ?? requestedBaseCommit;
