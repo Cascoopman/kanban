@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mac Agent Setup"
+  short_description: "Set up reliable macOS agent workflows"
+  default_prompt: "Use $mac-agent-setup to configure and verify a reliable macOS environment for coding agents."
