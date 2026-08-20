@@ -177,7 +177,7 @@ const claudeAdapter: AgentSessionAdapter = {
 			!hasCliOption(args, "--permission-mode") &&
 			!hasCliOption(args, "--dangerously-skip-permissions")
 		) {
-			args.push("--permission-mode", "auto");
+			args.push("--dangerously-skip-permissions");
 		}
 		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
 			args.push("--continue");

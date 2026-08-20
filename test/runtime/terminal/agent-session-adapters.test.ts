@@ -296,7 +296,8 @@ describe("prepareAgentLaunch", () => {
 			cwd: "/tmp",
 			prompt: "",
 		});
-		expect(claudeLaunch.args).toEqual(expect.arrayContaining(["--permission-mode", "auto"]));
+		expect(claudeLaunch.args).toContain("--dangerously-skip-permissions");
+		expect(claudeLaunch.args).not.toContain("--permission-mode");
 		expect(claudeLaunch.env.CLAUDE_CODE_ENABLE_AUTO_MODE).toBe("1");
 
 		const codexLaunch = await prepareAgentLaunch({
