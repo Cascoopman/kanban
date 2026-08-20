@@ -208,4 +208,88 @@ describe("parseCodexEventLine", () => {
 			},
 		});
 	});
+
+	it.each(["AskUserQuestion", "ask_user_question", "request_user_input"])(
+		"maps %s function_call to to_review",
+		(toolName) => {
+			const state = createCodexWatcherState();
+
+			const event = parseCodexEventLine(
+				createCodexLogLine({
+					type: "raw_response_item",
+					item: {
+						type: "function_call",
+						name: toolName,
+						call_id: "call-ask-123",
+					},
+				}),
+				state,
+			);
+
+			expect(event).toEqual({
+				event: "to_review",
+				metadata: {
+					source: "codex",
+					hookEventName: "raw_response_item",
+					activityText: "Waiting for input",
+				},
+			});
+		},
+	);
+
+	it("deduplicates request_user_input function_call events", () => {
+		const state = createCodexWatcherState();
+
+		const first = parseCodexEventLine(
+			createCodexLogLine({
+				type: "raw_response_item",
+				item: {
+					type: "function_call",
+					name: "request_user_input",
+					call_id: "call-ask-123",
+				},
+			}),
+			state,
+		);
+
+		const second = parseCodexEventLine(
+			createCodexLogLine({
+				type: "raw_response_item",
+				item: {
+					type: "function_call",
+					name: "request_user_input",
+					call_id: "call-ask-123",
+				},
+			}),
+			state,
+		);
+
+		expect(first?.event).toBe("to_review");
+		expect(second).toBeNull();
+	});
+
+	it("keeps regular function_call as activity, not to_review", () => {
+		const state = createCodexWatcherState();
+
+		const event = parseCodexEventLine(
+			createCodexLogLine({
+				type: "raw_response_item",
+				item: {
+					type: "function_call",
+					name: "exec_command",
+					call_id: "call-exec-456",
+				},
+			}),
+			state,
+		);
+
+		expect(event).toEqual({
+			event: "activity",
+			metadata: {
+				source: "codex",
+				hookEventName: "raw_response_item",
+				activityText: "Calling exec_command",
+			},
+		});
+	});
 });
