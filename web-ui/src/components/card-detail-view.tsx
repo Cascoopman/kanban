@@ -321,13 +321,33 @@ export function CardDetailView({
 	isDocumentVisible?: boolean;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
-	const [mobileTab, setMobileTab] = useState<MobileTab>("chat");
+	const [mobileTabState, setMobileTabState] = useState<{ taskId: string; tab: MobileTab }>(() => ({
+		taskId: selection.card.id,
+		tab: "chat",
+	}));
+	const mobileTab = mobileTabState.taskId === selection.card.id ? mobileTabState.tab : "chat";
+	const setMobileTab = useCallback(
+		(tab: MobileTab) => {
+			setMobileTabState({ taskId: selection.card.id, tab });
+		},
+		[selection.card.id],
+	);
 	const terminalThemeColors = useTerminalThemeColors();
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	const [diffComments, setDiffComments] = useState<Map<string, DiffLineComment>>(new Map());
 	const [diffMode, setDiffMode] = useState<RuntimeWorkspaceChangesMode>("working_copy");
-	const [isDiffCollapsed, setIsDiffCollapsed] = useState(false);
-	const [isDiffExpanded, setIsDiffExpanded] = useState(false);
+	const [diffPanelState, setDiffPanelState] = useState<{
+		taskId: string;
+		isCollapsed: boolean;
+		isExpanded: boolean;
+	}>(() => ({
+		taskId: selection.card.id,
+		isCollapsed: true,
+		isExpanded: false,
+	}));
+	const isCurrentTaskDiffState = diffPanelState.taskId === selection.card.id;
+	const isDiffCollapsed = !isCurrentTaskDiffState || diffPanelState.isCollapsed;
+	const isDiffExpanded = isCurrentTaskDiffState && diffPanelState.isExpanded;
 	const {
 		taskCardsPanelRatio,
 		setTaskCardsPanelRatio,
@@ -373,15 +393,15 @@ export function CardDetailView({
 					sessionSummary?.previousTurnCheckpoint?.commit ?? "none",
 				].join(":")
 			: null;
+	const isDiffSurfaceVisible = isMobile ? mobileTab !== "chat" : !isDiffCollapsed && !gitHistoryPanel;
+	const shouldLoadWorkspaceChanges = isDiffSurfaceVisible && isDocumentVisible;
 	const { changes: workspaceChanges, isRuntimeAvailable } = useRuntimeWorkspaceChanges(
-		selection.card.id,
+		shouldLoadWorkspaceChanges ? selection.card.id : null,
 		currentProjectId,
 		selection.card.baseRef,
 		diffMode,
 		taskWorkspaceStateVersion,
-		isDocumentVisible && !gitHistoryPanel && !isDiffCollapsed && selection.column.id !== "trash"
-			? DETAIL_DIFF_POLL_INTERVAL_MS
-			: null,
+		shouldLoadWorkspaceChanges && selection.column.id !== "trash" ? DETAIL_DIFF_POLL_INTERVAL_MS : null,
 		lastTurnViewKey,
 		true,
 	);
@@ -451,10 +471,10 @@ export function CardDetailView({
 				}
 				if (isDiffExpanded) {
 					event.preventDefault();
-					setIsDiffExpanded(false);
+					setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
 				}
 			},
-			[gitHistoryPanel, isDiffExpanded, onCloseGitHistory],
+			[gitHistoryPanel, isDiffExpanded, onCloseGitHistory, selection.card.id],
 		),
 	);
 
@@ -480,24 +500,28 @@ export function CardDetailView({
 	useEffect(() => {
 		setDiffComments(new Map());
 		setDiffMode("working_copy");
+		setDiffPanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false });
+		setMobileTabState({ taskId: selection.card.id, tab: "chat" });
 	}, [selection.card.id]);
 
 	const handleToggleDiffExpand = useCallback(() => {
 		if (!isDiffExpanded && bottomTerminalOpen) {
 			onBottomTerminalClose();
 		}
-		setIsDiffCollapsed(false);
-		setIsDiffExpanded((previous) => !previous);
-	}, [bottomTerminalOpen, isDiffExpanded, onBottomTerminalClose]);
+		setDiffPanelState({
+			taskId: selection.card.id,
+			isCollapsed: false,
+			isExpanded: !isDiffExpanded,
+		});
+	}, [bottomTerminalOpen, isDiffExpanded, onBottomTerminalClose, selection.card.id]);
 
 	const handleCollapseDiff = useCallback(() => {
-		setIsDiffExpanded(false);
-		setIsDiffCollapsed(true);
-	}, []);
+		setDiffPanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false });
+	}, [selection.card.id]);
 
 	const handleExpandDiff = useCallback(() => {
-		setIsDiffCollapsed(false);
-	}, []);
+		setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
+	}, [selection.card.id]);
 
 	const handleAddDiffComments = useCallback(
 		(formatted: string) => {
@@ -509,7 +533,7 @@ export function CardDetailView({
 	const handleSendDiffComments = useCallback(
 		(formatted: string) => {
 			onSendReviewComments?.(selection.card.id, formatted);
-			setIsDiffExpanded(false);
+			setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
 		},
 		[onSendReviewComments, selection.card.id],
 	);
