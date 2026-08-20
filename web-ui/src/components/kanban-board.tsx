@@ -61,11 +61,13 @@ export function KanbanBoard({
 	onDragEnd,
 	onRequestProgrammaticCardMoveReady,
 	workspacePath,
+	isDragDisabled = false,
+	hideCardActions = false,
 }: {
 	data: BoardData;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onCardSelect: (taskId: string) => void;
-	onCreateTask: () => void;
+	onCreateTask?: () => void;
 	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCard) => void;
 	onStartAllTasks?: () => void;
@@ -84,9 +86,11 @@ export function KanbanBoard({
 	dependencies: BoardDependency[];
 	onCreateDependency?: (fromTaskId: string, toTaskId: string) => void;
 	onDeleteDependency?: (dependencyId: string) => void;
-	onDragEnd: (result: DropResult) => void;
+	onDragEnd?: (result: DropResult) => void;
 	onRequestProgrammaticCardMoveReady?: (requestMove: RequestProgrammaticCardMove | null) => void;
 	workspacePath?: string | null;
+	isDragDisabled?: boolean;
+	hideCardActions?: boolean;
 }): React.ReactElement {
 	const dragOccurredRef = useRef(false);
 	const boardRef = useRef<HTMLElement>(null);
@@ -368,7 +372,7 @@ export function KanbanBoard({
 			requestAnimationFrame(() => {
 				dragOccurredRef.current = false;
 			});
-			onDragEnd(result);
+			onDragEnd?.(result);
 		},
 		[clearProgrammaticCardMoveInFlight, onDragEnd],
 	);
@@ -426,6 +430,8 @@ export function KanbanBoard({
 							dependencyTargetTaskId={dependencyLinking.draft?.targetTaskId ?? null}
 							isDependencyLinking={dependencyLinking.draft !== null}
 							workspacePath={workspacePath}
+							isDragDisabled={isDragDisabled}
+							hideCardActions={hideCardActions}
 							onCardClick={(card) => {
 								if (!dragOccurredRef.current) {
 									onCardSelect(card.id);

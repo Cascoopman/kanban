@@ -1,7 +1,18 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
-import { AlertCircle, AlertTriangle, Bot, Copy, GitBranch, Pencil, Play, RotateCcw, Trash2 } from "lucide-react";
+import {
+	AlertCircle,
+	AlertTriangle,
+	Bot,
+	Copy,
+	GitBranch,
+	Layers3,
+	Pencil,
+	Play,
+	RotateCcw,
+	Trash2,
+} from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -227,6 +238,8 @@ export function BoardCard({
 	isDependencyTarget = false,
 	isDependencyLinking = false,
 	workspacePath,
+	isDragDisabled = false,
+	hideActions = false,
 }: {
 	card: BoardCardModel;
 	index: number;
@@ -250,6 +263,8 @@ export function BoardCard({
 	isDependencyTarget?: boolean;
 	isDependencyLinking?: boolean;
 	workspacePath?: string | null;
+	isDragDisabled?: boolean;
+	hideActions?: boolean;
 }): React.ReactElement {
 	const [isHovered, setIsHovered] = useState(false);
 	const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -429,7 +444,7 @@ export function BoardCard({
 	const activeDescriptionDisplay = isDescriptionExpanded ? descriptionDisplay.expanded : descriptionDisplay.collapsed;
 
 	return (
-		<Draggable draggableId={card.id} index={index} isDragDisabled={false}>
+		<Draggable draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
 			{(provided, snapshot) => {
 				const isDragging = snapshot.isDragging;
 				const draggableContent = (
@@ -484,7 +499,7 @@ export function BoardCard({
 						style={{
 							...provided.draggableProps.style,
 							marginBottom: 6,
-							cursor: "grab",
+							cursor: isDragDisabled ? "default" : "grab",
 						}}
 						onMouseEnter={() => {
 							setIsHovered(true);
@@ -576,7 +591,7 @@ export function BoardCard({
 										/>
 									</Tooltip>
 								) : null}
-								{columnId === "backlog" ? (
+								{!hideActions && columnId === "backlog" ? (
 									<Button
 										icon={<Play size={14} />}
 										variant="ghost"
@@ -588,7 +603,7 @@ export function BoardCard({
 											onStart?.(card.id);
 										}}
 									/>
-								) : isReviewLikeColumnId(columnId) ? (
+								) : !hideActions && isReviewLikeColumnId(columnId) ? (
 									<Button
 										icon={isMoveToTrashLoading ? <Spinner size={13} /> : <Trash2 size={13} />}
 										variant="ghost"
@@ -601,7 +616,7 @@ export function BoardCard({
 											onMoveToTrash?.(card.id);
 										}}
 									/>
-								) : columnId === "trash" ? (
+								) : !hideActions && columnId === "trash" ? (
 									<Tooltip
 										side="bottom"
 										content={
@@ -696,6 +711,17 @@ export function BoardCard({
 									>
 										<Bot size={12} className="shrink-0" />
 										<span className="truncate">{taskAgentSettingsLabel}</span>
+									</span>
+								</div>
+							) : null}
+							{card.projectName ? (
+								<div className="mt-1.5">
+									<span
+										className="inline-flex max-w-full items-center gap-1 rounded-md border border-border-bright bg-surface-1 px-1.5 py-0.5 text-xs text-text-secondary"
+										title={card.projectPath}
+									>
+										<Layers3 size={11} className="shrink-0 text-accent" />
+										<span className="truncate">{card.projectName}</span>
 									</span>
 								</div>
 							) : null}

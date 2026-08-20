@@ -36,6 +36,7 @@ interface HookSnapshot {
 	selectedTaskId: string | null;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
 	handleProjectSelect: (projectId: string) => void;
+	handleProjectTaskSelect: (projectId: string, taskId: string) => void;
 }
 
 function HookHarness({
@@ -71,8 +72,15 @@ function HookHarness({
 			selectedTaskId: navigation.selectedTaskId,
 			setSelectedTaskId: navigation.setSelectedTaskId,
 			handleProjectSelect: navigation.handleProjectSelect,
+			handleProjectTaskSelect: navigation.handleProjectTaskSelect,
 		});
-	}, [navigation.handleProjectSelect, navigation.selectedTaskId, navigation.setSelectedTaskId, onSnapshot]);
+	}, [
+		navigation.handleProjectSelect,
+		navigation.handleProjectTaskSelect,
+		navigation.selectedTaskId,
+		navigation.setSelectedTaskId,
+		onSnapshot,
+	]);
 
 	return null;
 }
@@ -278,5 +286,66 @@ describe("useDetailTaskNavigation", () => {
 		});
 
 		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBe("review-top");
+	});
+
+	it("opens a requested task after switching from the unified board", () => {
+		const sourceBoard = createBoard();
+		const destinationBoard: BoardData = {
+			...createBoard(),
+			columns: createBoard().columns.map((column) =>
+				column.id === "backlog"
+					? {
+							...column,
+							cards: [
+								...column.cards,
+								{
+									id: "task-requested",
+									title: "Requested task",
+									prompt: "Requested task",
+									startInPlanMode: false,
+									baseRef: "main",
+									createdAt: 2,
+									updatedAt: 2,
+								},
+							],
+						}
+					: column,
+			),
+		};
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSelectProject = vi.fn();
+
+		act(() => {
+			root.render(
+				<HookHarness
+					board={sourceBoard}
+					currentProjectId="project-1"
+					onSelectProject={onSelectProject}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+		act(() => {
+			requireSnapshot(latestSnapshot).handleProjectTaskSelect("project-2", "task-requested");
+		});
+
+		expect(onSelectProject).toHaveBeenCalledWith("project-2");
+
+		act(() => {
+			root.render(
+				<HookHarness
+					board={destinationBoard}
+					currentProjectId="project-2"
+					onSelectProject={onSelectProject}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		expect(requireSnapshot(latestSnapshot).selectedTaskId).toBe("task-requested");
 	});
 });

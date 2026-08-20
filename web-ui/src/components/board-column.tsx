@@ -39,6 +39,8 @@ export function BoardColumn({
 	dependencyTargetTaskId,
 	isDependencyLinking,
 	workspacePath,
+	isDragDisabled = false,
+	hideCardActions = false,
 }: {
 	column: BoardColumnModel;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
@@ -69,6 +71,8 @@ export function BoardColumn({
 	dependencyTargetTaskId?: string | null;
 	isDependencyLinking?: boolean;
 	workspacePath?: string | null;
+	isDragDisabled?: boolean;
+	hideCardActions?: boolean;
 }): React.ReactElement {
 	const canCreate = column.id === "backlog" && onCreateTask;
 	const canStartAllTasks = column.id === "backlog" && onStartAllTasks;
@@ -145,7 +149,7 @@ export function BoardColumn({
 					</div>
 				</div>
 
-				<Droppable droppableId={column.id} type={cardDropType} isDropDisabled={isDropDisabled}>
+				<Droppable droppableId={column.id} type={cardDropType} isDropDisabled={isDropDisabled || isDragDisabled}>
 					{(cardProvided) => (
 						<div ref={cardProvided.innerRef} {...cardProvided.droppableProps} className="kb-column-cards">
 							{canCreate ? (
@@ -199,10 +203,12 @@ export function BoardColumn({
 											isDependencyTarget={dependencyTargetTaskId === card.id}
 											isDependencyLinking={isDependencyLinking}
 											workspacePath={workspacePath}
+											isDragDisabled={isDragDisabled}
+											hideActions={hideCardActions}
 											onSaveTitle={onSaveTitle}
 											onClick={() => {
-												if (column.id === "backlog") {
-													onEditTask?.(card);
+												if (column.id === "backlog" && onEditTask) {
+													onEditTask(card);
 													return;
 												}
 												onCardClick?.(card);

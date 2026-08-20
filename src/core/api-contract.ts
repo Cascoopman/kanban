@@ -365,6 +365,18 @@ export const runtimeProjectsResponseSchema = z.object({
 });
 export type RuntimeProjectsResponse = z.infer<typeof runtimeProjectsResponseSchema>;
 
+export const runtimeProjectBoardSnapshotSchema = z.object({
+	project: runtimeProjectSummarySchema,
+	board: runtimeBoardDataSchema,
+	sessions: z.record(z.string(), runtimeTaskSessionSummarySchema),
+});
+export type RuntimeProjectBoardSnapshot = z.infer<typeof runtimeProjectBoardSnapshotSchema>;
+
+export const runtimeProjectBoardsResponseSchema = z.object({
+	projects: z.array(runtimeProjectBoardSnapshotSchema),
+});
+export type RuntimeProjectBoardsResponse = z.infer<typeof runtimeProjectBoardsResponseSchema>;
+
 export const runtimeProjectAddRequestSchema = z
 	.object({
 		path: z.string().optional(),

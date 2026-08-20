@@ -23,6 +23,7 @@ export interface UseDetailTaskNavigationResult {
 	selectedCard: ReturnType<typeof findCardSelection>;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
 	handleProjectSelect: (projectId: string) => void;
+	handleProjectTaskSelect: (projectId: string, taskId: string) => void;
 	handleBack: () => void;
 }
 
@@ -44,6 +45,7 @@ export function useDetailTaskNavigation({
 	});
 	const previousProjectIdRef = useRef<string | null | undefined>(undefined);
 	const pendingDetailProjectIdRef = useRef<string | null>(null);
+	const pendingDetailTaskIdRef = useRef<string | null>(null);
 	const onDetailClosedRef = useRef(onDetailClosed);
 	const selectedCard = useMemo(() => {
 		if (!selectedTaskId) {
@@ -68,12 +70,30 @@ export function useDetailTaskNavigation({
 			}
 			const shouldKeepDetailOpen = selectedCard !== null || pendingDetailProjectIdRef.current !== null;
 			pendingDetailProjectIdRef.current = shouldKeepDetailOpen ? projectId : null;
+			pendingDetailTaskIdRef.current = null;
 			if (shouldKeepDetailOpen) {
 				closeDetail();
 			}
 			onSelectProject(projectId);
 		},
 		[closeDetail, currentProjectId, onSelectProject, selectedCard],
+	);
+
+	const handleProjectTaskSelect = useCallback(
+		(projectId: string, taskId: string) => {
+			if (!projectId || !taskId) {
+				return;
+			}
+			if (projectId === currentProjectId) {
+				setSelectedTaskId(taskId);
+				return;
+			}
+			pendingDetailProjectIdRef.current = projectId;
+			pendingDetailTaskIdRef.current = taskId;
+			closeDetail();
+			onSelectProject(projectId);
+		},
+		[closeDetail, currentProjectId, onSelectProject],
 	);
 
 	useEffect(() => {
@@ -96,6 +116,7 @@ export function useDetailTaskNavigation({
 		if (pendingProjectId !== currentProjectId) {
 			if (!isProjectSwitching) {
 				pendingDetailProjectIdRef.current = null;
+				pendingDetailTaskIdRef.current = null;
 			}
 			return;
 		}
@@ -104,7 +125,13 @@ export function useDetailTaskNavigation({
 		}
 
 		pendingDetailProjectIdRef.current = null;
-		setSelectedTaskId(getPreferredTaskIdForProjectSwitch(board));
+		const pendingTaskId = pendingDetailTaskIdRef.current;
+		pendingDetailTaskIdRef.current = null;
+		setSelectedTaskId(
+			pendingTaskId && findCardSelection(board, pendingTaskId)
+				? pendingTaskId
+				: getPreferredTaskIdForProjectSwitch(board),
+		);
 	}, [
 		board,
 		currentProjectId,
@@ -170,6 +197,7 @@ export function useDetailTaskNavigation({
 		selectedCard,
 		setSelectedTaskId,
 		handleProjectSelect,
+		handleProjectTaskSelect,
 		handleBack: closeDetail,
 	};
 }

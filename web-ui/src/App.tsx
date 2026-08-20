@@ -1,6 +1,7 @@
 // Main React composition root for the browser app.
 // Keep this file focused on wiring top-level hooks and surfaces together, and
 // push runtime-specific orchestration down into hooks and service modules.
+import type { DropResult } from "@hello-pangea/dnd";
 import { FolderOpen } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,7 +14,7 @@ import { DebugDialog } from "@/components/debug-dialog";
 import { AgentTerminalPanel } from "@/components/detail-panels/agent-terminal-panel";
 import { GitHistoryView } from "@/components/git-history-view";
 import { KanbanBoard } from "@/components/kanban-board";
-import { ProjectNavigationPanel } from "@/components/project-navigation-panel";
+import { ProjectBoardToolbar } from "@/components/project-board-toolbar";
 import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components/runtime-settings-dialog";
 import { StartupOnboardingDialog } from "@/components/startup-onboarding-dialog";
 import { TaskBranchDialog } from "@/components/task-branch-dialog";
@@ -41,6 +42,13 @@ import { useDetailTaskNavigation } from "@/hooks/use-detail-task-navigation";
 import { useDocumentVisibility } from "@/hooks/use-document-visibility";
 import { useGitActions } from "@/hooks/use-git-actions";
 import { useOpenWorkspace } from "@/hooks/use-open-workspace";
+import {
+	buildUnifiedProjectBoard,
+	createProjectBoardMove,
+	type ProjectBoardMove,
+	scopeProjectBoardMove,
+	useProjectBoards,
+} from "@/hooks/use-project-boards";
 import { parseRemovedProjectPathFromStreamError, useProjectNavigation } from "@/hooks/use-project-navigation";
 import { useProjectUiState } from "@/hooks/use-project-ui-state";
 import { useResumeInterruptedTaskSessions } from "@/hooks/use-resume-interrupted-task-sessions";
@@ -56,7 +64,6 @@ import { useTerminalPanels } from "@/hooks/use-terminal-panels";
 import { useWorkspaceSync } from "@/hooks/use-workspace-sync";
 import { LayoutCustomizationsProvider } from "@/resize/layout-customizations";
 import { ResizableBottomPane } from "@/resize/resizable-bottom-pane";
-import { useProjectNavigationLayout } from "@/resize/use-project-navigation-layout";
 import { getTaskAgentNavbarHint } from "@/runtime/supported-agents";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useRuntimeProjectConfig } from "@/runtime/use-runtime-project-config";
@@ -80,11 +87,15 @@ export default function App(): ReactElement {
 	const [canPersistWorkspaceState, setCanPersistWorkspaceState] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [settingsInitialSection, setSettingsInitialSection] = useState<RuntimeSettingsSection | null>(null);
+	const [visibleProjectIds, setVisibleProjectIds] = useState<Set<string>>(() => new Set());
+	const [pendingCreateProjectId, setPendingCreateProjectId] = useState<string | null>(null);
+	const [pendingUnifiedBoardMove, setPendingUnifiedBoardMove] = useState<ProjectBoardMove | null>(null);
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
 	const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
 	const [pendingTaskStartAfterEditId, setPendingTaskStartAfterEditId] = useState<string | null>(null);
 	const taskEditorResetRef = useRef<() => void>(() => {});
 	const lastStreamErrorRef = useRef<string | null>(null);
+	const knownProjectIdsRef = useRef<Set<string>>(new Set());
 	const handleProjectSwitchStart = useCallback(() => {
 		setCanPersistWorkspaceState(false);
 		setIsGitHistoryOpen(false);
@@ -210,18 +221,19 @@ export default function App(): ReactElement {
 		isWorkspaceMetadataPending,
 		startTaskSession,
 	});
-	const { selectedTaskId, selectedCard, setSelectedTaskId, handleBack } = useDetailTaskNavigation({
-		board,
-		currentProjectId,
-		isAwaitingWorkspaceSnapshot,
-		isInitialRuntimeLoad,
-		isProjectSwitching,
-		isWorkspaceMetadataPending,
-		onSelectProject: handleSelectProject,
-		onDetailClosed: () => {
-			setIsGitHistoryOpen(false);
-		},
-	});
+	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectTaskSelect, handleBack } =
+		useDetailTaskNavigation({
+			board,
+			currentProjectId,
+			isAwaitingWorkspaceSnapshot,
+			isInitialRuntimeLoad,
+			isProjectSwitching,
+			isWorkspaceMetadataPending,
+			onSelectProject: handleSelectProject,
+			onDetailClosed: () => {
+				setIsGitHistoryOpen(false);
+			},
+		});
 
 	useEffect(() => {
 		replaceWorkspaceMetadata(workspaceMetadata);
@@ -234,26 +246,60 @@ export default function App(): ReactElement {
 		resetWorkspaceMetadataStore();
 	}, [isProjectSwitching]);
 
-	const {
-		displayedProjects,
-		navigationProjectPath,
-		shouldShowProjectLoadingState,
-		isProjectListLoading,
-		shouldUseNavigationPath,
-	} = useProjectUiState({
-		board,
-		canPersistWorkspaceState,
+	const { displayedProjects, navigationProjectPath, shouldShowProjectLoadingState, shouldUseNavigationPath } =
+		useProjectUiState({
+			board,
+			canPersistWorkspaceState,
+			currentProjectId,
+			projects,
+			navigationCurrentProjectId,
+			selectedTaskId,
+			streamError,
+			isProjectSwitching,
+			isInitialRuntimeLoad,
+			isAwaitingWorkspaceSnapshot,
+			isWorkspaceMetadataPending,
+			hasReceivedSnapshot,
+		});
+	const projectBoards = useProjectBoards({
+		projects: displayedProjects,
 		currentProjectId,
-		projects,
-		navigationCurrentProjectId,
-		selectedTaskId,
-		streamError,
-		isProjectSwitching,
-		isInitialRuntimeLoad,
-		isAwaitingWorkspaceSnapshot,
-		isWorkspaceMetadataPending,
-		hasReceivedSnapshot,
+		currentBoard: board,
+		currentSessions: sessions,
+		canUseCurrentBoard: canPersistWorkspaceState,
 	});
+
+	useEffect(() => {
+		const availableIds = new Set(displayedProjects.map((project) => project.id));
+		const knownProjectIds = knownProjectIdsRef.current;
+		setVisibleProjectIds((current) => {
+			const next = new Set([...current].filter((projectId) => availableIds.has(projectId)));
+			const isInitialProjectLoad = knownProjectIds.size === 0;
+			for (const projectId of availableIds) {
+				if (isInitialProjectLoad || !knownProjectIds.has(projectId)) {
+					next.add(projectId);
+				}
+			}
+			return next;
+		});
+		knownProjectIdsRef.current = availableIds;
+	}, [displayedProjects]);
+
+	const unifiedProjectBoard = useMemo(
+		() => buildUnifiedProjectBoard(projectBoards.snapshots, visibleProjectIds),
+		[projectBoards.snapshots, visibleProjectIds],
+	);
+	const handleUnifiedCardSelect = useCallback(
+		(taskId: string) => {
+			const selection = findCardSelection(unifiedProjectBoard.board, taskId);
+			const projectId = selection?.card.projectId;
+			if (!projectId) {
+				return;
+			}
+			handleProjectTaskSelect(projectId, taskId);
+		},
+		[handleProjectTaskSelect, unifiedProjectBoard.board],
+	);
 
 	useReviewReadyNotifications({
 		activeWorkspaceId: activeNotificationWorkspaceId,
@@ -317,6 +363,38 @@ export default function App(): ReactElement {
 		setSelectedTaskId,
 		queueTaskStartAfterEdit,
 	});
+	const handleCreateTaskForProject = useCallback(
+		(projectId: string) => {
+			if (projectId === currentProjectId && !isProjectSwitching && !isAwaitingWorkspaceSnapshot) {
+				handleOpenCreateTask();
+				return;
+			}
+			setPendingCreateProjectId(projectId);
+			handleSelectProject(projectId);
+		},
+		[currentProjectId, handleOpenCreateTask, handleSelectProject, isAwaitingWorkspaceSnapshot, isProjectSwitching],
+	);
+
+	useEffect(() => {
+		if (
+			!pendingCreateProjectId ||
+			pendingCreateProjectId !== currentProjectId ||
+			isProjectSwitching ||
+			isAwaitingWorkspaceSnapshot ||
+			isWorkspaceMetadataPending
+		) {
+			return;
+		}
+		setPendingCreateProjectId(null);
+		handleOpenCreateTask();
+	}, [
+		currentProjectId,
+		handleOpenCreateTask,
+		isAwaitingWorkspaceSnapshot,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+		pendingCreateProjectId,
+	]);
 
 	useEffect(() => {
 		taskEditorResetRef.current = resetTaskEditorState;
@@ -342,14 +420,10 @@ export default function App(): ReactElement {
 		openPrTaskLoadingById,
 		agentCommitTaskLoadingById,
 		agentOpenPrTaskLoadingById,
-		isDiscardingHomeWorkingChanges,
 		gitActionError,
 		gitActionErrorTitle,
 		clearGitActionError,
 		gitHistory,
-		runGitAction,
-		switchHomeBranch,
-		discardHomeWorkingChanges,
 		handleCommitTask,
 		handleOpenPrTask,
 		handleAgentCommitTask,
@@ -369,7 +443,6 @@ export default function App(): ReactElement {
 	const {
 		homeTerminalTaskId,
 		isHomeTerminalOpen,
-		isHomeTerminalStarting,
 		homeTerminalPaneHeight,
 		isDetailTerminalOpen,
 		detailTerminalTaskId,
@@ -521,9 +594,6 @@ export default function App(): ReactElement {
 	}, []);
 
 	const {
-		handleProgrammaticCardMoveReady,
-		handleCreateDependency,
-		handleDeleteDependency,
 		handleDragEnd,
 		handleStartTask,
 		handleStartAllBacklogTasks,
@@ -557,6 +627,77 @@ export default function App(): ReactElement {
 		sendTaskSessionInput,
 		readyForReviewNotificationsEnabled,
 	});
+
+	const applyUnifiedBoardMove = useCallback(
+		(move: ProjectBoardMove) => {
+			const scopedResult = scopeProjectBoardMove(board, move);
+			if (!scopedResult) {
+				return;
+			}
+			handleDragEnd(scopedResult);
+		},
+		[board, handleDragEnd],
+	);
+
+	const handleUnifiedBoardDragEnd = useCallback(
+		(result: DropResult) => {
+			const move = createProjectBoardMove(unifiedProjectBoard.board, result);
+			if (!move) {
+				return;
+			}
+			if (
+				move.projectId === currentProjectId &&
+				canPersistWorkspaceState &&
+				!isProjectSwitching &&
+				!isWorkspaceMetadataPending
+			) {
+				applyUnifiedBoardMove(move);
+				return;
+			}
+			setPendingUnifiedBoardMove(move);
+			handleSelectProject(move.projectId);
+		},
+		[
+			applyUnifiedBoardMove,
+			canPersistWorkspaceState,
+			currentProjectId,
+			handleSelectProject,
+			isProjectSwitching,
+			isWorkspaceMetadataPending,
+			unifiedProjectBoard.board,
+		],
+	);
+
+	useEffect(() => {
+		if (!pendingUnifiedBoardMove) {
+			return;
+		}
+		if (!displayedProjects.some((project) => project.id === pendingUnifiedBoardMove.projectId)) {
+			setPendingUnifiedBoardMove(null);
+			return;
+		}
+		if (
+			pendingUnifiedBoardMove.projectId !== currentProjectId ||
+			!canPersistWorkspaceState ||
+			isProjectSwitching ||
+			isAwaitingWorkspaceSnapshot ||
+			isWorkspaceMetadataPending
+		) {
+			return;
+		}
+		const pendingMove = pendingUnifiedBoardMove;
+		setPendingUnifiedBoardMove(null);
+		applyUnifiedBoardMove(pendingMove);
+	}, [
+		applyUnifiedBoardMove,
+		canPersistWorkspaceState,
+		currentProjectId,
+		displayedProjects,
+		isAwaitingWorkspaceSnapshot,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+		pendingUnifiedBoardMove,
+	]);
 
 	const {
 		handleCreateAndStartTask,
@@ -652,16 +793,11 @@ export default function App(): ReactElement {
 		return undefined;
 	}, [selectedCard]);
 
-	const sidebarLayout = useProjectNavigationLayout();
-	const handleToggleSidebar = useCallback(() => {
-		sidebarLayout.setSidebarCollapsed(!sidebarLayout.isCollapsed);
-	}, [sidebarLayout]);
-
-	const navbarWorkspacePath = hasNoProjects ? undefined : activeWorkspacePath;
-	const navbarWorkspaceHint = hasNoProjects ? undefined : activeWorkspaceHint;
-	const navbarRuntimeHint = hasNoProjects ? undefined : runtimeHint;
+	const navbarWorkspacePath = selectedCard ? activeWorkspacePath : undefined;
+	const navbarWorkspaceHint = selectedCard ? activeWorkspaceHint : undefined;
+	const navbarRuntimeHint = selectedCard ? runtimeHint : undefined;
 	const shouldHideProjectDependentTopBarActions =
-		!selectedCard && (isProjectSwitching || isAwaitingWorkspaceSnapshot || isWorkspaceMetadataPending);
+		!selectedCard || isProjectSwitching || isAwaitingWorkspaceSnapshot || isWorkspaceMetadataPending;
 
 	const {
 		openTargetOptions,
@@ -713,63 +849,20 @@ export default function App(): ReactElement {
 	return (
 		<LayoutCustomizationsProvider onResetBottomTerminalLayoutCustomizations={resetBottomTerminalLayoutCustomizations}>
 			<div className="flex h-[100svh] min-w-0 overflow-hidden">
-				{!selectedCard ? (
-					<ProjectNavigationPanel
-						projects={displayedProjects}
-						isLoadingProjects={isProjectListLoading}
-						currentProjectId={navigationCurrentProjectId}
-						removingProjectId={removingProjectId}
-						onSelectProject={(projectId) => {
-							void handleSelectProject(projectId);
-						}}
-						onRemoveProject={handleRemoveProject}
-						onAddProject={() => {
-							void handleAddProject();
-						}}
-						sidebarWidth={sidebarLayout.sidebarWidth}
-						setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
-						isCollapsed={sidebarLayout.isCollapsed}
-						setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
-					/>
-				) : null}
 				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 					<TopBar
-						onToggleSidebar={handleToggleSidebar}
 						onBack={selectedCard ? handleBack : undefined}
 						workspacePath={navbarWorkspacePath}
-						isWorkspacePathLoading={shouldShowProjectLoadingState}
+						isWorkspacePathLoading={selectedCard ? shouldShowProjectLoadingState : false}
 						workspaceHint={navbarWorkspaceHint}
 						runtimeHint={navbarRuntimeHint}
 						selectedTaskId={selectedCard?.card.id ?? null}
 						selectedTaskBaseRef={selectedCard?.card.baseRef ?? null}
-						showHomeGitSummary={!hasNoProjects && !selectedCard}
-						runningGitAction={selectedCard || hasNoProjects ? null : runningGitAction}
-						onGitFetch={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("fetch");
-									}
-						}
-						onGitPull={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("pull");
-									}
-						}
-						onGitPush={
-							selectedCard
-								? undefined
-								: () => {
-										void runGitAction("push");
-									}
-						}
-						onToggleTerminal={
-							hasNoProjects ? undefined : selectedCard ? handleToggleDetailTerminal : handleToggleHomeTerminal
-						}
-						isTerminalOpen={selectedCard ? isDetailTerminalOpen : showHomeBottomTerminal}
-						isTerminalLoading={selectedCard ? isDetailTerminalStarting : isHomeTerminalStarting}
+						showHomeGitSummary={false}
+						runningGitAction={selectedCard ? runningGitAction : null}
+						onToggleTerminal={selectedCard ? handleToggleDetailTerminal : undefined}
+						isTerminalOpen={selectedCard ? isDetailTerminalOpen : false}
+						isTerminalLoading={selectedCard ? isDetailTerminalStarting : false}
 						onOpenSettings={handleOpenSettings}
 						showDebugButton={debugModeEnabled}
 						onOpenDebugDialog={debugModeEnabled ? handleOpenDebugDialog : undefined}
@@ -785,7 +878,7 @@ export default function App(): ReactElement {
 						onOpenWorkspace={onOpenWorkspace}
 						canOpenWorkspace={canOpenWorkspace}
 						isOpeningWorkspace={isOpeningWorkspace}
-						onToggleGitHistory={hasNoProjects ? undefined : handleToggleGitHistory}
+						onToggleGitHistory={selectedCard ? handleToggleGitHistory : undefined}
 						isGitHistoryOpen={isGitHistoryOpen}
 						hideProjectDependentActions={shouldHideProjectDependentTopBarActions}
 					/>
@@ -795,7 +888,7 @@ export default function App(): ReactElement {
 							aria-hidden={selectedCard ? true : undefined}
 							style={selectedCard ? { visibility: "hidden" } : undefined}
 						>
-							{shouldShowProjectLoadingState ? (
+							{projectBoards.isLoading && projectBoards.snapshots.length === 0 ? (
 								<div className="flex flex-1 min-h-0 items-center justify-center bg-surface-0">
 									<Spinner size={30} />
 								</div>
@@ -819,50 +912,26 @@ export default function App(): ReactElement {
 								</div>
 							) : (
 								<div className="flex flex-1 flex-col min-h-0 min-w-0">
+									<ProjectBoardToolbar
+										projects={displayedProjects}
+										visibleProjectIds={visibleProjectIds}
+										onVisibleProjectIdsChange={setVisibleProjectIds}
+										onAddProject={() => {
+											void handleAddProject();
+										}}
+										onRemoveProject={handleRemoveProject}
+										onCreateTask={handleCreateTaskForProject}
+										removingProjectId={removingProjectId}
+									/>
 									<div className="flex flex-1 min-h-0 min-w-0">
-										{isGitHistoryOpen ? (
-											<GitHistoryView
-												workspaceId={currentProjectId}
-												gitHistory={gitHistory}
-												onCheckoutBranch={(branch) => {
-													void switchHomeBranch(branch);
-												}}
-												onDiscardWorkingChanges={() => {
-													void discardHomeWorkingChanges();
-												}}
-												isDiscardWorkingChangesPending={isDiscardingHomeWorkingChanges}
-											/>
-										) : (
-											<KanbanBoard
-												data={board}
-												taskSessions={sessions}
-												workspacePath={workspacePath}
-												onCardSelect={handleCardSelect}
-												onCreateTask={handleOpenCreateTask}
-												onStartTask={handleStartTaskFromBoard}
-												onBranchTask={taskBranching.handleOpenBranchTask}
-												onStartAllTasks={handleStartAllBacklogTasksFromBoard}
-												onClearTrash={handleOpenClearTrash}
-												editingTaskId={editingTaskId}
-												inlineTaskEditor={inlineTaskEditor}
-												onEditTask={handleOpenEditTask}
-												onSaveTaskTitle={handleSaveTaskTitle}
-												onCommitTask={handleCommitTask}
-												onOpenPrTask={handleOpenPrTask}
-												commitTaskLoadingById={commitTaskLoadingById}
-												openPrTaskLoadingById={openPrTaskLoadingById}
-												moveToTrashLoadingById={moveToTrashLoadingById}
-												onMoveToTrashTask={handleMoveReviewCardToTrash}
-												onRestoreFromTrashTask={handleRestoreTaskFromTrash}
-												dependencies={board.dependencies}
-												onCreateDependency={handleCreateDependency}
-												onDeleteDependency={handleDeleteDependency}
-												onRequestProgrammaticCardMoveReady={
-													selectedCard ? undefined : handleProgrammaticCardMoveReady
-												}
-												onDragEnd={handleDragEnd}
-											/>
-										)}
+										<KanbanBoard
+											data={unifiedProjectBoard.board}
+											taskSessions={unifiedProjectBoard.sessions}
+											onCardSelect={handleUnifiedCardSelect}
+											dependencies={unifiedProjectBoard.board.dependencies}
+											hideCardActions
+											onDragEnd={handleUnifiedBoardDragEnd}
+										/>
 									</div>
 									{showHomeBottomTerminal ? (
 										<ResizableBottomPane

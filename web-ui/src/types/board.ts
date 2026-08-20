@@ -19,6 +19,9 @@ export interface BoardCard {
 	baseRef: string;
 	createdAt: number;
 	updatedAt: number;
+	projectId?: string;
+	projectName?: string;
+	projectPath?: string;
 }
 
 export interface BoardColumn {
