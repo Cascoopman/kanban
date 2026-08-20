@@ -289,7 +289,7 @@ describe("BoardCard", () => {
 			);
 		});
 
-		expect(container.textContent).toContain("~/.cline/worktrees/trash-task-1/kanban");
+		expect(container.textContent).toContain("~/.kanban/worktrees/trash-task-1/kanban");
 	});
 
 	it("shows tool input details in the session preview text", async () => {

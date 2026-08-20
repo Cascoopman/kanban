@@ -40,7 +40,6 @@ import { useDebugTools } from "@/hooks/use-debug-tools";
 import { useDetailTaskNavigation } from "@/hooks/use-detail-task-navigation";
 import { useDocumentVisibility } from "@/hooks/use-document-visibility";
 import { useGitActions } from "@/hooks/use-git-actions";
-import { useHomeSidebarAgentPanel } from "@/hooks/use-home-sidebar-agent-panel";
 import { useOpenWorkspace } from "@/hooks/use-open-workspace";
 import { parseRemovedProjectPathFromStreamError, useProjectNavigation } from "@/hooks/use-project-navigation";
 import { useProjectUiState } from "@/hooks/use-project-ui-state";
@@ -81,7 +80,6 @@ export default function App(): ReactElement {
 	const [canPersistWorkspaceState, setCanPersistWorkspaceState] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [settingsInitialSection, setSettingsInitialSection] = useState<RuntimeSettingsSection | null>(null);
-	const [homeSidebarSection, setHomeSidebarSection] = useState<"projects" | "agent">("projects");
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
 	const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
 	const [pendingTaskStartAfterEditId, setPendingTaskStartAfterEditId] = useState<string | null>(null);
@@ -212,20 +210,18 @@ export default function App(): ReactElement {
 		isWorkspaceMetadataPending,
 		startTaskSession,
 	});
-	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectSelect, handleBack } = useDetailTaskNavigation(
-		{
-			board,
-			currentProjectId,
-			isAwaitingWorkspaceSnapshot,
-			isInitialRuntimeLoad,
-			isProjectSwitching,
-			isWorkspaceMetadataPending,
-			onSelectProject: handleSelectProject,
-			onDetailClosed: () => {
-				setIsGitHistoryOpen(false);
-			},
+	const { selectedTaskId, selectedCard, setSelectedTaskId, handleBack } = useDetailTaskNavigation({
+		board,
+		currentProjectId,
+		isAwaitingWorkspaceSnapshot,
+		isInitialRuntimeLoad,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+		onSelectProject: handleSelectProject,
+		onDetailClosed: () => {
+			setIsGitHistoryOpen(false);
 		},
-	);
+	});
 
 	useEffect(() => {
 		replaceWorkspaceMetadata(workspaceMetadata);
@@ -415,13 +411,6 @@ export default function App(): ReactElement {
 		sendTaskSessionInput,
 	});
 	const homeTerminalSummary = sessions[homeTerminalTaskId] ?? null;
-	const homeSidebarAgentPanel = useHomeSidebarAgentPanel({
-		currentProjectId,
-		hasNoProjects,
-		runtimeProjectConfig,
-		taskSessions: sessions,
-		workspaceGit,
-	});
 	const { runningShortcutLabel, handleSelectShortcutLabel, handleRunShortcut, handleCreateShortcut } =
 		useShortcutActions({
 			currentProjectId,
@@ -741,25 +730,25 @@ export default function App(): ReactElement {
 	return (
 		<LayoutCustomizationsProvider onResetBottomTerminalLayoutCustomizations={resetBottomTerminalLayoutCustomizations}>
 			<div className="flex h-[100svh] min-w-0 overflow-hidden">
-				<ProjectNavigationPanel
-					projects={displayedProjects}
-					isLoadingProjects={isProjectListLoading}
-					currentProjectId={navigationCurrentProjectId}
-					removingProjectId={removingProjectId}
-					activeSection={homeSidebarSection}
-					onActiveSectionChange={setHomeSidebarSection}
-					canShowAgentSection={!hasNoProjects && Boolean(currentProjectId)}
-					agentSectionContent={homeSidebarAgentPanel}
-					onSelectProject={handleProjectSelect}
-					onRemoveProject={handleRemoveProject}
-					onAddProject={() => {
-						void handleAddProject();
-					}}
-					sidebarWidth={sidebarLayout.sidebarWidth}
-					setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
-					isCollapsed={sidebarLayout.isCollapsed}
-					setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
-				/>
+				{!selectedCard ? (
+					<ProjectNavigationPanel
+						projects={displayedProjects}
+						isLoadingProjects={isProjectListLoading}
+						currentProjectId={navigationCurrentProjectId}
+						removingProjectId={removingProjectId}
+						onSelectProject={(projectId) => {
+							void handleSelectProject(projectId);
+						}}
+						onRemoveProject={handleRemoveProject}
+						onAddProject={() => {
+							void handleAddProject();
+						}}
+						sidebarWidth={sidebarLayout.sidebarWidth}
+						setExpandedSidebarWidth={sidebarLayout.setExpandedSidebarWidth}
+						isCollapsed={sidebarLayout.isCollapsed}
+						setSidebarCollapsed={sidebarLayout.setSidebarCollapsed}
+					/>
+				) : null}
 				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 					<TopBar
 						onToggleSidebar={handleToggleSidebar}

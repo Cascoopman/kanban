@@ -1,4 +1,4 @@
-## npx kanban (Research Preview)
+## npx kanban
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/2aa3dcc7-94e3-4076-bcfe-6d0272007cfe" width="100%" />
@@ -6,29 +6,11 @@
 
 A replacement for your IDE better suited for running many agents in parallel and reviewing diffs. Each task card gets its own terminal and worktree, all handled for you automatically. Enable auto-commit and link cards together to create dependency chains that complete large amounts of work autonomously.
 
-> [!WARNING]
-> Kanban is a research preview and uses experimental features of CLI agents like bypassing permissions and runtime hooks for more autonomy. We'd love your feedback in #kanban on our [discord](https://discord.gg/cline).
-
 <div align="left">
 <table>
 <tbody>
 <td align="center">
 <a href="https://www.npmjs.com/package/kanban" target="_blank">NPM</a>
-</td>
-<td align="center">
-<a href="https://github.com/cline/kanban" target="_blank">GitHub</a>
-</td>
-<td align="center">
-<a href="https://github.com/cline/kanban/issues" target="_blank">Issues</a>
-</td>
-<td align="center">
-<a href="https://github.com/cline/kanban/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank">Feature Requests</a>
-</td>
-<td align="center">
-<a href="https://discord.gg/cline" target="_blank">Discord</a>
-</td>
-<td align="center">
-<a href="https://x.com/cline" target="_blank">@cline</a>
 </td>
 </tbody>
 </table>
@@ -46,7 +28,7 @@ kanban
 Run this from the root of any git repo. Kanban detects Claude Code or OpenAI Codex and launches a local webserver in your browser. No account or setup is required.
 
 ### 2. Create tasks
-Create a task card manually, or open the sidebar chat and ask your agent to break work down into tasks for you. Kanban injects board-management instructions into that session so you can simply ask it to add tasks, link tasks, or start work on your board.
+Create a task card with the new-task shortcut or the board controls, then configure its agent and workflow options.
 
 ### 3. Link and automate
 <kbd>⌘</kbd> + click a card to link it to another task. When a card is completed and moved to trash, linked tasks auto-start. Combine with auto-commit for fully autonomous dependency chains: one task completes → commits → kicks off the next → repeat. It’s a pretty magical experience asking your agent to decompose a big task into subtasks that auto-commit - he’ll cleverly do it in a way that parallelizes for maximum efficiency and links tasks together for end-to-end autonomy.
@@ -72,4 +54,4 @@ Click the branch name in the navbar to open a full git interface to browse commi
 
 ---
 
-[Apache 2.0 © 2026 Cline Bot Inc.](./LICENSE)
+[Apache 2.0](./LICENSE)

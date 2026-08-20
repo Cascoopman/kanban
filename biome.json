@@ -36,7 +36,7 @@
 			"!.worktrees/**/*"
 		]
 	},
-	"plugins": ["grit/no-process-env-destructure.grit", "grit/no-home-agent-prefix-literal.grit"],
+	"plugins": ["grit/no-process-env-destructure.grit"],
 	"overrides": [
 		{
 			"includes": ["src/**/*.ts", "src/**/*.tsx", "!src/cli.ts"],

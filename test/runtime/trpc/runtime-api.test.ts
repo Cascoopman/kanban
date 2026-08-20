@@ -285,33 +285,6 @@ describe("createRuntimeApi terminal task sessions", () => {
 		);
 	});
 
-	it("starts home sessions in the workspace root and forwards images", async () => {
-		const terminalManager = {
-			getSummary: vi.fn(() => null),
-			startTaskSession: vi.fn(async () => createSummary()),
-			applyTurnCheckpoint: vi.fn(),
-		};
-		const api = createTestRuntimeApi({
-			getScopedTerminalManager: vi.fn(async () => terminalManager as never),
-		});
-
-		await api.startTaskSession(workspaceScope, {
-			taskId: "__home_agent__:workspace-1:claude",
-			baseRef: "main",
-			prompt: "Review the repository",
-			images: [{ id: "img-1", data: "abc", mimeType: "image/png" }],
-		});
-
-		expect(taskWorktreeMocks.resolveTaskCwd).not.toHaveBeenCalled();
-		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
-			expect.objectContaining({
-				cwd: "/tmp/repo",
-				images: [{ id: "img-1", data: "abc", mimeType: "image/png" }],
-			}),
-		);
-		expect(turnCheckpointMocks.captureTaskTurnCheckpoint).not.toHaveBeenCalled();
-	});
-
 	it("routes stop and input through the terminal manager", async () => {
 		const summary = createSummary();
 		const terminalManager = {
@@ -341,12 +314,8 @@ describe("createRuntimeApi maintenance endpoints", () => {
 		rmSync(testHome, { recursive: true, force: true });
 	});
 
-	it("runs reset teardown before deleting the preserved .cline storage paths", async () => {
-		const resetPaths = [
-			join(testHome, ".cline", "data"),
-			join(testHome, ".cline", "kanban"),
-			join(testHome, ".cline", "worktrees"),
-		];
+	it("runs reset teardown before deleting Kanban storage", async () => {
+		const resetPaths = [join(testHome, ".kanban")];
 		for (const path of resetPaths) {
 			mkdirSync(path, { recursive: true });
 			writeFileSync(join(path, "state.json"), "{}");

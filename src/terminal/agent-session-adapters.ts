@@ -9,7 +9,6 @@ import type {
 import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
-import { resolveHomeAgentAppendSystemPrompt } from "../prompts/append-system-prompt";
 import { getRuntimeHomePath } from "../state/workspace-state";
 import { configureCodexHooks, hasCodexConfigOverride } from "./codex-hook-config";
 import { createHookRuntimeEnv } from "./hook-runtime-context";
@@ -167,7 +166,6 @@ const claudeAdapter: AgentSessionAdapter = {
 		const env: Record<string, string | undefined> = {
 			FORCE_HYPERLINK: "1",
 		};
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
 		if (input.autonomousModeEnabled) {
 			env.CLAUDE_CODE_ENABLE_AUTO_MODE = "1";
 		}
@@ -243,14 +241,6 @@ const claudeAdapter: AgentSessionAdapter = {
 			Object.assign(env, createHookRuntimeEnv(hooks));
 		}
 
-		if (
-			appendedSystemPrompt &&
-			!hasCliOption(args, "--append-system-prompt") &&
-			!hasCliOption(args, "--system-prompt")
-		) {
-			args.push("--append-system-prompt", appendedSystemPrompt);
-		}
-
 		const launch = withPrompt(args, input.prompt);
 		return {
 			...launch,
@@ -287,7 +277,6 @@ const codexAdapter: AgentSessionAdapter = {
 		const codexArgs = [...input.args];
 		const env: Record<string, string | undefined> = {};
 		let deferredStartupInput: string | undefined;
-		const appendedSystemPrompt = resolveHomeAgentAppendSystemPrompt(input.taskId);
 
 		if (!hasCodexConfigOverride(codexArgs, "check_for_update_on_startup")) {
 			codexArgs.push("-c", "check_for_update_on_startup=false");
@@ -308,10 +297,6 @@ const codexAdapter: AgentSessionAdapter = {
 			if (!hasCliOption(codexArgs, "--last")) {
 				codexArgs.push("--last");
 			}
-		}
-
-		if (appendedSystemPrompt && !hasCodexConfigOverride(codexArgs, "developer_instructions")) {
-			codexArgs.push("-c", `developer_instructions=${JSON.stringify(appendedSystemPrompt)}`);
 		}
 
 		const hooks = resolveHookContext(input);

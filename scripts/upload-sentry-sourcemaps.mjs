@@ -3,7 +3,6 @@ import { cp, mkdir, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { relative, resolve, sep } from "node:path";
 
-const SENTRY_ORG = "cline-bot-inc-xi";
 const SENTRY_WEB_PROJECT = "kanban-react";
 const SENTRY_NODE_PROJECT = "kanban-node";
 
@@ -50,6 +49,10 @@ async function main() {
 		console.log("Skipping Sentry sourcemap upload because SENTRY_AUTH_TOKEN is not set.");
 		return;
 	}
+	const sentryOrg = process.env.SENTRY_ORG?.trim();
+	if (!sentryOrg) {
+		throw new Error("SENTRY_ORG must be set when SENTRY_AUTH_TOKEN is configured.");
+	}
 
 	await rm(stagingRoot, { force: true, recursive: true });
 	await mkdir(stagingRoot, { recursive: true });
@@ -61,8 +64,8 @@ async function main() {
 		recursive: true,
 	});
 
-	runSentryCli(["sourcemaps", "upload", "--org", SENTRY_ORG, "--project", SENTRY_WEB_PROJECT, webDistDir]);
-	runSentryCli(["sourcemaps", "upload", "--org", SENTRY_ORG, "--project", SENTRY_NODE_PROJECT, nodeStagingDir]);
+	runSentryCli(["sourcemaps", "upload", "--org", sentryOrg, "--project", SENTRY_WEB_PROJECT, webDistDir]);
+	runSentryCli(["sourcemaps", "upload", "--org", sentryOrg, "--project", SENTRY_NODE_PROJECT, nodeStagingDir]);
 
 	await rm(stagingRoot, { force: true, recursive: true });
 }

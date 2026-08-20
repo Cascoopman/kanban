@@ -1,6 +1,6 @@
-appId: com.cline.kanban
+appId: app.kanban.desktop
 productName: Kanban
-copyright: Copyright © 2025 Cline
+copyright: Copyright © 2026 Kanban contributors
 
 directories:
   output: out
@@ -43,7 +43,6 @@ asarUnpack:
 
 mac:
   category: public.app-category.developer-tools
-  icon: build/icon.icns
   target:
     - target: dmg
       arch:

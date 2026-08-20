@@ -1,17 +1,15 @@
 import type { PostHogConfig } from "posthog-js";
 
-const DEFAULT_POSTHOG_HOST = "https://data.cline.bot";
-
 function getTrimmedEnvValue(value: string | undefined): string | null {
 	const trimmed = value?.trim();
 	return trimmed ? trimmed : null;
 }
 
 export const posthogApiKey = getTrimmedEnvValue(import.meta.env.POSTHOG_KEY);
-export const posthogHost = getTrimmedEnvValue(import.meta.env.POSTHOG_HOST) ?? DEFAULT_POSTHOG_HOST;
+export const posthogHost = getTrimmedEnvValue(import.meta.env.POSTHOG_HOST);
 
 export const posthogOptions: Partial<PostHogConfig> = {
-	api_host: posthogHost,
+	api_host: posthogHost ?? undefined,
 	defaults: "2026-01-30",
 	autocapture: false,
 	capture_pageview: true,
@@ -25,5 +23,5 @@ export const posthogOptions: Partial<PostHogConfig> = {
 };
 
 export function isTelemetryEnabled(): boolean {
-	return Boolean(posthogApiKey);
+	return Boolean(posthogApiKey && posthogHost);
 }

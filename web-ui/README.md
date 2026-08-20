@@ -17,9 +17,9 @@ For local builds, forks, and source builds, telemetry is off unless you set a Po
 
 1. Copy `web-ui/.env.example` to `web-ui/.env.local`.
 2. Set `POSTHOG_KEY` to your PostHog project key.
-3. Keep `POSTHOG_HOST` set to `https://data.cline.bot` unless you need a different ingestion host.
+3. Set `POSTHOG_HOST` to your PostHog ingestion host.
 
-When `POSTHOG_KEY` is empty or unset, the app does not initialize PostHog.
+When either `POSTHOG_KEY` or `POSTHOG_HOST` is empty or unset, the app does not initialize PostHog.
 
 Current behavior:
 - Session replay is disabled.

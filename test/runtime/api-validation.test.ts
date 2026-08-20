@@ -93,14 +93,14 @@ describe("parseTaskSessionStartRequest", () => {
 	});
 });
 
-describe("legacy persisted agent compatibility", () => {
-	it("discards unsupported card agent IDs and retired provider settings", () => {
+describe("persisted agent normalization", () => {
+	it("discards unsupported card agent IDs and unknown retired settings", () => {
 		const parsed = runtimeBoardCardSchema.parse({
 			id: "task-1",
 			prompt: "Continue legacy task",
 			startInPlanMode: false,
 			agentId: "retired-agent",
-			clineSettings: {
+			retiredProviderSettings: {
 				providerId: "anthropic",
 				modelId: "legacy-model",
 			},
@@ -110,7 +110,7 @@ describe("legacy persisted agent compatibility", () => {
 		});
 
 		expect(parsed.agentId).toBeUndefined();
-		expect(parsed).not.toHaveProperty("clineSettings");
+		expect(parsed).not.toHaveProperty("retiredProviderSettings");
 	});
 
 	it("normalizes unsupported persisted session agent IDs to null", () => {
