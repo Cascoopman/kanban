@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 import type { RuntimeWorkspaceChangesMode, RuntimeWorkspaceChangesResponse } from "@/runtime/types";
 import { useTrpcQuery } from "@/runtime/use-trpc-query";
+import { useInterval, useUnmount } from "@/utils/react-use";
 
 export interface UseRuntimeWorkspaceChangesResult {
 	changes: RuntimeWorkspaceChangesResponse | null;
@@ -25,18 +26,31 @@ export function useRuntimeWorkspaceChanges(
 	const normalizedViewKey = viewKey ?? "__default__";
 	const requestKey = `${workspaceId ?? "__none__"}:${taskId ?? "__none__"}:${baseRef ?? "__none__"}:${mode}:${normalizedViewKey}`;
 	const previousRequestKeyRef = useRef(requestKey);
+	const requestAbortControllerRef = useRef<AbortController | null>(null);
 	const isRequestTransitioning = hasWorkspaceScope && previousRequestKeyRef.current !== requestKey;
 	const queryFn = useCallback(async () => {
 		if (!taskId || !workspaceId || !baseRef) {
 			throw new Error("Missing workspace scope.");
 		}
 		void normalizedViewKey;
+		requestAbortControllerRef.current?.abort();
+		const abortController = new AbortController();
+		requestAbortControllerRef.current = abortController;
 		const trpcClient = getRuntimeTrpcClient(workspaceId);
-		return await trpcClient.workspace.getChanges.query({
-			taskId,
-			baseRef,
-			mode,
-		});
+		try {
+			return await trpcClient.workspace.getChanges.query(
+				{
+					taskId,
+					baseRef,
+					mode,
+				},
+				{ signal: abortController.signal },
+			);
+		} finally {
+			if (requestAbortControllerRef.current === abortController) {
+				requestAbortControllerRef.current = null;
+			}
+		}
 	}, [baseRef, mode, normalizedViewKey, taskId, workspaceId]);
 	const changesQuery = useTrpcQuery<RuntimeWorkspaceChangesResponse>({
 		enabled: hasWorkspaceScope,
@@ -50,6 +64,19 @@ export function useRuntimeWorkspaceChanges(
 		await changesQuery.refetch();
 	}, [changesQuery.refetch, hasWorkspaceScope]);
 	const previousStateVersionRef = useRef(stateVersion);
+
+	useEffect(() => {
+		if (hasWorkspaceScope) {
+			return;
+		}
+		requestAbortControllerRef.current?.abort();
+		requestAbortControllerRef.current = null;
+	}, [hasWorkspaceScope]);
+
+	useUnmount(() => {
+		requestAbortControllerRef.current?.abort();
+		requestAbortControllerRef.current = null;
+	});
 
 	useEffect(() => {
 		if (!isRequestTransitioning) {
@@ -74,17 +101,12 @@ export function useRuntimeWorkspaceChanges(
 		void changesQuery.refetch();
 	}, [changesQuery.refetch, hasWorkspaceScope, requestKey, stateVersion]);
 
-	useEffect(() => {
-		if (!hasWorkspaceScope || pollIntervalMs == null) {
-			return;
-		}
-		const interval = window.setInterval(() => {
+	useInterval(
+		() => {
 			void changesQuery.refetch();
-		}, pollIntervalMs);
-		return () => {
-			window.clearInterval(interval);
-		};
-	}, [changesQuery.refetch, hasWorkspaceScope, pollIntervalMs]);
+		},
+		hasWorkspaceScope ? pollIntervalMs : null,
+	);
 
 	if (!taskId) {
 		return {

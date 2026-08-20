@@ -217,6 +217,7 @@ export default function App(): ReactElement {
 		isInitialRuntimeLoad,
 		isProjectSwitching,
 		isWorkspaceMetadataPending,
+		onSelectProject: handleSelectProject,
 		onDetailClosed: () => {
 			setIsGitHistoryOpen(false);
 		},
@@ -750,7 +751,7 @@ export default function App(): ReactElement {
 				) : null}
 				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 					<TopBar
-						onToggleSidebar={!selectedCard ? handleToggleSidebar : undefined}
+						onToggleSidebar={handleToggleSidebar}
 						onBack={selectedCard ? handleBack : undefined}
 						workspacePath={navbarWorkspacePath}
 						isWorkspacePathLoading={shouldShowProjectLoadingState}

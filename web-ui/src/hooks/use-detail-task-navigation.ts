@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildDetailTaskUrl, parseDetailTaskIdFromSearch } from "@/hooks/app-utils";
 import { findCardSelection } from "@/state/board-state";
 import type { BoardData } from "@/types";
+import { getPreferredTaskIdForProjectSwitch } from "@/utils/detail-view-task-order";
 import { useWindowEvent } from "@/utils/react-use";
 
 interface UseDetailTaskNavigationInput {
@@ -13,6 +14,7 @@ interface UseDetailTaskNavigationInput {
 	isInitialRuntimeLoad: boolean;
 	isProjectSwitching: boolean;
 	isWorkspaceMetadataPending: boolean;
+	onSelectProject: (projectId: string) => void;
 	onDetailClosed?: () => void;
 }
 
@@ -20,6 +22,7 @@ export interface UseDetailTaskNavigationResult {
 	selectedTaskId: string | null;
 	selectedCard: ReturnType<typeof findCardSelection>;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
+	handleProjectSelect: (projectId: string) => void;
 	handleBack: () => void;
 }
 
@@ -30,6 +33,7 @@ export function useDetailTaskNavigation({
 	isInitialRuntimeLoad,
 	isProjectSwitching,
 	isWorkspaceMetadataPending,
+	onSelectProject,
 	onDetailClosed,
 }: UseDetailTaskNavigationInput): UseDetailTaskNavigationResult {
 	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => {
@@ -39,6 +43,7 @@ export function useDetailTaskNavigation({
 		return parseDetailTaskIdFromSearch(window.location.search);
 	});
 	const previousProjectIdRef = useRef<string | null | undefined>(undefined);
+	const pendingDetailProjectIdRef = useRef<string | null>(null);
 	const onDetailClosedRef = useRef(onDetailClosed);
 	const selectedCard = useMemo(() => {
 		if (!selectedTaskId) {
@@ -56,6 +61,21 @@ export function useDetailTaskNavigation({
 		onDetailClosedRef.current?.();
 	}, []);
 
+	const handleProjectSelect = useCallback(
+		(projectId: string) => {
+			if (!projectId || projectId === currentProjectId) {
+				return;
+			}
+			const shouldKeepDetailOpen = selectedCard !== null || pendingDetailProjectIdRef.current !== null;
+			pendingDetailProjectIdRef.current = shouldKeepDetailOpen ? projectId : null;
+			if (shouldKeepDetailOpen) {
+				closeDetail();
+			}
+			onSelectProject(projectId);
+		},
+		[closeDetail, currentProjectId, onSelectProject, selectedCard],
+	);
+
 	useEffect(() => {
 		const previousProjectId = previousProjectIdRef.current;
 		previousProjectIdRef.current = currentProjectId;
@@ -67,6 +87,32 @@ export function useDetailTaskNavigation({
 		}
 		closeDetail();
 	}, [closeDetail, currentProjectId]);
+
+	useEffect(() => {
+		const pendingProjectId = pendingDetailProjectIdRef.current;
+		if (!pendingProjectId) {
+			return;
+		}
+		if (pendingProjectId !== currentProjectId) {
+			if (!isProjectSwitching) {
+				pendingDetailProjectIdRef.current = null;
+			}
+			return;
+		}
+		if (isInitialRuntimeLoad || isProjectSwitching || isAwaitingWorkspaceSnapshot || isWorkspaceMetadataPending) {
+			return;
+		}
+
+		pendingDetailProjectIdRef.current = null;
+		setSelectedTaskId(getPreferredTaskIdForProjectSwitch(board));
+	}, [
+		board,
+		currentProjectId,
+		isAwaitingWorkspaceSnapshot,
+		isInitialRuntimeLoad,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+	]);
 
 	useEffect(() => {
 		if (
@@ -123,6 +169,7 @@ export function useDetailTaskNavigation({
 		selectedTaskId,
 		selectedCard,
 		setSelectedTaskId,
+		handleProjectSelect,
 		handleBack: closeDetail,
 	};
 }

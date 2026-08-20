@@ -56,7 +56,7 @@ function HookHarness({
 	clearOnViewTransition = true,
 	onSnapshot,
 }: {
-	taskId: string;
+	taskId: string | null;
 	viewKey?: string | null;
 	clearOnViewTransition?: boolean;
 	onSnapshot: (snapshot: HookSnapshot) => void;
@@ -109,6 +109,42 @@ describe("useRuntimeWorkspaceChanges", () => {
 			(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 				previousActEnvironment;
 		}
+	});
+
+	it("does not calculate changes while disabled and aborts an in-flight calculation when hidden", async () => {
+		const requestState: { signal?: AbortSignal } = {};
+		getChangesQueryMock.mockImplementation(
+			(_input: unknown, options: { signal?: AbortSignal }) =>
+				new Promise<RuntimeWorkspaceChangesResponse>((_resolve, reject) => {
+					requestState.signal = options.signal;
+					options.signal?.addEventListener("abort", () => {
+						reject(new DOMException("Aborted", "AbortError"));
+					});
+				}),
+		);
+
+		await act(async () => {
+			root.render(<HookHarness taskId={null} onSnapshot={() => {}} />);
+			await Promise.resolve();
+		});
+
+		expect(getChangesQueryMock).not.toHaveBeenCalled();
+
+		await act(async () => {
+			root.render(<HookHarness taskId="task-a" onSnapshot={() => {}} />);
+			await Promise.resolve();
+		});
+
+		expect(getChangesQueryMock).toHaveBeenCalledOnce();
+		expect(requestState.signal?.aborted).toBe(false);
+
+		await act(async () => {
+			root.render(<HookHarness taskId={null} onSnapshot={() => {}} />);
+			await Promise.resolve();
+		});
+
+		expect(requestState.signal?.aborted).toBe(true);
+		expect(getChangesQueryMock).toHaveBeenCalledOnce();
 	});
 
 	it("clears the previous task diff immediately when switching tasks", async () => {
