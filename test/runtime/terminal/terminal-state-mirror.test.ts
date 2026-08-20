@@ -55,6 +55,25 @@ describe("TerminalStateMirror", () => {
 		expect(snapshot.snapshot).toContain("after resize");
 	});
 
+	it("reuses the cached snapshot until output or geometry changes", async () => {
+		const mirror = createMirror(80, 24);
+		mirror.applyOutput(Buffer.from("first", "utf8"));
+
+		const firstSnapshot = await mirror.getSnapshot();
+		expect(await mirror.getSnapshot()).toBe(firstSnapshot);
+
+		mirror.applyOutput(Buffer.from(" second", "utf8"));
+		const outputSnapshot = await mirror.getSnapshot();
+		expect(outputSnapshot).not.toBe(firstSnapshot);
+		expect(outputSnapshot.snapshot).toContain("second");
+
+		mirror.resize(100, 30);
+		const resizedSnapshot = await mirror.getSnapshot();
+		expect(resizedSnapshot).not.toBe(outputSnapshot);
+		expect(resizedSnapshot.cols).toBe(100);
+		expect(resizedSnapshot.rows).toBe(30);
+	});
+
 	it("emits terminal query responses through the optional callback", async () => {
 		const onInputResponse = vi.fn();
 		const mirror = new TerminalStateMirror(80, 24, {
