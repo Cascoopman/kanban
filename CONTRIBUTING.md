@@ -4,12 +4,12 @@ Thanks for your interest in contributing to Kanban! This project is in research 
 
 ## What We're Looking For
 
-Kanban currently supports Claude, Codex, Gemini, OpenCode, Droid, and Cline as runtime agents, and runs on macOS, Linux, and Windows. The surface area for cross-compatibility issues is large, and that's where contributions have the most impact.
+Kanban currently supports Claude Code and OpenAI Codex as runtime agents, and runs on macOS, Linux, and Windows. Cross-platform terminal and lifecycle compatibility is where contributions have the most impact.
 
 We are actively looking for help with:
 
 - Cross-platform support: fixing bugs and inconsistencies across macOS, Linux, and Windows (terminal behavior, path handling, symlinks, shell detection, etc.)
-- Agent compatibility: adding support for new CLI agents, fixing integration issues with existing ones, and improving agent detection/lifecycle management
+- Agent compatibility: fixing Claude Code and Codex integration issues and improving agent detection/lifecycle management
 - Bug fixes: anything that makes the current feature set more stable and reliable
 - Test coverage: adding tests for untested paths, especially platform-specific and agent-specific behavior
 

@@ -2,7 +2,6 @@ import type {
 	RuntimeAgentId,
 	RuntimeBoardColumnId,
 	RuntimeTaskAutoReviewMode,
-	RuntimeTaskClineSettings,
 	RuntimeTaskImage,
 } from "@/runtime/types";
 
@@ -49,7 +48,6 @@ export interface BoardCard {
 	autoReviewMode?: TaskAutoReviewMode;
 	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
-	clineSettings?: RuntimeTaskClineSettings;
 	branchedFromTaskId?: string;
 	baseRef: string;
 	createdAt: number;

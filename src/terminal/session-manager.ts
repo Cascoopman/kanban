@@ -1,6 +1,6 @@
-// PTY-backed runtime for non-Cline task sessions and the workspace shell terminal.
+// PTY-backed runtime for task sessions and the workspace shell terminal.
 // It owns process lifecycle, terminal protocol filtering, and summary updates
-// for command-driven agents such as Claude Code, Codex, Gemini, and shell sessions.
+// for Claude Code, Codex, and shell sessions.
 import type {
 	RuntimeTaskHookActivity,
 	RuntimeTaskImage,
@@ -37,7 +37,7 @@ import { TerminalStateMirror } from "./terminal-state-mirror";
 const MAX_WORKSPACE_TRUST_BUFFER_CHARS = 16_384;
 const AUTO_RESTART_WINDOW_MS = 5_000;
 const MAX_AUTO_RESTARTS_PER_WINDOW = 3;
-// TUI apps (Codex, OpenCode) can query OSC 10/11 before the browser terminal is attached
+// TUI apps such as Codex can query OSC 10/11 before the browser terminal is attached
 // and ready to answer. We intercept those startup probes during early PTY output, synthesize
 // foreground/background color replies, then disable the filter once a live terminal listener
 // has attached.
@@ -532,7 +532,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 			rows,
 			terminalProtocolFilter: createTerminalProtocolFilterState({
 				interceptOscColorQueries: true,
-				suppressDeviceAttributeQueries: request.agentId === "droid",
+				suppressDeviceAttributeQueries: false,
 			}),
 			onSessionCleanup: launch.cleanup ?? null,
 			deferredStartupInput: launch.deferredStartupInput ?? null,
@@ -728,8 +728,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 			return cloneSummary(entry.summary);
 		}
 
-		// Preserve agentId so the server can route to the correct agent type
-		// (Cline SDK vs terminal PTY) when a task is restored from trash.
+		// Preserve agentId so a restored task resumes with the same CLI agent.
 		const summary = updateSummary(entry, {
 			state: "idle",
 			workspacePath: null,

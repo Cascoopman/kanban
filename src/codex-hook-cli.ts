@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-
-import type { RuntimeHookEvent } from "./core/api-contract";
 import { type HookCommandMetadataOptionValues, runCodexHookSubcommand } from "./commands/hooks";
+import type { RuntimeHookEvent } from "./core/api-contract";
 
 const VALID_EVENTS = new Set<RuntimeHookEvent>(["to_review", "to_in_progress", "activity"]);
 const OPTION_KEYS = {

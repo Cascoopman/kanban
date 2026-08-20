@@ -2,7 +2,6 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ChevronDown, ChevronUp, Ellipsis, ExternalLink, Info, Lightbulb, Plus, X } from "lucide-react";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { canShowFeaturebaseFeedbackButton } from "@/components/featurebase-feedback-button";
 import { Button } from "@/components/ui/button";
 import { ClineIcon } from "@/components/ui/cline-icon";
 import { cn } from "@/components/ui/cn";
@@ -18,9 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
 import { Spinner } from "@/components/ui/spinner";
-import type { FeaturebaseFeedbackState } from "@/hooks/use-featurebase-feedback-widget";
 import { useIsMobile } from "@/hooks/use-is-mobile";
-import type { RuntimeAgentId, RuntimeClineProviderSettings, RuntimeProjectSummary } from "@/runtime/types";
+import type { RuntimeProjectSummary } from "@/runtime/types";
 import {
 	LocalStorageKey,
 	readLocalStorageItem,
@@ -54,9 +52,6 @@ export function ProjectNavigationPanel({
 	onActiveSectionChange,
 	canShowAgentSection,
 	agentSectionContent,
-	selectedAgentId,
-	clineProviderSettings,
-	featurebaseFeedbackState,
 	onSelectProject,
 	onRemoveProject,
 	onAddProject,
@@ -73,9 +68,6 @@ export function ProjectNavigationPanel({
 	onActiveSectionChange: (section: "projects" | "agent") => void;
 	canShowAgentSection: boolean;
 	agentSectionContent?: ReactNode;
-	selectedAgentId?: RuntimeAgentId | null;
-	clineProviderSettings?: RuntimeClineProviderSettings | null;
-	featurebaseFeedbackState?: FeaturebaseFeedbackState;
 	onSelectProject: (projectId: string) => void;
 	onRemoveProject: (projectId: string) => Promise<boolean>;
 	onAddProject: () => void;
@@ -85,11 +77,6 @@ export function ProjectNavigationPanel({
 	setSidebarCollapsed: (collapsed: boolean, persist?: boolean) => void;
 }): React.ReactElement {
 	const sortedProjects = [...projects].sort((a, b) => a.path.localeCompare(b.path));
-	const shouldShowFeaturebaseFeedback = canShowFeaturebaseFeedbackButton({
-		selectedAgentId,
-		clineProviderSettings,
-		featurebaseFeedbackState,
-	});
 
 	const [pendingProjectRemoval, setPendingProjectRemoval] = useState<RuntimeProjectSummary | null>(null);
 	const isProjectRemovalPending = pendingProjectRemoval !== null && removingProjectId === pendingProjectRemoval.id;
@@ -396,14 +383,11 @@ export function ProjectNavigationPanel({
 						) : null}
 					</div>
 					<ShortcutsCard />
-					<ProjectSupportFooter
-						shouldShowFeaturebaseFeedback={shouldShowFeaturebaseFeedback}
-						featurebaseFeedbackState={featurebaseFeedbackState}
-					/>
+					<ProjectSupportFooter />
 				</>
 			) : (
 				<div className="flex flex-1 min-h-0 flex-col">
-					{selectedAgentId && selectedAgentId !== "cline" ? <TerminalAgentHints /> : null}
+					<TerminalAgentHints />
 					<div className="flex flex-1 min-h-0 overflow-hidden bg-surface-1 px-2 pb-2 pt-1">
 						{agentSectionContent ?? (
 							<div className="flex w-full items-center justify-center rounded-md border border-border bg-surface-2 px-3 text-center text-sm text-text-secondary">
@@ -545,25 +529,7 @@ function TerminalAgentHints(): React.ReactElement {
 	);
 }
 
-function ProjectSupportFooter({
-	shouldShowFeaturebaseFeedback,
-	featurebaseFeedbackState,
-}: {
-	shouldShowFeaturebaseFeedback: boolean;
-	featurebaseFeedbackState?: FeaturebaseFeedbackState;
-}): React.ReactElement {
-	const isOpening = featurebaseFeedbackState?.authState === "loading";
-
-	const handleAction = () => {
-		if (shouldShowFeaturebaseFeedback) {
-			void featurebaseFeedbackState?.openFeedbackWidget();
-		} else {
-			window.open(GITHUB_ISSUES_URL, "_blank");
-		}
-	};
-
-	const actionLabel = shouldShowFeaturebaseFeedback ? (isOpening ? "Opening..." : "Send feedback") : "Report issue";
-
+function ProjectSupportFooter(): React.ReactElement {
 	return (
 		<div style={{ padding: "4px 12px 12px" }}>
 			<div className="flex items-start gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5">
@@ -575,10 +541,9 @@ function ProjectSupportFooter({
 					<button
 						type="button"
 						className="m-0 flex cursor-pointer items-center gap-1 self-start border-none bg-transparent p-0 text-xs font-semibold text-text-secondary hover:text-text-primary active:text-text-tertiary disabled:cursor-default disabled:opacity-50"
-						disabled={shouldShowFeaturebaseFeedback && isOpening}
-						onClick={handleAction}
+						onClick={() => window.open(GITHUB_ISSUES_URL, "_blank")}
 					>
-						{actionLabel} {!isOpening && <ExternalLink size={11} />}
+						Report issue <ExternalLink size={11} />
 					</button>
 				</div>
 			</div>

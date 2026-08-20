@@ -779,7 +779,6 @@ export function useBoardInteractions({
 					autoReviewMode: resolveTaskAutoReviewMode(selection.card.autoReviewMode),
 					images: selection.card.images,
 					agentId: selection.card.agentId,
-					clineSettings: selection.card.clineSettings,
 					baseRef: selection.card.baseRef,
 				});
 				return updated.updated ? updated.board : currentBoard;

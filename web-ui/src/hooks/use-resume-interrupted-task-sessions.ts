@@ -11,7 +11,6 @@ function isRestartableCliSession(summary: RuntimeTaskSessionSummary | undefined)
 	return (
 		summary !== undefined &&
 		summary.agentId !== null &&
-		summary.agentId !== "cline" &&
 		(summary.state === "idle" || summary.state === "interrupted" || summary.state === "awaiting_review")
 	);
 }
@@ -47,9 +46,7 @@ export function useResumeInterruptedTaskSessions({
 		}
 		handledProjectIdRef.current = currentProjectId;
 
-		const resumableColumns = board.columns.filter(
-			(column) => column.id === "in_progress" || column.id === "review",
-		);
+		const resumableColumns = board.columns.filter((column) => column.id === "in_progress" || column.id === "review");
 		for (const column of resumableColumns) {
 			for (const task of column.cards) {
 				if (!isRestartableCliSession(sessions[task.id])) {

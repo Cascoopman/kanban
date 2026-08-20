@@ -67,14 +67,9 @@ function writeFakeCommand(binDir: string, command: string): void {
 
 describe.sequential("runtime-config auto agent selection", () => {
 	it("selects agents using the configured priority order", () => {
-		expect(pickBestInstalledAgentIdFromDetected(["codex", "opencode", "gemini"])).toBe("codex");
-		expect(pickBestInstalledAgentIdFromDetected(["opencode", "droid", "gemini"])).toBe("droid");
-		expect(pickBestInstalledAgentIdFromDetected(["kiro-cli", "gemini"])).toBe("kiro");
-		expect(pickBestInstalledAgentIdFromDetected(["droid", "gemini", "cline"])).toBe("droid");
-		expect(pickBestInstalledAgentIdFromDetected(["gemini", "cline"])).toBeNull();
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex", "cline"])).toBe("claude");
-		expect(pickBestInstalledAgentIdFromDetected(["claude", "droid"])).toBe("claude");
-		expect(pickBestInstalledAgentIdFromDetected(["cline"])).toBeNull();
+		expect(pickBestInstalledAgentIdFromDetected(["codex"])).toBe("codex");
+		expect(pickBestInstalledAgentIdFromDetected(["claude", "codex"])).toBe("claude");
+		expect(pickBestInstalledAgentIdFromDetected(["unsupported"])).toBeNull();
 		expect(pickBestInstalledAgentIdFromDetected([])).toBeNull();
 	});
 
@@ -87,9 +82,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 		const { path: tempBin, cleanup: cleanupBin } = createTempDir("kanban-bin-runtime-config-");
 
 		try {
-			writeFakeCommand(tempBin, "opencode");
 			writeFakeCommand(tempBin, "codex");
-			writeFakeCommand(tempBin, "gemini");
 
 			const previousShell = process.env.SHELL;
 			try {
@@ -144,7 +137,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				process.env.SHELL = "/definitely-not-a-shell";
 				await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin, replacePath: true }, async () => {
 					const state = await loadRuntimeConfig(tempProject);
-					expect(state.selectedAgentId).toBe("cline");
+					expect(state.selectedAgentId).toBe("claude");
 					expect(existsSync(join(tempHome, ".cline", "kanban", "config.json"))).toBe(false);
 				});
 			} finally {
@@ -221,7 +214,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 				join(runtimeConfigDir, "config.json"),
 				JSON.stringify(
 					{
-						selectedAgentId: "gemini",
+						selectedAgentId: "unsupported",
 					},
 					null,
 					2,
@@ -231,7 +224,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 			await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin }, async () => {
 				const state = await loadRuntimeConfig(tempProject);
-				expect(state.selectedAgentId).toBe("cline");
+				expect(state.selectedAgentId).toBe("claude");
 			});
 		} finally {
 			cleanupBin();
@@ -264,7 +257,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 			await withTemporaryEnv({ home: tempHome, pathPrefix: tempBin }, async () => {
 				const state = await loadRuntimeConfig(tempProject);
-				expect(state.selectedAgentId).toBe("cline");
+				expect(state.selectedAgentId).toBe("claude");
 			});
 		} finally {
 			cleanupBin();
@@ -287,7 +280,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "claude",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
@@ -332,7 +325,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "claude",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
@@ -359,7 +352,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 			await withTemporaryEnv({ home: tempHome }, async () => {
 				const current = await loadRuntimeConfig(tempProject);
 				await saveRuntimeConfig(tempProject, {
-					selectedAgentId: "cline",
+					selectedAgentId: "claude",
 					selectedShortcutLabel: null,
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,

@@ -57,9 +57,7 @@ function addCodexConfigOverrideBeforeSubcommand(args: string[], key: string, val
 }
 
 function buildCodexHookCommand(event: RuntimeHookEvent): string {
-	return buildKanbanCodexHookCommandParts(["--event", event, "--source", "codex"])
-		.map(quoteShellArg)
-		.join(" ");
+	return buildKanbanCodexHookCommandParts(["--event", event, "--source", "codex"]).map(quoteShellArg).join(" ");
 }
 
 function buildCodexHookConfigValue(command: string, matcher?: string): string {

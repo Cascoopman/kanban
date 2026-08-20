@@ -77,7 +77,6 @@ export function useTaskBranching({
 				autoReviewEnabled: sourceTask.autoReviewEnabled,
 				autoReviewMode: sourceTask.autoReviewMode,
 				agentId: sourceTask.agentId,
-				clineSettings: sourceTask.clineSettings,
 				branchedFromTaskId: sourceTask.id,
 				baseRef: sourceTask.baseRef,
 			};

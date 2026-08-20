@@ -14,7 +14,7 @@ What NOT to add: Stuff you can figure out from reading a few files, obvious patt
 TypeScript principles
 - No any types unless absolutely necessary.
 - Check node_modules for external API type definitions instead of guessing.
-- Prefer SDK-provided types, schemas, helpers, and model metadata over local redefinitions. For things like Cline SDK reasoning settings, use the SDK's source of truth whenever possible instead of recreating unions, support checks, or shapes in Kanban.
+- Prefer dependency-provided types, schemas, helpers, and metadata over local redefinitions.
 - NEVER use inline imports. No await import("./foo.js"), no import("pkg").Type in type positions, and no dynamic imports for types. Always use standard top-level imports.
 - NEVER remove or downgrade code to fix type errors from outdated dependencies. Upgrade the dependency instead.
 
@@ -87,9 +87,8 @@ Dark theme
 - Do NOT use Blueprint, Tailwind's light-mode defaults, or any `dark:` prefix. The theme is always dark.
 
 Misc. tribal knowledge
-- Kanban's native Cline agent is powered by the installed `@clinebot/core` and `@clinebot/llms` packages plus the local `src/cline-sdk/` boundary layer, so when Cline behavior is unclear, inspect those packages and `src/cline-sdk/` for the real implementation details.
 - Kanban is launched from the user's shell and inherits its environment. For agent detection and task-agent startup, prefer direct PATH checks and direct process launches over spawning an interactive shell. Avoid `zsh -i`, shell fallback command discovery, or "launch shell then type command into it" on hot paths. On setups with heavy shell init like `conda` or `nvm`, doing that per task can freeze the runtime and even make new Terminal.app windows feel hung when several tasks start at once. It's fine to use an actual interactive shell for explicit shell terminals, not for normal agent session work.
-- If CI hangs on Node 22 after tests seem to finish, suspect a live subprocess or SDK-host startup path before assuming a slow test body. Read `.plan/docs/node22-ci-hanging-tests-investigation.md` before repeating that investigation. `test/runtime/cline-sdk/cline-task-session-service.test.ts` was the big prior culprit because a unit-style suite was still booting the real Cline SDK host.
+- If CI hangs on Node 22 after tests seem to finish, suspect a live subprocess before assuming a slow test body. Read `.plan/docs/node22-ci-hanging-tests-investigation.md` before repeating that investigation.
 - When Kanban runs on a headless remote Linux instance (for example over SSH+tunnel), native folder picker commands may be unavailable (`zenity`/`kdialog`). Treat this as a normal remote-runtime limitation and use manual path entry fallback instead of requiring desktop packages.
 - Persisted terminal session summaries are not live PTYs. After a runtime restart, `TerminalSessionManager` has metadata but no active process or terminal mirror. Restart recovery must use a distinct resume-existing flow; do not reuse `resumeFromTrash`, because trash restoration clears task chat state and applies review-oriented session state.
 - Board columns are authoritative across runtime shutdown and restart. Snapshot a terminal session's logical state before stopping its PTY, and never interpret an `interrupted` process state as task completion or move its card to Done; interruption is recovery metadata, while Done remains an explicit board workflow.

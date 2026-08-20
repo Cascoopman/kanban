@@ -99,13 +99,13 @@ describe("useResumeInterruptedTaskSessions", () => {
 
 	it("continues interrupted CLI tasks that were already in progress once per hydration", async () => {
 		const codexTask = createTask(createInitialBoardData(), "in_progress", "Codex task", "codex");
-		const clineTask = createTask(codexTask.board, "in_progress", "Cline task", "cline");
-		const reviewTask = createTask(clineTask.board, "review", "Review task", "codex");
+		const claudeTask = createTask(codexTask.board, "in_progress", "Claude task", "claude");
+		const reviewTask = createTask(claudeTask.board, "review", "Review task", "codex");
 		const onHoldTask = createTask(reviewTask.board, "on_hold", "On hold task", "codex");
 		const doneTask = createTask(onHoldTask.board, "trash", "Done task", "codex");
 		const sessions = {
 			[codexTask.task.id]: createSummary(codexTask.task.id, "codex"),
-			[clineTask.task.id]: createSummary(clineTask.task.id, "cline"),
+			[claudeTask.task.id]: createSummary(claudeTask.task.id, "claude"),
 			[reviewTask.task.id]: createSummary(reviewTask.task.id, "codex", "awaiting_review"),
 			[onHoldTask.task.id]: createSummary(onHoldTask.task.id, "codex", "awaiting_review"),
 			[doneTask.task.id]: createSummary(doneTask.task.id, "codex"),
@@ -123,13 +123,17 @@ describe("useResumeInterruptedTaskSessions", () => {
 			);
 		});
 
-		expect(startTaskSession).toHaveBeenCalledTimes(2);
+		expect(startTaskSession).toHaveBeenCalledTimes(3);
 		expect(startTaskSession).toHaveBeenCalledWith(codexTask.task, {
 			resumeExistingSession: "running",
 			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
 		expect(startTaskSession).toHaveBeenCalledWith(reviewTask.task, {
 			resumeExistingSession: "awaiting_review",
+		});
+		expect(startTaskSession).toHaveBeenCalledWith(claudeTask.task, {
+			resumeExistingSession: "running",
+			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
 
 		await act(async () => {
@@ -143,7 +147,7 @@ describe("useResumeInterruptedTaskSessions", () => {
 			);
 		});
 
-		expect(startTaskSession).toHaveBeenCalledTimes(2);
+		expect(startTaskSession).toHaveBeenCalledTimes(3);
 		expect(notifyErrorMock).not.toHaveBeenCalled();
 	});
 });
