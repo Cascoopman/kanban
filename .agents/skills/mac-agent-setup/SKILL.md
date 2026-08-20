@@ -129,6 +129,27 @@ For design and technical choices, show rather than merely tell: produce
 reviewable HTML alternatives, prototypes, product surfaces, SDK examples, API
 examples, or short demonstrations when they make tradeoffs clearer.
 
+#### Configure work and personal MCP accounts
+
+Use named MCP aliases so Codex and Claude Code can keep work and personal
+Notion and Linear sessions active at the same time. Run:
+
+```sh
+node .agents/skills/mac-agent-setup/scripts/setup-mcp-account-aliases.mjs
+```
+
+The script is idempotent and non-destructive by default. It adds missing
+aliases, preserves existing aliases that use custom endpoints, and disables
+Claude Code's official single-account Notion plugin when configuring the two
+direct Notion aliases. Use `--dry-run` to inspect changes, `--replace` to
+replace custom endpoints deliberately, and `--login` to authenticate each
+configured direct endpoint interactively.
+
+Codex retains the established work alias `notion`; Claude Code uses
+`notion_work`. Both use `notion_personal`, `linear_work`, and
+`linear_personal`. Keep these names aligned with the account-routing rules in
+the project's `AGENTS.md`.
+
 ### 7. Add optional productivity tools deliberately
 
 Consider a usage reporter, a portable prompt, directory-jump tooling, fuzzy

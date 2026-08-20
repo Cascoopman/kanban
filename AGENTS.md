@@ -11,6 +11,25 @@ What NOT to add: Stuff you can figure out from reading a few files, obvious patt
 
 ---
 
+## MCP account routing
+
+- The Mistral work Notion workspace is `notion` in Codex and `notion_work` in Claude Code.
+- `notion_personal` is the personal Notion workspace.
+- Use the client-appropriate work alias for company, client, professional, and Mistral-related content.
+- Use `notion_personal` for private, household, and personal-project content.
+- If the target Notion account is ambiguous, ask before creating, editing, moving, or deleting content.
+- Search both Notion accounts only when explicitly requested or when the source workspace is genuinely unknown.
+- When mutating Notion content, state which account was used.
+
+## Linear account routing
+
+- `linear_work` is the Mistral work Linear workspace.
+- `linear_personal` is the personal Linear workspace.
+- Use `linear_work` for Mistral, company, client, and professional work.
+- Use `linear_personal` for private and personal-project work.
+- If the target Linear account is ambiguous, ask before creating, editing, or deleting content.
+- When mutating Linear content, state which account was used.
+
 TypeScript principles
 - No any types unless absolutely necessary.
 - Check node_modules for external API type definitions instead of guessing.
