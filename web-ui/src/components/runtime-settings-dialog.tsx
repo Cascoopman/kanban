@@ -66,8 +66,7 @@ function quoteCommandPartForDisplay(part: string): string {
 	return JSON.stringify(part);
 }
 
-function buildDisplayedAgentCommand(agentId: RuntimeAgentId, binary: string, autonomousModeEnabled: boolean): string {
-	const args = autonomousModeEnabled ? (getRuntimeAgentCatalogEntry(agentId)?.autonomousArgs ?? []) : [];
+function buildDisplayedAgentCommand(binary: string, args: readonly string[]): string {
 	return [binary, ...args.map(quoteCommandPartForDisplay)].join(" ");
 }
 
@@ -395,6 +394,8 @@ export function RuntimeSettingsDialog({
 				id: agent.id,
 				label: agent.label,
 				binary: agent.binary,
+				command:
+					"command" in agent ? agent.command : buildDisplayedAgentCommand(agent.binary, agent.baseArgs),
 				installed: "installed" in agent ? agent.installed : null,
 			}),
 		);
@@ -404,11 +405,8 @@ export function RuntimeSettingsDialog({
 			const rightOrderIndex = orderIndexByAgentId.get(right.id) ?? Number.MAX_SAFE_INTEGER;
 			return leftOrderIndex - rightOrderIndex;
 		});
-		return orderedAgents.map((agent) => ({
-			...agent,
-			command: buildDisplayedAgentCommand(agent.id, agent.binary, agentAutonomousModeEnabled),
-		}));
-	}, [agentAutonomousModeEnabled, config?.agents]);
+		return orderedAgents;
+	}, [config?.agents]);
 	const displayedAgents = useMemo(() => supportedAgents, [supportedAgents]);
 	const configuredAgentId = resolveSupportedAgentId(config?.selectedAgentId);
 	const firstInstalledAgentId = displayedAgents.find((agent) => agent.installed)?.id;

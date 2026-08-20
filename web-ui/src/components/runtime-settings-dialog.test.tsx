@@ -79,8 +79,10 @@ const resetLayoutCustomizationsMock = vi.hoisted(() => vi.fn());
 vi.mock("@runtime-agent-catalog", () => ({
 	getRuntimeAgentCatalogEntry: vi.fn((agentId: string) => ({
 		id: agentId,
+		label: agentId === "claude" ? "Claude Code" : "OpenAI Codex",
+		binary: agentId,
+		baseArgs: [],
 		installUrl: null,
-		autonomousArgs: [],
 	})),
 }));
 
