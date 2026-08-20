@@ -39,8 +39,6 @@ function createCard(id: string, prompt: string) {
 		title: prompt,
 		prompt,
 		startInPlanMode: false,
-		autoReviewEnabled: false,
-		autoReviewMode: "commit" as const,
 		baseRef: "main",
 		createdAt: 1,
 		updatedAt: 1,

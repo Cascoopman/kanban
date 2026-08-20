@@ -11,12 +11,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
-import {
-	type BoardCard as BoardCardModel,
-	type BoardColumnId,
-	getTaskAutoReviewCancelButtonLabel,
-	isReviewLikeColumnId,
-} from "@/types";
+import { type BoardCard as BoardCardModel, type BoardColumnId, isReviewLikeColumnId } from "@/types";
 import { formatPathForDisplay } from "@/utils/path-display";
 import { useMeasure } from "@/utils/react-use";
 import {
@@ -223,7 +218,6 @@ export function BoardCard({
 	onSaveTitle,
 	onCommit,
 	onOpenPr,
-	onCancelAutomaticAction,
 	isCommitLoading = false,
 	isOpenPrLoading = false,
 	isMoveToTrashLoading = false,
@@ -247,7 +241,6 @@ export function BoardCard({
 	onSaveTitle?: (taskId: string, title: string) => void;
 	onCommit?: (taskId: string) => void;
 	onOpenPr?: (taskId: string) => void;
-	onCancelAutomaticAction?: (taskId: string) => void;
 	isCommitLoading?: boolean;
 	isOpenPrLoading?: boolean;
 	isMoveToTrashLoading?: boolean;
@@ -427,8 +420,6 @@ export function BoardCard({
 		: null;
 	const showReviewGitActions = isReviewLikeColumnId(columnId) && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
 	const isAnyGitActionLoading = isCommitLoading || isOpenPrLoading;
-	const cancelAutomaticActionLabel =
-		!isTrashCard && card.autoReviewEnabled ? getTaskAutoReviewCancelButtonLabel(card.autoReviewMode) : null;
 	const agentOverrideLabel = useMemo(
 		() => (card.agentId ? (getRuntimeAgentCatalogEntry(card.agentId)?.label ?? card.agentId) : null),
 		[card.agentId],
@@ -811,20 +802,6 @@ export function BoardCard({
 										Open PR
 									</Button>
 								</div>
-							) : null}
-							{cancelAutomaticActionLabel && onCancelAutomaticAction ? (
-								<Button
-									size="sm"
-									fill
-									style={{ marginTop: 12 }}
-									onMouseDown={stopEvent}
-									onClick={(event) => {
-										stopEvent(event);
-										onCancelAutomaticAction(card.id);
-									}}
-								>
-									{cancelAutomaticActionLabel}
-								</Button>
 							) : null}
 						</div>
 					</div>

@@ -32,14 +32,12 @@ describe("telemetry events", () => {
 		trackTaskCreated({
 			selected_agent_id: "unknown",
 			start_in_plan_mode: true,
-			auto_review_mode: "pr",
 			prompt_character_count: 42,
 		});
 
 		expect(captureMock).toHaveBeenCalledWith("task_created", {
 			selected_agent_id: "unknown",
 			start_in_plan_mode: true,
-			auto_review_mode: "pr",
 			prompt_character_count: 42,
 		});
 	});

@@ -6,7 +6,6 @@ import {
 	addTaskToColumn,
 	applyDragResult,
 	clearColumnTasks,
-	disableTaskAutoReview,
 	getTaskColumnId,
 	moveTaskToColumn,
 	normalizeBoardData,
@@ -593,7 +592,14 @@ describe("board dependency state", () => {
 				{
 					id: "backlog",
 					cards: [
-						{ id: "b", prompt: "Task B", startInPlanMode: false, baseRef: "main" },
+						{
+							id: "b",
+							prompt: "Task B",
+							startInPlanMode: false,
+							autoReviewEnabled: true,
+							autoReviewMode: "pr",
+							baseRef: "main",
+						},
 						{ id: "c", prompt: "Task C", startInPlanMode: false, baseRef: "main" },
 					],
 				},
@@ -624,33 +630,16 @@ describe("board dependency state", () => {
 			"trash",
 		]);
 		expect(normalized?.columns.find((column) => column.id === "on_hold")?.cards).toEqual([]);
+		const normalizedLegacyTask = normalized?.columns
+			.find((column) => column.id === "backlog")
+			?.cards.find((card) => card.id === "b");
+		expect(normalizedLegacyTask).not.toHaveProperty("autoReviewEnabled");
+		expect(normalizedLegacyTask).not.toHaveProperty("autoReviewMode");
 		expect(normalized?.dependencies.map((dependency) => `${dependency.fromTaskId}->${dependency.toTaskId}`)).toEqual([
 			"b->a",
 			"c->a",
 			"b->c",
 		]);
-	});
-
-	it("disables auto-review settings for a task", () => {
-		let board = createInitialBoardData();
-		board = addTaskToColumn(board, "review", {
-			prompt: "Task A",
-			autoReviewEnabled: true,
-			autoReviewMode: "commit",
-			baseRef: "main",
-		});
-		const task = board.columns.find((column) => column.id === "review")?.cards[0];
-		expect(task).toBeDefined();
-		if (!task) {
-			throw new Error("Expected review task to exist");
-		}
-
-		const disabled = disableTaskAutoReview(board, task.id);
-		expect(disabled.updated).toBe(true);
-
-		const updatedTask = disabled.board.columns.find((column) => column.id === "review")?.cards[0];
-		expect(updatedTask?.autoReviewEnabled).toBe(false);
-		expect(updatedTask?.autoReviewMode).toBe("commit");
 	});
 
 	it("updates only the task title", () => {

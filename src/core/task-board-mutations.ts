@@ -4,7 +4,6 @@ import type {
 	RuntimeBoardColumnId,
 	RuntimeBoardData,
 	RuntimeBoardDependency,
-	RuntimeTaskAutoReviewMode,
 	RuntimeTaskImage,
 } from "./api-contract";
 import { createUniqueTaskId } from "./task-id";
@@ -15,8 +14,6 @@ export interface RuntimeCreateTaskInput {
 	title?: string;
 	prompt: string;
 	startInPlanMode?: boolean;
-	autoReviewEnabled?: boolean;
-	autoReviewMode?: RuntimeTaskAutoReviewMode;
 	images?: RuntimeTaskImage[];
 	agentId?: RuntimeAgentId;
 	branchedFromTaskId?: string;
@@ -27,18 +24,9 @@ export interface RuntimeUpdateTaskInput {
 	title?: string;
 	prompt: string;
 	startInPlanMode?: boolean;
-	autoReviewEnabled?: boolean;
-	autoReviewMode?: RuntimeTaskAutoReviewMode;
 	images?: RuntimeTaskImage[];
 	agentId?: RuntimeAgentId | null;
 	baseRef: string;
-}
-
-function normalizeTaskAutoReviewMode(value: RuntimeTaskAutoReviewMode | null | undefined): RuntimeTaskAutoReviewMode {
-	if (value === "pr") {
-		return value;
-	}
-	return "commit";
 }
 
 // Copy image metadata so board tasks do not retain caller-owned array or object references.
@@ -289,8 +277,6 @@ export function addTaskToColumn(
 		title: resolveTaskTitle(input.title, prompt),
 		prompt,
 		startInPlanMode: Boolean(input.startInPlanMode),
-		autoReviewEnabled: Boolean(input.autoReviewEnabled),
-		autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
 		images: cloneTaskImages(input.images),
 		...(input.agentId ? { agentId: input.agentId } : {}),
 		...(input.branchedFromTaskId?.trim() ? { branchedFromTaskId: input.branchedFromTaskId.trim() } : {}),
@@ -605,8 +591,6 @@ export function updateTask(
 				title: resolveTaskTitle(input.title, prompt),
 				prompt,
 				startInPlanMode: Boolean(input.startInPlanMode),
-				autoReviewEnabled: Boolean(input.autoReviewEnabled),
-				autoReviewMode: normalizeTaskAutoReviewMode(input.autoReviewMode),
 				images: input.images === undefined ? card.images : cloneTaskImages(input.images),
 				agentId: input.agentId === undefined ? card.agentId : (input.agentId ?? undefined),
 				baseRef,

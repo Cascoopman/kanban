@@ -18,7 +18,7 @@ import type { RuntimeTaskSessionSummary, RuntimeWorkspaceChangesMode } from "@/r
 import { useRuntimeWorkspaceChanges } from "@/runtime/use-runtime-workspace-changes";
 import { useTaskWorkspaceStateVersionValue } from "@/stores/workspace-metadata-store";
 import { useTerminalThemeColors } from "@/terminal/theme-colors";
-import { type BoardCard, type CardSelection, getTaskAutoReviewCancelButtonLabel, isReviewLikeColumnId } from "@/types";
+import { type BoardCard, type CardSelection, isReviewLikeColumnId } from "@/types";
 import { useWindowEvent } from "@/utils/react-use";
 
 // We still poll the open detail diff because line content can change without changing
@@ -243,7 +243,6 @@ export function CardDetailView({
 	onAgentOpenPrTask,
 	onMoveReviewCardToTrash,
 	onRestoreTaskFromTrash,
-	onCancelAutomaticTaskAction,
 	commitTaskLoadingById,
 	openPrTaskLoadingById,
 	agentCommitTaskLoadingById,
@@ -293,7 +292,6 @@ export function CardDetailView({
 	onAgentOpenPrTask?: (taskId: string) => void;
 	onMoveReviewCardToTrash?: (taskId: string) => void;
 	onRestoreTaskFromTrash?: (taskId: string) => void;
-	onCancelAutomaticTaskAction?: (taskId: string) => void;
 	commitTaskLoadingById?: Record<string, boolean>;
 	openPrTaskLoadingById?: Record<string, boolean>;
 	agentCommitTaskLoadingById?: Record<string, boolean>;
@@ -556,16 +554,6 @@ export function CardDetailView({
 			showMoveToTrash={showMoveToTrashActions}
 			onMoveToTrash={onMoveToTrash}
 			isMoveToTrashLoading={isMoveToTrashLoading}
-			onCancelAutomaticAction={
-				selection.card.autoReviewEnabled === true && onCancelAutomaticTaskAction
-					? () => onCancelAutomaticTaskAction(selection.card.id)
-					: undefined
-			}
-			cancelAutomaticActionLabel={
-				selection.card.autoReviewEnabled === true
-					? getTaskAutoReviewCancelButtonLabel(selection.card.autoReviewMode)
-					: null
-			}
 			panelBackgroundColor="var(--color-surface-0)"
 			terminalBackgroundColor={terminalThemeColors.surfacePrimary}
 			cursorColor={terminalThemeColors.textPrimary}

@@ -2,7 +2,6 @@ import posthog from "posthog-js";
 
 import type { RuntimeAgentId } from "@/runtime/types";
 import { isTelemetryEnabled } from "@/telemetry/posthog-config";
-import type { TaskAutoReviewMode } from "@/types";
 
 export type TelemetrySelectedAgentId = RuntimeAgentId | "unknown";
 
@@ -10,7 +9,6 @@ interface TelemetryEventMap {
 	task_created: {
 		selected_agent_id: TelemetrySelectedAgentId;
 		start_in_plan_mode: boolean;
-		auto_review_mode?: TaskAutoReviewMode;
 		prompt_character_count: number;
 	};
 	task_dependency_created: Record<string, never>;

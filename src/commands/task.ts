@@ -76,16 +76,6 @@ function parseListColumn(value: string | undefined): ListTaskColumn | undefined 
 	throw new Error(`Invalid column "${value}". Expected one of: ${LIST_TASK_COLUMNS.join(", ")}, done.`);
 }
 
-function parseAutoReviewMode(value: string | undefined): "commit" | "pr" | undefined {
-	if (value === undefined) {
-		return undefined;
-	}
-	if (value === "commit" || value === "pr") {
-		return value;
-	}
-	throw new Error(`Invalid auto review mode "${value}". Expected: commit, pr.`);
-}
-
 const VALID_AGENT_IDS = runtimeAgentIdSchema.options;
 
 function parseAgentId(value: string | undefined): RuntimeAgentId | null | undefined {
@@ -228,8 +218,6 @@ function formatTaskRecord(
 		column: columnId,
 		baseRef: task.baseRef,
 		startInPlanMode: task.startInPlanMode,
-		autoReviewEnabled: task.autoReviewEnabled === true,
-		autoReviewMode: task.autoReviewMode ?? "commit",
 		...(task.agentId ? { agentId: task.agentId } : {}),
 		createdAt: task.createdAt,
 		updatedAt: task.updatedAt,
@@ -357,8 +345,6 @@ async function createTask(input: {
 	projectPath?: string;
 	baseRef?: string;
 	startInPlanMode?: boolean;
-	autoReviewEnabled?: boolean;
-	autoReviewMode?: "commit" | "pr";
 	agentId?: RuntimeAgentId;
 }): Promise<JsonRecord> {
 	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
@@ -376,8 +362,6 @@ async function createTask(input: {
 				title: input.title,
 				prompt: input.prompt,
 				startInPlanMode: input.startInPlanMode,
-				autoReviewEnabled: input.autoReviewEnabled,
-				autoReviewMode: input.autoReviewMode,
 				agentId: input.agentId,
 				baseRef: resolvedBaseRef,
 			},
@@ -399,8 +383,6 @@ async function createTask(input: {
 			prompt: created.prompt,
 			baseRef: created.baseRef,
 			startInPlanMode: created.startInPlanMode,
-			autoReviewEnabled: created.autoReviewEnabled === true,
-			autoReviewMode: created.autoReviewMode ?? "commit",
 			...(created.agentId ? { agentId: created.agentId } : {}),
 		},
 	};
@@ -414,8 +396,6 @@ async function updateTaskCommand(input: {
 	prompt?: string;
 	baseRef?: string;
 	startInPlanMode?: boolean;
-	autoReviewEnabled?: boolean;
-	autoReviewMode?: "commit" | "pr";
 	agentId?: RuntimeAgentId | null;
 }): Promise<JsonRecord> {
 	if (
@@ -423,8 +403,6 @@ async function updateTaskCommand(input: {
 		input.prompt === undefined &&
 		input.baseRef === undefined &&
 		input.startInPlanMode === undefined &&
-		input.autoReviewEnabled === undefined &&
-		input.autoReviewMode === undefined &&
 		input.agentId === undefined
 	) {
 		throw new Error("task update requires at least one field to change.");
@@ -443,8 +421,6 @@ async function updateTaskCommand(input: {
 			prompt: input.prompt ?? taskRecord.task.prompt,
 			baseRef: input.baseRef ?? taskRecord.task.baseRef,
 			startInPlanMode: input.startInPlanMode ?? taskRecord.task.startInPlanMode,
-			autoReviewEnabled: input.autoReviewEnabled ?? taskRecord.task.autoReviewEnabled === true,
-			autoReviewMode: input.autoReviewMode ?? taskRecord.task.autoReviewMode ?? "commit",
 			agentId: input.agentId,
 		});
 		if (!updatedTask.updated || !updatedTask.task) {
@@ -983,8 +959,6 @@ export function registerTaskCommand(program: Command): void {
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Task base branch/ref.")
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
-		.option("--auto-review-enabled [value]", "Enable auto-review behavior (true|false). Flag-only implies true.")
-		.option("--auto-review-mode <mode>", "Auto-review mode: commit | pr.", parseAutoReviewMode)
 		.option("--agent-id <id>", "Agent override: claude | codex | default.")
 		.action(
 			async (options: {
@@ -993,8 +967,6 @@ export function registerTaskCommand(program: Command): void {
 				projectPath?: string;
 				baseRef?: string;
 				startInPlanMode?: unknown;
-				autoReviewEnabled?: unknown;
-				autoReviewMode?: "commit" | "pr";
 				agentId?: string;
 			}) => {
 				await runTaskCommand(
@@ -1006,8 +978,6 @@ export function registerTaskCommand(program: Command): void {
 							projectPath: options.projectPath,
 							baseRef: options.baseRef,
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
-							autoReviewEnabled: parseOptionalBooleanOption(options.autoReviewEnabled, "--auto-review-enabled"),
-							autoReviewMode: options.autoReviewMode,
 							agentId: parseAgentId(options.agentId) ?? undefined,
 						}),
 				);
@@ -1023,8 +993,6 @@ export function registerTaskCommand(program: Command): void {
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Replacement base branch/ref.")
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
-		.option("--auto-review-enabled [value]", "Enable auto-review behavior (true|false). Flag-only implies true.")
-		.option("--auto-review-mode <mode>", "Auto-review mode: commit | pr.", parseAutoReviewMode)
 		.option("--agent-id <id>", 'Agent override: claude | codex. Use "default" to clear.')
 		.action(
 			async (options: {
@@ -1034,8 +1002,6 @@ export function registerTaskCommand(program: Command): void {
 				projectPath?: string;
 				baseRef?: string;
 				startInPlanMode?: unknown;
-				autoReviewEnabled?: unknown;
-				autoReviewMode?: "commit" | "pr";
 				agentId?: string;
 			}) => {
 				await runTaskCommand(
@@ -1048,8 +1014,6 @@ export function registerTaskCommand(program: Command): void {
 							prompt: options.prompt,
 							baseRef: options.baseRef,
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
-							autoReviewEnabled: parseOptionalBooleanOption(options.autoReviewEnabled, "--auto-review-enabled"),
-							autoReviewMode: options.autoReviewMode,
 							agentId: parseAgentId(options.agentId),
 						}),
 				);

@@ -21,10 +21,6 @@ function Harness(): React.ReactElement {
 			onCreateMultiple={() => []}
 			startInPlanMode={false}
 			onStartInPlanModeChange={() => {}}
-			autoReviewEnabled={false}
-			onAutoReviewEnabledChange={() => {}}
-			autoReviewMode="commit"
-			onAutoReviewModeChange={() => {}}
 			workspaceId={null}
 			branchRef="main"
 			branchOptions={[{ value: "main", label: "main" }]}

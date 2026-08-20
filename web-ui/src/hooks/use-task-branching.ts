@@ -74,8 +74,6 @@ export function useTaskBranching({
 				title: explicitTitle,
 				prompt: normalizedPrompt,
 				startInPlanMode: sourceTask.startInPlanMode,
-				autoReviewEnabled: sourceTask.autoReviewEnabled,
-				autoReviewMode: sourceTask.autoReviewMode,
 				agentId: sourceTask.agentId,
 				branchedFromTaskId: sourceTask.id,
 				baseRef: sourceTask.baseRef,

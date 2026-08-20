@@ -280,10 +280,6 @@ export default function App(): ReactElement {
 		setNewTaskImages,
 		newTaskStartInPlanMode,
 		setNewTaskStartInPlanMode,
-		newTaskAutoReviewEnabled,
-		setNewTaskAutoReviewEnabled,
-		newTaskAutoReviewMode,
-		setNewTaskAutoReviewMode,
 		isNewTaskStartInPlanModeDisabled,
 		newTaskBranchRef,
 		setNewTaskBranchRef,
@@ -296,10 +292,6 @@ export default function App(): ReactElement {
 		setEditTaskImages,
 		editTaskStartInPlanMode,
 		setEditTaskStartInPlanMode,
-		editTaskAutoReviewEnabled,
-		setEditTaskAutoReviewEnabled,
-		editTaskAutoReviewMode,
-		setEditTaskAutoReviewMode,
 		isEditTaskStartInPlanModeDisabled,
 		editTaskBranchRef,
 		setEditTaskBranchRef,
@@ -346,7 +338,6 @@ export default function App(): ReactElement {
 
 	const {
 		runningGitAction,
-		taskGitActionLoadingByTaskId,
 		commitTaskLoadingById,
 		openPrTaskLoadingById,
 		agentCommitTaskLoadingById,
@@ -363,7 +354,6 @@ export default function App(): ReactElement {
 		handleOpenPrTask,
 		handleAgentCommitTask,
 		handleAgentOpenPrTask,
-		runAutoReviewGitAction,
 		resetGitActionState,
 	} = useGitActions({
 		currentProjectId,
@@ -542,7 +532,6 @@ export default function App(): ReactElement {
 		handleMoveToTrash,
 		handleMoveReviewCardToTrash,
 		handleRestoreTaskFromTrash,
-		handleCancelAutomaticTaskAction,
 		handleOpenClearTrash,
 		handleConfirmClearTrash,
 		handleAddReviewComments,
@@ -567,8 +556,6 @@ export default function App(): ReactElement {
 		fetchTaskWorkspaceInfo,
 		sendTaskSessionInput,
 		readyForReviewNotificationsEnabled,
-		taskGitActionLoadingByTaskId,
-		runAutoReviewGitAction,
 	});
 
 	const {
@@ -708,10 +695,6 @@ export default function App(): ReactElement {
 			startInPlanMode={editTaskStartInPlanMode}
 			onStartInPlanModeChange={setEditTaskStartInPlanMode}
 			startInPlanModeDisabled={isEditTaskStartInPlanModeDisabled}
-			autoReviewEnabled={editTaskAutoReviewEnabled}
-			onAutoReviewEnabledChange={setEditTaskAutoReviewEnabled}
-			autoReviewMode={editTaskAutoReviewMode}
-			onAutoReviewModeChange={setEditTaskAutoReviewMode}
 			workspaceId={currentProjectId}
 			branchRef={editTaskBranchRef}
 			branchOptions={createTaskBranchOptions}
@@ -866,7 +849,6 @@ export default function App(): ReactElement {
 												onSaveTaskTitle={handleSaveTaskTitle}
 												onCommitTask={handleCommitTask}
 												onOpenPrTask={handleOpenPrTask}
-												onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
 												commitTaskLoadingById={commitTaskLoadingById}
 												openPrTaskLoadingById={openPrTaskLoadingById}
 												moveToTrashLoadingById={moveToTrashLoadingById}
@@ -958,7 +940,6 @@ export default function App(): ReactElement {
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
-									onCancelAutomaticTaskAction={handleCancelAutomaticTaskAction}
 									onAddReviewComments={(taskId: string, text: string) => {
 										void handleAddReviewComments(taskId, text);
 									}}
@@ -1032,10 +1013,6 @@ export default function App(): ReactElement {
 					startInPlanMode={newTaskStartInPlanMode}
 					onStartInPlanModeChange={setNewTaskStartInPlanMode}
 					startInPlanModeDisabled={isNewTaskStartInPlanModeDisabled}
-					autoReviewEnabled={newTaskAutoReviewEnabled}
-					onAutoReviewEnabledChange={setNewTaskAutoReviewEnabled}
-					autoReviewMode={newTaskAutoReviewMode}
-					onAutoReviewModeChange={setNewTaskAutoReviewMode}
 					workspaceId={currentProjectId}
 					branchRef={newTaskBranchRef}
 					branchOptions={createTaskBranchOptions}

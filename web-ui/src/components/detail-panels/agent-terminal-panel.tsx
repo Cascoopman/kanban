@@ -34,8 +34,6 @@ export interface AgentTerminalPanelProps {
 	taskColumnId?: string;
 	onMoveToTrash?: () => void;
 	isMoveToTrashLoading?: boolean;
-	onCancelAutomaticAction?: () => void;
-	cancelAutomaticActionLabel?: string | null;
 	showMoveToTrash?: boolean;
 	showSessionToolbar?: boolean;
 	onClose?: () => void;
@@ -154,8 +152,6 @@ function AgentTerminalPanelLayout({
 	taskColumnId = "in_progress",
 	onMoveToTrash,
 	isMoveToTrashLoading = false,
-	onCancelAutomaticAction,
-	cancelAutomaticActionLabel,
 	showMoveToTrash,
 	showSessionToolbar = true,
 	onClose,
@@ -325,11 +321,6 @@ function AgentTerminalPanelLayout({
 						isCommitLoading={isCommitLoading}
 						isOpenPrLoading={isOpenPrLoading}
 					/>
-					{cancelAutomaticActionLabel && onCancelAutomaticAction ? (
-						<Button variant="default" fill onClick={onCancelAutomaticAction}>
-							{cancelAutomaticActionLabel}
-						</Button>
-					) : null}
 					<Button variant="danger" fill disabled={isMoveToTrashLoading} onClick={onMoveToTrash}>
 						{isMoveToTrashLoading ? <Spinner size={14} /> : "Move Card To Done"}
 					</Button>

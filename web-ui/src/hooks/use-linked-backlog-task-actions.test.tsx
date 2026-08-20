@@ -20,8 +20,6 @@ function createTask(taskId: string, prompt: string, createdAt: number): BoardCar
 		title: prompt,
 		prompt,
 		startInPlanMode: false,
-		autoReviewEnabled: false,
-		autoReviewMode: "commit",
 		baseRef: "main",
 		createdAt,
 		updatedAt: createdAt,
