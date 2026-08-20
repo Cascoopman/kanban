@@ -27,7 +27,7 @@ import { TaskPromptComposer } from "@/components/task-prompt-composer";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
-import type { RuntimeAgentId, RuntimeClineReasoningEffort, RuntimeTaskClineSettings } from "@/runtime/types";
+import type { RuntimeAgentId } from "@/runtime/types";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 import type { TaskAutoReviewMode, TaskImage } from "@/types";
 import { isMacPlatform, pasteShortcutLabel } from "@/utils/platform";
@@ -123,12 +123,7 @@ export function TaskCreateDialog({
 	onBranchRefChange,
 	agentId,
 	onAgentIdChange,
-	clineSettings,
-	onClineSettingsChange,
 	defaultAgentId,
-	defaultProviderId,
-	defaultModelId,
-	defaultReasoningEffort,
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -156,16 +151,8 @@ export function TaskCreateDialog({
 	onBranchRefChange: (value: string) => void;
 	agentId?: RuntimeAgentId | undefined;
 	onAgentIdChange?: (value: RuntimeAgentId | undefined) => void;
-	clineSettings?: RuntimeTaskClineSettings | undefined;
-	onClineSettingsChange?: (value: RuntimeTaskClineSettings | undefined) => void;
 	/** Default agent ID from runtimeConfig.selectedAgentId, used to show "Default (AgentName)" in picker */
 	defaultAgentId?: RuntimeAgentId | null;
-	/** Default Cline provider ID from runtimeConfig.clineProviderSettings.providerId */
-	defaultProviderId?: string | null;
-	/** Default Cline model ID from runtimeConfig.clineProviderSettings.modelId */
-	defaultModelId?: string | null;
-	/** Default Cline reasoning effort from runtimeConfig.clineProviderSettings.reasoningEffort */
-	defaultReasoningEffort?: RuntimeClineReasoningEffort | null;
 }): ReactElement {
 	const [mode, setMode] = useState<"single" | "multi">("single");
 	const [createMore, setCreateMore] = useState(false);
@@ -185,23 +172,10 @@ export function TaskCreateDialog({
 		normalizeStoredTaskCreateStartAction,
 	);
 
-	const {
-		agentOptions,
-		clineProviderOptions,
-		clineModelOptions,
-		effectiveDefaultModelId,
-		providerModels,
-		isLoadingProviders,
-		isLoadingModels,
-		providerDefaultModels,
-	} = useTaskAgentModelPicker({
+	const { agentOptions } = useTaskAgentModelPicker({
 		active: open,
-		workspaceId,
 		agentId,
-		clineSettings,
 		defaultAgentId,
-		defaultProviderId,
-		defaultModelId,
 	});
 
 	const detectedItems = useMemo(() => parseListItems(prompt), [prompt]);
@@ -622,23 +596,11 @@ export function TaskCreateDialog({
 						</NativeSelect>
 					</div>
 
-					{onAgentIdChange && onClineSettingsChange ? (
+					{onAgentIdChange ? (
 						<TaskAgentModelPicker
 							agentId={agentId}
 							onAgentIdChange={onAgentIdChange}
-							clineSettings={clineSettings}
-							onClineSettingsChange={onClineSettingsChange}
 							agentOptions={agentOptions}
-							clineProviderOptions={clineProviderOptions}
-							clineModelOptions={clineModelOptions}
-							effectiveDefaultModelId={effectiveDefaultModelId}
-							providerModels={providerModels}
-							isLoadingProviders={isLoadingProviders}
-							isLoadingModels={isLoadingModels}
-							defaultAgentId={defaultAgentId}
-							defaultProviderId={defaultProviderId}
-							defaultReasoningEffort={defaultReasoningEffort}
-							providerDefaultModels={providerDefaultModels}
 						/>
 					) : null}
 				</div>

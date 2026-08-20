@@ -1,15 +1,12 @@
 // Settings dialog composition for Kanban.
-// Generic app settings live here, while Cline-specific provider state and
-// side effects should stay in use-runtime-settings-cline-controller.ts.
 import * as RadixCheckbox from "@radix-ui/react-checkbox";
 import * as RadixPopover from "@radix-ui/react-popover";
 import * as RadixSelect from "@radix-ui/react-select";
 import * as RadixSwitch from "@radix-ui/react-switch";
-import { getRuntimeAgentCatalogEntry, getRuntimeLaunchSupportedAgentCatalog } from "@runtime-agent-catalog";
+import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { areRuntimeProjectShortcutsEqual } from "@runtime-shortcuts";
 import {
 	Bell,
-	Bot,
 	Check,
 	ChevronDown,
 	Circle,
@@ -24,8 +21,6 @@ import {
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AccountOrganizationSection } from "@/components/shared/account-organization-section";
-import { ClineSetupSection } from "@/components/shared/cline-setup-section";
 import {
 	getRuntimeShortcutIconComponent,
 	getRuntimeShortcutPickerOption,
@@ -38,17 +33,15 @@ import { cn } from "@/components/ui/cn";
 import { Dialog, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { TASK_GIT_BASE_REF_PROMPT_VARIABLE, type TaskGitAction } from "@/git-actions/build-task-git-action-prompt";
-import { useRuntimeSettingsClineController } from "@/hooks/use-runtime-settings-cline-controller";
-import { useRuntimeSettingsClineMcpController } from "@/hooks/use-runtime-settings-cline-mcp-controller";
 import { previewThemeId, readStoredThemeId, saveThemeId, THEME_GROUPS, THEMES, type ThemeId } from "@/hooks/use-theme";
 import { useLayoutCustomizations } from "@/resize/layout-customizations";
 import { openFileOnHost } from "@/runtime/runtime-config-query";
-import type {
-	RuntimeAgentId,
-	RuntimeClineMcpServerAuthStatus,
-	RuntimeConfigResponse,
-	RuntimeProjectShortcut,
-} from "@/runtime/types";
+import {
+	filterSupportedAgentDefinitions,
+	getSupportedAgentCatalog,
+	resolveSupportedAgentId,
+} from "@/runtime/supported-agents";
+import type { RuntimeAgentId, RuntimeConfigResponse, RuntimeProjectShortcut } from "@/runtime/types";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
 	type BrowserNotificationPermission,
@@ -74,9 +67,6 @@ function quoteCommandPartForDisplay(part: string): string {
 }
 
 function buildDisplayedAgentCommand(agentId: RuntimeAgentId, binary: string, autonomousModeEnabled: boolean): string {
-	if (agentId === "cline") {
-		return "";
-	}
 	const args = autonomousModeEnabled ? (getRuntimeAgentCatalogEntry(agentId)?.autonomousArgs ?? []) : [];
 	return [binary, ...args.map(quoteCommandPartForDisplay)].join(" ");
 }
@@ -92,18 +82,16 @@ const GIT_PROMPT_VARIANT_OPTIONS: Array<{ value: TaskGitAction; label: string }>
 
 export type RuntimeSettingsSection = "shortcuts";
 
-const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["cline", "claude", "codex", "droid", "kiro"];
+const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["claude", "codex"];
 
-type SettingsNavId = "general" | "cline" | "git-prompts" | "notifications" | "appearance" | "project";
+type SettingsNavId = "general" | "git-prompts" | "notifications" | "appearance" | "project";
 
 const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	id: SettingsNavId;
 	label: string;
 	icon: React.ReactNode;
-	clineOnly?: boolean;
 }> = [
 	{ id: "general", label: "General", icon: <SlidersHorizontal size={16} /> },
-	{ id: "cline", label: "Cline", icon: <Bot size={16} />, clineOnly: true },
 	{ id: "git-prompts", label: "Git Prompts", icon: <GitCommit size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
@@ -154,9 +142,8 @@ function AgentRow({
 	disabled: boolean;
 }): React.ReactElement {
 	const installUrl = getRuntimeAgentCatalogEntry(agent.id)?.installUrl;
-	const isNativeCline = agent.id === "cline";
 	const isInstalled = agent.installed === true;
-	const isInstallStatusPending = !isNativeCline && agent.installed === null;
+	const isInstallStatusPending = agent.installed === null;
 
 	return (
 		<div
@@ -187,7 +174,7 @@ function AgentRow({
 				<div className="min-w-0">
 					<div className="flex items-center gap-2">
 						<span className="text-[13px] text-text-primary">{agent.label}</span>
-						{!isNativeCline && isInstalled ? (
+						{isInstalled ? (
 							<span className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium bg-status-green/10 text-status-green">
 								Installed
 							</span>
@@ -202,7 +189,7 @@ function AgentRow({
 					) : null}
 				</div>
 			</div>
-			{!isNativeCline && agent.installed === false && installUrl ? (
+			{agent.installed === false && installUrl ? (
 				<a
 					href={installUrl}
 					target="_blank"
@@ -212,7 +199,7 @@ function AgentRow({
 				>
 					Install
 				</a>
-			) : !isNativeCline && agent.installed === false ? (
+			) : agent.installed === false ? (
 				<Button size="sm" disabled>
 					Install
 				</Button>
@@ -349,22 +336,18 @@ export function RuntimeSettingsDialog({
 	open,
 	workspaceId,
 	initialConfig = null,
-	liveMcpAuthStatuses = null,
 	onOpenChange,
 	onSaved,
-	onAccountSwitched,
 	initialSection,
 }: {
 	open: boolean;
 	workspaceId: string | null;
 	initialConfig?: RuntimeConfigResponse | null;
-	liveMcpAuthStatuses?: RuntimeClineMcpServerAuthStatus[] | null;
 	onOpenChange: (open: boolean) => void;
 	onSaved?: () => void;
-	onAccountSwitched?: () => void;
 	initialSection?: RuntimeSettingsSection | null;
 }): React.ReactElement {
-	const { config, isLoading, isSaving, save, refresh } = useRuntimeConfig(open, workspaceId, initialConfig);
+	const { config, isLoading, isSaving, save } = useRuntimeConfig(open, workspaceId, initialConfig);
 	const { resetLayoutCustomizations } = useLayoutCustomizations();
 	const [selectedAgentId, setSelectedAgentId] = useState<RuntimeAgentId>("claude");
 	const [agentAutonomousModeEnabled, setAgentAutonomousModeEnabled] = useState(true);
@@ -407,19 +390,14 @@ export function RuntimeSettingsDialog({
 	}, []);
 
 	const supportedAgents = useMemo<RuntimeSettingsAgentRowModel[]>(() => {
-		const agents =
-			config?.agents.map((agent) => ({
+		const agents = (config ? filterSupportedAgentDefinitions(config.agents) : getSupportedAgentCatalog()).map(
+			(agent) => ({
 				id: agent.id,
 				label: agent.label,
 				binary: agent.binary,
-				installed: agent.id === "cline" ? true : agent.installed,
-			})) ??
-			getRuntimeLaunchSupportedAgentCatalog().map((agent) => ({
-				id: agent.id,
-				label: agent.label,
-				binary: agent.binary,
-				installed: agent.id === "cline" ? true : null,
-			}));
+				installed: "installed" in agent ? agent.installed : null,
+			}),
+		);
 		const orderIndexByAgentId = new Map(SETTINGS_AGENT_ORDER.map((agentId, index) => [agentId, index] as const));
 		const orderedAgents = [...agents].sort((left, right) => {
 			const leftOrderIndex = orderIndexByAgentId.get(left.id) ?? Number.MAX_SAFE_INTEGER;
@@ -432,11 +410,7 @@ export function RuntimeSettingsDialog({
 		}));
 	}, [agentAutonomousModeEnabled, config?.agents]);
 	const displayedAgents = useMemo(() => supportedAgents, [supportedAgents]);
-	const navItems = useMemo(
-		() => SETTINGS_NAV_ITEMS.filter((item) => !item.clineOnly || selectedAgentId === "cline"),
-		[selectedAgentId],
-	);
-	const configuredAgentId = config?.selectedAgentId ?? null;
+	const configuredAgentId = resolveSupportedAgentId(config?.selectedAgentId);
 	const firstInstalledAgentId = displayedAgents.find((agent) => agent.installed)?.id;
 	const fallbackAgentId = firstInstalledAgentId ?? displayedAgents[0]?.id ?? "claude";
 	const initialSelectedAgentId = configuredAgentId ?? fallbackAgentId;
@@ -445,18 +419,6 @@ export function RuntimeSettingsDialog({
 	const initialShortcuts = config?.shortcuts ?? [];
 	const initialCommitPromptTemplate = config?.commitPromptTemplate ?? "";
 	const initialOpenPrPromptTemplate = config?.openPrPromptTemplate ?? "";
-	const clineSettings = useRuntimeSettingsClineController({
-		open,
-		workspaceId,
-		selectedAgentId,
-		config,
-	});
-	const clineMcpSettings = useRuntimeSettingsClineMcpController({
-		open,
-		workspaceId,
-		selectedAgentId,
-		liveAuthStatuses: liveMcpAuthStatuses,
-	});
 	const hasUnsavedChanges = useMemo(() => {
 		if (!config) {
 			return false;
@@ -468,12 +430,6 @@ export function RuntimeSettingsDialog({
 			return true;
 		}
 		if (readyForReviewNotificationsEnabled !== initialReadyForReviewNotificationsEnabled) {
-			return true;
-		}
-		if (clineSettings.hasUnsavedChanges) {
-			return true;
-		}
-		if (clineMcpSettings.hasUnsavedChanges) {
 			return true;
 		}
 		if (draftThemeId !== initialThemeId) {
@@ -494,8 +450,6 @@ export function RuntimeSettingsDialog({
 		);
 	}, [
 		agentAutonomousModeEnabled,
-		clineMcpSettings.hasUnsavedChanges,
-		clineSettings.hasUnsavedChanges,
 		commitPromptTemplate,
 		config,
 		draftThemeId,
@@ -516,7 +470,7 @@ export function RuntimeSettingsDialog({
 		if (!open) {
 			return;
 		}
-		setSelectedAgentId(configuredAgentId ?? fallbackAgentId);
+		setSelectedAgentId(resolveSupportedAgentId(configuredAgentId, resolveSupportedAgentId(fallbackAgentId)));
 		setAgentAutonomousModeEnabled(config?.agentAutonomousModeEnabled ?? true);
 		setReadyForReviewNotificationsEnabled(config?.readyForReviewNotificationsEnabled ?? true);
 		setShortcuts(config?.shortcuts ?? []);
@@ -587,12 +541,6 @@ export function RuntimeSettingsDialog({
 			copiedVariableResetTimerRef.current = null;
 		}
 	});
-
-	useEffect(() => {
-		if (activeSection === "cline" && selectedAgentId !== "cline") {
-			setActiveSection("general");
-		}
-	}, [activeSection, selectedAgentId]);
 
 	const handleBodyScroll = useCallback(() => {
 		if (isScrollingProgrammatically.current) return;
@@ -681,22 +629,6 @@ export function RuntimeSettingsDialog({
 			const nextPermission = await requestBrowserNotificationPermission();
 			setNotificationPermission(nextPermission);
 		}
-		if (selectedAgentId === "cline" && clineSettings.providerId.trim().length === 0) {
-			setSaveError("Choose a Cline provider before saving.");
-			return;
-		}
-		if (selectedAgentId === "cline") {
-			const clineProviderSaveResult = await clineSettings.saveProviderSettings();
-			if (!clineProviderSaveResult.ok) {
-				setSaveError(clineProviderSaveResult.message ?? "Could not save Cline provider settings.");
-				return;
-			}
-			const clineMcpSaveResult = await clineMcpSettings.saveMcpSettings();
-			if (!clineMcpSaveResult.ok) {
-				setSaveError(clineMcpSaveResult.message ?? "Could not save Cline MCP settings.");
-				return;
-			}
-		}
 		const saved = await save({
 			selectedAgentId,
 			agentAutonomousModeEnabled,
@@ -735,11 +667,6 @@ export function RuntimeSettingsDialog({
 		[workspaceId],
 	);
 
-	const handleClineSetupSaved = useCallback(() => {
-		refresh();
-		onSaved?.();
-	}, [onSaved, refresh]);
-
 	const handleDialogOpenChange = useCallback(
 		(nextOpen: boolean) => {
 			if (!nextOpen) {
@@ -761,7 +688,7 @@ export function RuntimeSettingsDialog({
 		<Dialog open={open} onOpenChange={handleDialogOpenChange} contentClassName="!max-w-[780px]">
 			<DialogHeader title="Settings" icon={<Settings size={16} />} />
 			<div className="flex h-[min(480px,60vh)]">
-				<SettingsNav items={navItems} activeId={activeSection} onSelect={handleNavSelect} />
+				<SettingsNav items={SETTINGS_NAV_ITEMS} activeId={activeSection} onSelect={handleNavSelect} />
 				<div
 					ref={bodyRef}
 					onScroll={handleBodyScroll}
@@ -813,38 +740,6 @@ export function RuntimeSettingsDialog({
 							Allows agents to use tools without stopping for permission. Use at your own risk.
 						</p>
 					</div>
-
-					{/* ---- Cline ---- */}
-					{selectedAgentId === "cline" ? (
-						<>
-							<div data-settings-section="cline" />
-							<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
-								<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
-									<Bot size={16} className="text-text-secondary" />
-									Cline
-								</h2>
-							</div>
-							<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
-								<ClineSetupSection
-									controller={clineSettings}
-									mcpController={clineMcpSettings}
-									controlsDisabled={controlsDisabled}
-									workspaceId={workspaceId}
-									accountSection={
-										clineSettings.providerId.trim() === "cline" ? (
-											<AccountOrganizationSection
-												workspaceId={workspaceId}
-												open={open}
-												onAccountSwitched={onAccountSwitched}
-											/>
-										) : null
-									}
-									onError={setSaveError}
-									onSaved={handleClineSetupSaved}
-								/>
-							</div>
-						</>
-					) : null}
 
 					{/* ---- Git Prompts ---- */}
 					<div data-settings-section="git-prompts" />
