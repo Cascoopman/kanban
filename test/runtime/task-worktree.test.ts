@@ -161,6 +161,13 @@ describe.sequential("task-worktree serialization", () => {
 				async (_file: string, args: readonly string[], options?: ExecFileOptions) => {
 					const { cwd, command } = getCommandArgs(args, options);
 
+					if (command[0] === "fetch") {
+						return {
+							stdout: "",
+							stderr: "",
+						};
+					}
+
 					if (command[0] === "rev-parse" && command[1] === "--git-common-dir") {
 						return {
 							stdout: ".git\n",
@@ -182,6 +189,13 @@ describe.sequential("task-worktree serialization", () => {
 					if (command[0] === "rev-parse" && command[1] === "--verify") {
 						return {
 							stdout: "base-commit\n",
+							stderr: "",
+						};
+					}
+
+					if (command[0] === "rev-parse" && command[1] === "--symbolic-full-name") {
+						return {
+							stdout: "",
 							stderr: "",
 						};
 					}

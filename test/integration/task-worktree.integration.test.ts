@@ -91,6 +91,61 @@ describe.sequential("task-worktree integration", () => {
 		});
 	});
 
+	it("creates a new task worktree from the fetched upstream commit when the local branch is behind", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-upstream-");
+			try {
+				const repoPath = join(sandboxRoot, "repo");
+				const remotePath = join(sandboxRoot, "remote.git");
+				const updaterPath = join(sandboxRoot, "updater");
+				mkdirSync(repoPath, { recursive: true });
+
+				runGit(sandboxRoot, ["init", "--bare", remotePath]);
+				runGit(repoPath, ["init"]);
+				runGit(repoPath, ["config", "user.name", "Kanban Test"]);
+				runGit(repoPath, ["config", "user.email", "kanban-test@example.com"]);
+
+				writeFileSync(join(repoPath, "README.md"), "initial\n", "utf8");
+				runGit(repoPath, ["add", "README.md"]);
+				runGit(repoPath, ["commit", "-m", "initial"]);
+				const branchName = runGit(repoPath, ["symbolic-ref", "--short", "HEAD"]);
+				const localCommit = runGit(repoPath, ["rev-parse", "HEAD"]);
+				runGit(repoPath, ["remote", "add", "origin", remotePath]);
+				runGit(repoPath, ["push", "--set-upstream", "origin", branchName]);
+				runGit(remotePath, ["symbolic-ref", "HEAD", `refs/heads/${branchName}`]);
+
+				runGit(sandboxRoot, ["clone", remotePath, updaterPath]);
+				runGit(updaterPath, ["config", "user.name", "Kanban Test"]);
+				runGit(updaterPath, ["config", "user.email", "kanban-test@example.com"]);
+				writeFileSync(join(updaterPath, "remote.txt"), "remote advance\n", "utf8");
+				runGit(updaterPath, ["add", "remote.txt"]);
+				runGit(updaterPath, ["commit", "-m", "remote advance"]);
+				const remoteCommit = runGit(updaterPath, ["rev-parse", "HEAD"]);
+				runGit(updaterPath, ["push", "origin", branchName]);
+
+				expect(runGit(repoPath, ["rev-parse", branchName])).toBe(localCommit);
+				expect(runGit(repoPath, ["rev-parse", `origin/${branchName}`])).toBe(localCommit);
+
+				const ensured = await ensureTaskWorktreeIfDoesntExist({
+					cwd: repoPath,
+					taskId: "task-from-fetched-upstream",
+					baseRef: branchName,
+				});
+
+				expect(ensured.ok).toBe(true);
+				if (!ensured.ok || !ensured.path) {
+					throw new Error(ensured.error ?? "Task worktree was not created");
+				}
+				expect(ensured.baseCommit).toBe(remoteCommit);
+				expect(runGit(ensured.path, ["rev-parse", "HEAD"])).toBe(remoteCommit);
+				expect(runGit(repoPath, ["rev-parse", branchName])).toBe(localCommit);
+				expect(runGit(repoPath, ["rev-parse", `origin/${branchName}`])).toBe(remoteCommit);
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
 	it("keeps symlinked ignored paths ignored in task worktrees", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-");
