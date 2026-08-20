@@ -54,7 +54,7 @@ export function createKanbanTerminalOptions({
 		rightClickSelectsWord: false,
 		scrollOnEraseInDisplay: true,
 		scrollOnUserInput: true,
-		scrollback: 10_000,
+		scrollback: 1_000,
 		smoothScrollDuration: 0,
 		theme: {
 			background: terminalBackgroundColor,

@@ -12,6 +12,7 @@ import type {
 	RuntimeTerminalWsClientMessage,
 	RuntimeTerminalWsServerMessage,
 } from "@/runtime/types";
+import { splitTerminalRestoreSnapshot } from "@/terminal/restore-snapshot-chunks";
 import { clearTerminalGeometry, reportTerminalGeometry } from "@/terminal/terminal-geometry-registry";
 import { createKanbanTerminalOptions } from "@/terminal/terminal-options";
 import {
@@ -322,7 +323,9 @@ class PersistentTerminal {
 		if (!snapshot) {
 			return;
 		}
-		await this.enqueueTerminalWrite(snapshot);
+		for (const chunk of splitTerminalRestoreSnapshot(snapshot)) {
+			await this.enqueueTerminalWrite(chunk);
+		}
 	}
 
 	private requestResize(): void {
