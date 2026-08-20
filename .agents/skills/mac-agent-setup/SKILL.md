@@ -96,6 +96,11 @@ agent.
 Verify the one-monitor arrangement, undocked behavior, and multi-monitor
 no-op behavior separately.
 
+For the full single-external-monitor workflow, including the DeskJockey failure
+mode, an agent-ready setup prompt, the displayplacer script, launchd
+installation, verification, and uninstallation, read
+[references/multiple-screens.md](references/multiple-screens.md).
+
 ### 5. Configure sleep behavior for agents
 
 Set a conservative battery policy and an AC policy that allows the display to
