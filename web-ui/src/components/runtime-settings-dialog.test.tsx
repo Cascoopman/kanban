@@ -75,6 +75,10 @@ vi.mock("@radix-ui/react-select", () => ({
 }));
 
 const resetLayoutCustomizationsMock = vi.hoisted(() => vi.fn());
+const agentInstructionsHookMocks = vi.hoisted(() => ({
+	useAgentInstructions: vi.fn(),
+	save: vi.fn(),
+}));
 
 vi.mock("@runtime-agent-catalog", () => ({
 	getRuntimeAgentCatalogEntry: vi.fn((agentId: string) => ({
@@ -105,6 +109,10 @@ vi.mock("@/runtime/use-runtime-config", () => ({
 		refresh: vi.fn(),
 		save: vi.fn(async () => true),
 	}),
+}));
+
+vi.mock("@/runtime/use-agent-instructions", () => ({
+	useAgentInstructions: agentInstructionsHookMocks.useAgentInstructions,
 }));
 
 vi.mock("@/runtime/runtime-config-query", () => ({
@@ -166,6 +174,23 @@ describe("RuntimeSettingsDialog", () => {
 
 	beforeEach(() => {
 		resetLayoutCustomizationsMock.mockReset();
+		agentInstructionsHookMocks.save.mockReset();
+		agentInstructionsHookMocks.save.mockResolvedValue({
+			path: "/tmp/project/AGENTS.md",
+			content: "# Existing instructions\n",
+			exists: true,
+		});
+		agentInstructionsHookMocks.useAgentInstructions.mockReturnValue({
+			instructions: {
+				path: "/tmp/project/AGENTS.md",
+				content: "# Existing instructions\n",
+				exists: true,
+			},
+			isLoading: false,
+			isSaving: false,
+			loadError: null,
+			save: agentInstructionsHookMocks.save,
+		});
 		window.localStorage.clear();
 		document.documentElement.removeAttribute("data-theme");
 		previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -312,5 +337,41 @@ describe("RuntimeSettingsDialog", () => {
 		expect(handleOpenChange).toHaveBeenCalledWith(false);
 		expect(window.localStorage.getItem("kanban.theme")).toBe("graphite");
 		expect(document.documentElement.getAttribute("data-theme")).toBe("graphite");
+	});
+
+	it("shows and saves the project AGENTS.md contents", async () => {
+		const handleOpenChange = vi.fn();
+		await act(async () => {
+			root.render(
+				<RuntimeSettingsDialog
+					open={true}
+					workspaceId={"workspace-1"}
+					initialConfig={savedRuntimeConfig}
+					onOpenChange={handleOpenChange}
+				/>,
+			);
+		});
+
+		const editor = document.querySelector('textarea[aria-label="AGENTS.md contents"]') as HTMLTextAreaElement | null;
+		const saveButton = findButtonByText(document.body, "Save");
+		expect(editor?.value).toBe("# Existing instructions\n");
+		expect(saveButton?.disabled).toBe(true);
+
+		await act(async () => {
+			if (!editor) {
+				throw new Error("Expected AGENTS.md editor.");
+			}
+			const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+			valueSetter?.call(editor, "# Updated instructions\n\nRun tests.\n");
+			editor.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		expect(saveButton?.disabled).toBe(false);
+		await act(async () => {
+			saveButton?.click();
+		});
+
+		expect(agentInstructionsHookMocks.save).toHaveBeenCalledWith("# Updated instructions\n\nRun tests.\n");
+		expect(handleOpenChange).toHaveBeenCalledWith(false);
 	});
 });
