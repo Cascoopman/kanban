@@ -5,12 +5,6 @@ import type { BoardData } from "@/types";
 export const TASK_START_IN_PLAN_MODE_STORAGE_KEY = LocalStorageKey.TaskStartInPlanMode;
 const DETAIL_TASK_QUERY_PARAM = "task";
 
-export interface SearchableTask {
-	id: string;
-	title: string;
-	columnTitle: string;
-}
-
 export function countTasksByColumn(board: BoardData): {
 	backlog: number;
 	in_progress: number;
@@ -108,41 +102,3 @@ export function createIdleTaskSession(taskId: string): RuntimeTaskSessionSummary
 		warningMessage: null,
 	};
 }
-
-export const filterTask = (query: string, task: SearchableTask): boolean => {
-	const normalizedQuery = query.toLowerCase();
-	return (
-		task.title.toLowerCase().includes(normalizedQuery) || task.columnTitle.toLowerCase().includes(normalizedQuery)
-	);
-};
-
-export const renderTask = (
-	task: SearchableTask,
-	{
-		handleClick,
-		handleFocus,
-		modifiers,
-	}: {
-		handleClick: React.MouseEventHandler<HTMLElement>;
-		handleFocus: () => void;
-		modifiers: { matchesPredicate: boolean; active: boolean; disabled: boolean };
-	},
-): React.ReactElement | null => {
-	if (!modifiers.matchesPredicate) {
-		return null;
-	}
-	return (
-		<button
-			key={task.id}
-			type="button"
-			className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-[13px] text-text-primary rounded-md hover:bg-surface-3 text-left ${modifiers.active ? "bg-surface-3" : ""}`}
-			disabled={modifiers.disabled}
-			onClick={handleClick}
-			onFocus={handleFocus}
-			role="option"
-		>
-			<span className="flex-1 truncate">{task.title}</span>
-			<span className="text-text-tertiary text-xs shrink-0">{task.columnTitle}</span>
-		</button>
-	);
-};

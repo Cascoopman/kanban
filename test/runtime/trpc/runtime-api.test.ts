@@ -104,19 +104,6 @@ function createTestRuntimeApi(overrides: Partial<CreateRuntimeApiDependencies> =
 		getScopedTerminalManager: vi.fn(),
 		resolveInteractiveShellCommand: vi.fn(() => ({ binary: "/bin/zsh", args: ["-l"] })),
 		runCommand: vi.fn(),
-		getUpdateStatus: vi.fn(() => ({
-			currentVersion: "0.1.0",
-			latestVersion: null,
-			updateAvailable: false,
-			updateTiming: null,
-			installCommand: null,
-		})),
-		runUpdateNow: vi.fn(async () => ({
-			status: "unsupported_installation" as const,
-			currentVersion: "0.1.0",
-			latestVersion: null,
-			message: "Updates are unavailable in tests.",
-		})),
 		...overrides,
 	});
 }
@@ -327,25 +314,5 @@ describe("createRuntimeApi maintenance endpoints", () => {
 
 		expect(prepareForStateReset).toHaveBeenCalledTimes(1);
 		expect(response).toEqual({ ok: true, clearedPaths: resetPaths });
-	});
-
-	it("delegates update status and update execution", async () => {
-		const getUpdateStatus = vi.fn(() => ({
-			currentVersion: "1.0.0",
-			latestVersion: "1.1.0",
-			updateAvailable: true,
-			updateTiming: "startup" as const,
-			installCommand: "npm install -g kanban@1.1.0",
-		}));
-		const runUpdateNow = vi.fn(async () => ({
-			status: "updated" as const,
-			currentVersion: "1.1.0",
-			latestVersion: "1.1.0",
-			message: "Updated.",
-		}));
-		const api = createTestRuntimeApi({ getUpdateStatus, runUpdateNow });
-
-		await expect(api.getUpdateStatus(null)).resolves.toEqual(getUpdateStatus());
-		await expect(api.runUpdateNow(null)).resolves.toEqual(await runUpdateNow());
 	});
 });

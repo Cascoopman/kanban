@@ -6,7 +6,7 @@ import {
 	isPersistableRuntimePath,
 } from "./window-state.js";
 
-export interface RuntimeOrchestratorLike {
+interface RuntimeOrchestratorLike {
 	getUrl(): string | null;
 	defaultOrigin(): string;
 	checkHealth(origin: string): Promise<boolean>;

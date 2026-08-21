@@ -341,7 +341,7 @@ export function readStoredThemeId(): ThemeId {
 	return isThemeId(stored) ? stored : "default";
 }
 
-export function applyThemeToDocument(themeId: ThemeId): void {
+function applyThemeToDocument(themeId: ThemeId): void {
 	if (typeof document === "undefined") {
 		return;
 	}

@@ -33,7 +33,7 @@ export const MIN_COLLAPSE_LINES = 8;
 export const INCREMENTAL_EXPAND_STEP = 20;
 export const INCREMENTAL_EXPAND_THRESHOLD = 40;
 
-export interface InlineDiffSegment {
+interface InlineDiffSegment {
 	key: string;
 	text: string;
 	tone: "added" | "removed" | "context";

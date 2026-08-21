@@ -10,10 +10,10 @@ import {
 } from "@/resize/resize-preferences";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 
-export const MIN_GIT_REFS_PANEL_WIDTH = 180;
-export const MIN_GIT_COMMITS_PANEL_WIDTH = 260;
-export const MIN_GIT_DIFF_PANEL_WIDTH = 340;
-export const GIT_HISTORY_SEPARATOR_COUNT = 2;
+const MIN_GIT_REFS_PANEL_WIDTH = 180;
+const MIN_GIT_COMMITS_PANEL_WIDTH = 260;
+const MIN_GIT_DIFF_PANEL_WIDTH = 340;
+const GIT_HISTORY_SEPARATOR_COUNT = 2;
 
 const REFS_PANEL_WIDTH_PREFERENCE: ResizeNumberPreference = {
 	key: LocalStorageKey.GitHistoryRefsPanelWidth,

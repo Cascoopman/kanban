@@ -20,12 +20,12 @@ interface BaseLockRequest {
 	onCompromised?: LockOptions["onCompromised"];
 }
 
-export interface FileLockRequest extends BaseLockRequest {
+interface FileLockRequest extends BaseLockRequest {
 	type?: "file";
 	lockfilePath?: string;
 }
 
-export interface DirectoryLockRequest extends BaseLockRequest {
+interface DirectoryLockRequest extends BaseLockRequest {
 	type: "directory";
 	lockfileName?: string;
 	lockfilePath?: string;

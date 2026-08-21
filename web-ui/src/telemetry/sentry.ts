@@ -25,7 +25,3 @@ export function initializeSentry(): void {
 
 	initialized = true;
 }
-
-export function isSentryEnabled(): boolean {
-	return initialized;
-}

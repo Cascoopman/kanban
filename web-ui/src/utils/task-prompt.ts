@@ -10,7 +10,7 @@ export interface InlineSuffixClampResult {
 	isTruncated: boolean;
 }
 
-export const DEFAULT_TASK_PROMPT_LABEL_MAX_CHARS = 100;
+const DEFAULT_TASK_PROMPT_LABEL_MAX_CHARS = 100;
 
 export function normalizePromptForDisplay(prompt: string): string {
 	return prompt.replaceAll(/\s+/g, " ").trim();

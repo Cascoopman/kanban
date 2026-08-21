@@ -4,7 +4,7 @@ import type { RuntimeAgentDefinition, RuntimeAgentId, RuntimeConfigResponse } fr
 
 export type SupportedAgentId = Extract<RuntimeAgentId, "claude" | "codex">;
 
-export const SUPPORTED_AGENT_IDS: readonly SupportedAgentId[] = ["claude", "codex"];
+const SUPPORTED_AGENT_IDS: readonly SupportedAgentId[] = ["claude", "codex"];
 
 export function isSupportedAgentId(agentId: RuntimeAgentId | string | null | undefined): agentId is SupportedAgentId {
 	return agentId === "claude" || agentId === "codex";
@@ -27,9 +27,7 @@ export function resolveSupportedAgentId(
 	return isSupportedAgentId(agentId) ? agentId : fallback;
 }
 
-export function isTaskAgentSetupSatisfied(
-	config: Pick<RuntimeConfigResponse, "agents"> | null | undefined,
-): boolean | null {
+function isTaskAgentSetupSatisfied(config: Pick<RuntimeConfigResponse, "agents"> | null | undefined): boolean | null {
 	if (!config) {
 		return null;
 	}

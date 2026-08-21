@@ -13,11 +13,8 @@ import {
 	type RuntimeTaskSessionStartRequest,
 	type RuntimeTaskSessionStopRequest,
 	type RuntimeTaskWorkspaceBranchRequest,
-	type RuntimeTaskWorkspaceInfoRequest,
 	type RuntimeTerminalWsClientMessage,
-	type RuntimeWorkspaceChangesRequest,
 	type RuntimeWorkspaceFileSearchRequest,
-	type RuntimeWorkspaceStateSaveRequest,
 	type RuntimeWorktreeDeleteRequest,
 	type RuntimeWorktreeEnsureRequest,
 	runtimeCommandRunRequestSchema,
@@ -32,11 +29,8 @@ import {
 	runtimeTaskSessionStartRequestSchema,
 	runtimeTaskSessionStopRequestSchema,
 	runtimeTaskWorkspaceBranchRequestSchema,
-	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTerminalWsClientMessageSchema,
-	runtimeWorkspaceChangesRequestSchema,
 	runtimeWorkspaceFileSearchRequestSchema,
-	runtimeWorkspaceStateSaveRequestSchema,
 	runtimeWorktreeDeleteRequestSchema,
 	runtimeWorktreeEnsureRequestSchema,
 } from "./api-contract";
@@ -44,48 +38,12 @@ import {
 const trimmedStringSchema = z.string().transform((value) => value.trim());
 const positiveIntegerFromQuerySchema = z.coerce.number().int().positive();
 
-const requiredTrimmedStringSchema = (message: string) => trimmedStringSchema.pipe(z.string().min(1, message));
-
 function parseWithSchema<T>(schema: z.ZodType<T>, value: unknown): T {
 	const parsed = schema.safeParse(value);
 	if (!parsed.success) {
 		throw new Error(parsed.error.issues[0]?.message ?? "Invalid request payload.");
 	}
 	return parsed.data;
-}
-
-export function parseWorkspaceChangesRequest(query: URLSearchParams): RuntimeWorkspaceChangesRequest {
-	const taskId = parseWithSchema(
-		requiredTrimmedStringSchema("Missing taskId query parameter."),
-		query.get("taskId") ?? "",
-	);
-	const baseRef = parseWithSchema(
-		requiredTrimmedStringSchema("Missing baseRef query parameter."),
-		query.get("baseRef") ?? "",
-	);
-	return parseWithSchema(runtimeWorkspaceChangesRequestSchema, { taskId, baseRef });
-}
-
-export function parseTaskWorkspaceInfoRequest(query: URLSearchParams): RuntimeTaskWorkspaceInfoRequest {
-	const taskId = parseWithSchema(
-		requiredTrimmedStringSchema("Missing taskId query parameter."),
-		query.get("taskId") ?? "",
-	);
-	const baseRef = parseWithSchema(
-		requiredTrimmedStringSchema("Missing baseRef query parameter."),
-		query.get("baseRef") ?? "",
-	);
-	return parseWithSchema(runtimeTaskWorkspaceInfoRequestSchema, { taskId, baseRef });
-}
-
-export function parseOptionalTaskWorkspaceInfoRequest(query: URLSearchParams): RuntimeTaskWorkspaceInfoRequest | null {
-	if (!query.has("taskId")) {
-		if (query.has("baseRef")) {
-			throw new Error("baseRef query parameter requires taskId.");
-		}
-		return null;
-	}
-	return parseTaskWorkspaceInfoRequest(query);
 }
 
 export function parseWorkspaceFileSearchRequest(query: URLSearchParams): RuntimeWorkspaceFileSearchRequest {
@@ -161,10 +119,6 @@ export function parseWorktreeDeleteRequest(value: unknown): RuntimeWorktreeDelet
 	return {
 		taskId,
 	};
-}
-
-export function parseWorkspaceStateSaveRequest(value: unknown): RuntimeWorkspaceStateSaveRequest {
-	return parseWithSchema(runtimeWorkspaceStateSaveRequestSchema, value);
 }
 
 export function parseProjectAddRequest(value: unknown): RuntimeProjectAddRequest {

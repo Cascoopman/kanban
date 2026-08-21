@@ -82,16 +82,6 @@ export function isPasscodeEnabled(): boolean {
 }
 
 /**
- * Revoke the current passcode and generate a new one.
- * Returns the new plaintext passcode for display.
- */
-export function revokeAndRegeneratePasscode(): string {
-	sessions.clear();
-	rateLimitByIp.clear();
-	return generatePasscode();
-}
-
-/**
  * Validate a submitted passcode. Uses timing-safe comparison.
  */
 export function validatePasscode(submitted: string): boolean {

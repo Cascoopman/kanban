@@ -20,7 +20,7 @@ import type { ResolvedWorkspaceStreamTarget, WorkspaceRegistry } from "./workspa
 
 const TASK_SESSION_STREAM_BATCH_MS = 150;
 
-export interface DisposeRuntimeStateWorkspaceOptions {
+interface DisposeRuntimeStateWorkspaceOptions {
 	disconnectClients?: boolean;
 	closeClientErrorMessage?: string;
 }

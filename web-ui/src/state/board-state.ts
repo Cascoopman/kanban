@@ -310,10 +310,6 @@ export function removeTaskDependency(board: BoardData, dependencyId: string): { 
 	return runtimeTaskState.removeTaskDependency(board, dependencyId);
 }
 
-export function getReadyLinkedTaskIdsForTaskInTrash(board: BoardData, taskId: string): string[] {
-	return runtimeTaskState.getReadyLinkedTaskIdsForTaskInTrash(board, taskId);
-}
-
 export function trashTaskAndGetReadyLinkedTaskIds(
 	board: BoardData,
 	taskId: string,
@@ -506,26 +502,6 @@ export function updateTaskTitle(
 		agentId: selection.card.agentId,
 		baseRef: selection.card.baseRef,
 	});
-}
-
-export function removeTask(board: BoardData, taskId: string): { board: BoardData; removed: boolean } {
-	let removed = false;
-	const columns = board.columns.map((column) => {
-		const nextCards = column.cards.filter((card) => card.id !== taskId);
-		if (nextCards.length !== column.cards.length) {
-			removed = true;
-			return { ...column, cards: nextCards };
-		}
-		return column;
-	});
-	if (!removed) {
-		return { board, removed: false };
-	}
-	const boardWithUpdatedColumns = withUpdatedColumns(board, columns);
-	return {
-		board: removeDependenciesByTaskIds(boardWithUpdatedColumns, new Set([taskId])),
-		removed: true,
-	};
 }
 
 export function clearColumnTasks(

@@ -34,7 +34,6 @@ import { terminateProcessForTimeout } from "./server/process-termination";
 import type { RuntimeStateHub } from "./server/runtime-state-hub";
 import { captureNodeException, flushNodeTelemetry } from "./telemetry/sentry-node.js";
 import type { TerminalSessionManager } from "./terminal/session-manager";
-import { runOnDemandUpdate } from "./update/update";
 
 interface CliOptions {
 	noOpen: boolean;
@@ -69,7 +68,6 @@ interface RootCommandOptions {
 	port?: { mode: "fixed"; value: number } | { mode: "auto" };
 	open?: boolean;
 	skipShutdownCleanup?: boolean;
-	update?: boolean;
 	https?: boolean;
 	cert?: string;
 	key?: string;
@@ -392,7 +390,6 @@ async function startServer(): Promise<{
 		{ resolveInteractiveShellCommand },
 		{ shutdownRuntimeServer },
 		{ collectProjectWorktreeTaskIdsForRemoval, createWorkspaceRegistry },
-		{ clearPendingUpdateNotification, getPendingUpdateNotification },
 	] = await Promise.all([
 		import("./projects/project-path.js"),
 		import("./server/directory-picker.js"),
@@ -401,7 +398,6 @@ async function startServer(): Promise<{
 		import("./server/shell.js"),
 		import("./server/shutdown-coordinator.js"),
 		import("./server/workspace-registry.js"),
-		import("./update/update.js"),
 	]);
 	let runtimeStateHub: RuntimeStateHub | undefined;
 	const workspaceRegistry = await createWorkspaceRegistry({
@@ -450,46 +446,6 @@ async function startServer(): Promise<{
 		disposeWorkspace: disposeTrackedWorkspace,
 		collectProjectWorktreeTaskIdsForRemoval,
 		pickDirectoryPathFromSystemDialog,
-		getUpdateStatus: () => {
-			const notification = getPendingUpdateNotification();
-			if (!notification) {
-				return {
-					currentVersion: KANBAN_VERSION,
-					latestVersion: null,
-					updateAvailable: false,
-					updateTiming: null,
-					installCommand: null,
-				};
-			}
-			return {
-				currentVersion: notification.currentVersion,
-				latestVersion: notification.latestVersion,
-				updateAvailable: true,
-				updateTiming: notification.updateTiming,
-				installCommand: notification.installCommand,
-			};
-		},
-		runUpdateNow: async () => {
-			const result = await runOnDemandUpdate({
-				currentVersion: KANBAN_VERSION,
-			});
-			if (
-				result.status === "updated" ||
-				result.status === "already_up_to_date" ||
-				result.status === "cache_refreshed"
-			) {
-				// The pending notification is a one-shot signal recorded at startup.
-				// Clearing it here prevents the modal from reappearing on page reload
-				// after the user has already applied the update.
-				clearPendingUpdateNotification();
-			}
-			return {
-				status: result.status,
-				currentVersion: result.currentVersion,
-				latestVersion: result.latestVersion,
-				message: result.message,
-			};
-		},
 	});
 
 	const close = async () => {
@@ -540,10 +496,7 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 		console.log(`Binding to host ${options.host}.`);
 	}
 
-	const [{ openInBrowser }, { autoUpdateOnStartup, runPendingAutoUpdateOnShutdown }] = await Promise.all([
-		import("./server/browser.js"),
-		import("./update/update.js"),
-	]);
+	const { openInBrowser } = await import("./server/browser.js");
 
 	const selectedPort = await applyRuntimePortOption(options.port);
 	if (selectedPort !== null) {
@@ -569,10 +522,6 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 			console.log(`\n🔐 Remote access passcode: ${passcode}\n\nShare this with users who need access.\n`);
 		}
 	}
-
-	autoUpdateOnStartup({
-		currentVersion: KANBAN_VERSION,
-	});
 
 	let runtime: Awaited<ReturnType<typeof startServer>>;
 	try {
@@ -609,7 +558,6 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 			return;
 		}
 		isShuttingDown = true;
-		runPendingAutoUpdateOnShutdown();
 		if (options.skipShutdownCleanup) {
 			console.warn("Skipping shutdown session cleanup for this instance.");
 		}
@@ -655,19 +603,6 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 	});
 }
 
-async function runUpdateCommand(): Promise<void> {
-	const result = await runOnDemandUpdate({
-		currentVersion: KANBAN_VERSION,
-	});
-
-	if (result.status === "updated" || result.status === "already_up_to_date" || result.status === "cache_refreshed") {
-		console.log(result.message);
-		return;
-	}
-
-	throw new Error(result.message);
-}
-
 function createProgram(invocationArgs: string[]): Command {
 	const shouldAutoOpenBrowser = shouldAutoOpenBrowserTabForInvocation(invocationArgs);
 	const program = new Command();
@@ -682,7 +617,6 @@ function createProgram(invocationArgs: string[]): Command {
 		.option("--https", "Enable HTTPS. Requires both --cert and --key.")
 		.option("--cert <path>", "Path to a TLS certificate PEM file (implies HTTPS).")
 		.option("--key <path>", "Path to a TLS private key PEM file (implies HTTPS).")
-		.option("--update", "Update Kanban to the latest published version and exit.")
 		.option(
 			"--no-passcode",
 			"Disable auto-generated passcode for remote access (for advanced users behind a reverse proxy).",
@@ -702,18 +636,7 @@ function createProgram(invocationArgs: string[]): Command {
 			console.warn("Deprecated. Please uninstall Kanban MCP.");
 		});
 
-	program
-		.command("update")
-		.description("Update Kanban to the latest published version.")
-		.action(async () => {
-			await runUpdateCommand();
-		});
-
 	program.action(async (options: RootCommandOptions) => {
-		if (options.update === true) {
-			await runUpdateCommand();
-			return;
-		}
 		await runMainCommand(
 			{
 				host: options.host ?? null,

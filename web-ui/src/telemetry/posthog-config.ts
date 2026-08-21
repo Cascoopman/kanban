@@ -6,7 +6,7 @@ function getTrimmedEnvValue(value: string | undefined): string | null {
 }
 
 export const posthogApiKey = getTrimmedEnvValue(import.meta.env.POSTHOG_KEY);
-export const posthogHost = getTrimmedEnvValue(import.meta.env.POSTHOG_HOST);
+const posthogHost = getTrimmedEnvValue(import.meta.env.POSTHOG_HOST);
 
 export const posthogOptions: Partial<PostHogConfig> = {
 	api_host: posthogHost ?? undefined,

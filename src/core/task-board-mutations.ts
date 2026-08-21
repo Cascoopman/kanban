@@ -381,10 +381,6 @@ export function removeTaskDependency(board: RuntimeBoardData, dependencyId: stri
 	};
 }
 
-export function getReadyLinkedTaskIdsForTaskInTrash(board: RuntimeBoardData, taskId: string): string[] {
-	return getLinkedBacklogTaskIdsReadyAfterTaskTrashed(board, taskId, getTaskColumnId(board, taskId));
-}
-
 export function trashTaskAndGetReadyLinkedTaskIds(
 	board: RuntimeBoardData,
 	taskId: string,

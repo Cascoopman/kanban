@@ -6,7 +6,7 @@ const ACCEPTED_IMAGE_TYPE_SET = new Set<string>(ACCEPTED_IMAGE_TYPES);
 
 export const ACCEPTED_TASK_IMAGE_INPUT_ACCEPT = ACCEPTED_IMAGE_TYPES.join(",");
 
-export function isAcceptedTaskImageFile(file: File): boolean {
+function isAcceptedTaskImageFile(file: File): boolean {
 	return ACCEPTED_IMAGE_TYPE_SET.has(file.type);
 }
 

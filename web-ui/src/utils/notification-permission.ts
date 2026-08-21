@@ -25,7 +25,7 @@ export function hasPromptedForBrowserNotificationPermission(): boolean {
 	return readPromptedFlag();
 }
 
-export function markBrowserNotificationPermissionPrompted(): void {
+function markBrowserNotificationPermissionPrompted(): void {
 	writePromptedFlag(true);
 }
 

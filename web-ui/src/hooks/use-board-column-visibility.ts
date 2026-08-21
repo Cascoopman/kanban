@@ -16,7 +16,7 @@ function serializeHiddenColumnIds(columnIds: Iterable<BoardColumnId>): string {
 	return BOARD_COLUMN_IDS.filter((columnId) => hiddenColumnIds.has(columnId)).join(",");
 }
 
-export function normalizeStoredHiddenColumnIds(value: string): string {
+function normalizeStoredHiddenColumnIds(value: string): string {
 	return serializeHiddenColumnIds(value.split(",").filter(isBoardColumnId));
 }
 

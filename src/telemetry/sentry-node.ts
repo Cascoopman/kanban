@@ -48,7 +48,3 @@ export async function flushNodeTelemetry(timeoutMs = 2_000): Promise<void> {
 	}
 	await Sentry.flush(timeoutMs);
 }
-
-export function isNodeSentryEnabled(): boolean {
-	return initialized;
-}

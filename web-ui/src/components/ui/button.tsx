@@ -2,8 +2,8 @@ import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from "react";
 
 import { cn } from "@/components/ui/cn";
 
-export type ButtonVariant = "default" | "primary" | "danger" | "ghost";
-export type ButtonSize = "sm" | "md";
+type ButtonVariant = "default" | "primary" | "danger" | "ghost";
+type ButtonSize = "sm" | "md";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 	variant?: ButtonVariant;
