@@ -45,6 +45,10 @@ interface MountPersistentTerminalOptions {
 	isVisible?: boolean;
 }
 
+interface RequestTerminalResizeOptions {
+	scrollToBottom?: boolean;
+}
+
 interface EnsurePersistentTerminalInput extends PersistentTerminalAppearance {
 	taskId: string;
 	workspaceId: string;
@@ -160,6 +164,7 @@ class PersistentTerminal {
 	private controlSocket: WebSocket | null = null;
 	private connectionReady = false;
 	private restoreCompleted = false;
+	private scrollToBottomOnNextResize = false;
 	private outputTextDecoder = new TextDecoder();
 	private terminalWriteQueue: Promise<void> = Promise.resolve();
 	private disposed = false;
@@ -328,11 +333,24 @@ class PersistentTerminal {
 		}
 	}
 
-	private requestResize(): void {
+	private requestResize(options: RequestTerminalResizeOptions = {}): void {
+		if (options.scrollToBottom) {
+			this.scrollToBottomOnNextResize = true;
+		}
 		if (!this.visibleContainer) {
 			return;
 		}
+		// Restore snapshots contain cursor movement and wrapping for their saved
+		// geometry. Fitting midway through replay can reconstruct a different
+		// viewport, so defer all fitting until the snapshot has fully drained.
+		if (!this.restoreCompleted) {
+			return;
+		}
 		this.fitAddon.fit();
+		if (this.scrollToBottomOnNextResize) {
+			this.terminal.scrollToBottom();
+			this.scrollToBottomOnNextResize = false;
+		}
 		const bounds = this.visibleContainer.getBoundingClientRect();
 		const pixelWidth = Math.round(bounds.width);
 		const pixelHeight = Math.round(bounds.height);
@@ -430,10 +448,10 @@ class PersistentTerminal {
 							return;
 						}
 						this.restoreCompleted = true;
-						this.sendControlMessage({ type: "restore_complete" });
-						if (this.ioSocket && this.visibleContainer) {
-							this.requestResize();
+						if (this.visibleContainer) {
+							this.requestResize({ scrollToBottom: true });
 						}
+						this.sendControlMessage({ type: "restore_complete" });
 						if (this.ioSocket) {
 							this.notifyConnectionReady();
 						}
@@ -551,7 +569,7 @@ class PersistentTerminal {
 		this.resizeObserver.observe(container);
 		if (options.isVisible !== false) {
 			window.requestAnimationFrame(() => {
-				this.requestResize();
+				this.requestResize({ scrollToBottom: true });
 				if (options.autoFocus) {
 					this.terminal.focus();
 				}
