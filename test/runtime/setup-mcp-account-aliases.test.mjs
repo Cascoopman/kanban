@@ -187,6 +187,7 @@ describe("setup MCP account aliases", () => {
 			["claude plugin list", { status: 0, stdout: "", stderr: "" }],
 		]);
 		const runner = createRunner(responses);
+		const messages = [];
 
 		setupMcpAccountAliases(
 			{
@@ -196,12 +197,24 @@ describe("setup MCP account aliases", () => {
 				login: true,
 				keepClaudeNotionPlugin: false,
 			},
-			{ run: runner.run, log: () => undefined },
+			{ run: runner.run, log: (message) => messages.push(message) },
 		);
 
 		const loginInvocations = runner.invocations.filter(({ key }) => key.includes(" mcp login "));
 		expect(loginInvocations).toHaveLength(4);
+		expect(loginInvocations.map(({ key }) => key)).toEqual([
+			"claude mcp login --no-browser notion_work",
+			"claude mcp login --no-browser notion_personal",
+			"claude mcp login --no-browser linear_work",
+			"claude mcp login --no-browser linear_personal",
+		]);
 		expect(loginInvocations.every(({ options }) => options?.interactive === true)).toBe(true);
+		expect(messages).toContain(
+			"1. Copy the authorization URL printed below into your work browser profile.",
+		);
+		expect(messages).toContain(
+			"1. Copy the authorization URL printed below into your personal browser profile.",
+		);
 	});
 
 	it("parses client and safety options", () => {

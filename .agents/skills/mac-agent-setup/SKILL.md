@@ -143,7 +143,10 @@ aliases, preserves existing aliases that use custom endpoints, and disables
 Claude Code's official single-account Notion plugin when configuring the two
 direct Notion aliases. Use `--dry-run` to inspect changes, `--replace` to
 replace custom endpoints deliberately, and `--login` to authenticate each
-configured direct endpoint interactively.
+configured direct endpoint interactively. Claude authentication prints each
+authorization URL instead of opening a browser automatically. Open it in the
+matching work or personal browser profile, then paste the complete redirected
+URL back into the terminal when prompted.
 
 Codex retains the established work alias `notion`; Claude Code uses
 `notion_work`. Both use `notion_personal`, `linear_work`, and

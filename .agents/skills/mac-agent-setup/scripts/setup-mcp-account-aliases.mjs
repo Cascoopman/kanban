@@ -137,6 +137,21 @@ function removeArguments(client, aliasName) {
 	return ["mcp", "remove", "--scope", "user", aliasName];
 }
 
+function loginArguments(client, aliasName) {
+	if (client === "claude") {
+		return ["mcp", "login", "--no-browser", aliasName];
+	}
+	return ["mcp", "login", aliasName];
+}
+
+function explainManualClaudeLogin(log, aliasName) {
+	const browserProfile = aliasName.endsWith("_personal") ? "personal" : "work";
+	log(`\nAuthenticating Claude ${aliasName}:`);
+	log(`1. Copy the authorization URL printed below into your ${browserProfile} browser profile.`);
+	log("2. Complete authorization without changing browser profiles.");
+	log("3. Copy the complete redirected URL from the address bar and paste it back here.");
+}
+
 function logMutation({ dryRun, log, run }, command, args, options) {
 	log(`${dryRun ? "Would run" : "Running"}: ${formatCommand(command, args)}`);
 	if (!dryRun) {
@@ -219,7 +234,12 @@ export function setupMcpAccountAliases(options, dependencies = {}) {
 
 	if (options.login) {
 		for (const target of loginTargets) {
-			logMutation(context, target.client, ["mcp", "login", target.name], { interactive: true });
+			if (target.client === "claude") {
+				explainManualClaudeLogin(log, target.name);
+			}
+			logMutation(context, target.client, loginArguments(target.client, target.name), {
+				interactive: true,
+			});
 		}
 		return;
 	}
