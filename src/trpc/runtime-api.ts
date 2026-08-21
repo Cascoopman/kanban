@@ -9,11 +9,7 @@ import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import type { RuntimeConfigState } from "../config/runtime-config";
 import { updateGlobalRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config";
-import type {
-	RuntimeCommandRunResponse,
-	RuntimeRunUpdateResponse,
-	RuntimeUpdateStatusResponse,
-} from "../core/api-contract";
+import type { RuntimeCommandRunResponse } from "../core/api-contract";
 import {
 	parseCommandRunRequest,
 	parseRuntimeConfigSaveRequest,
@@ -39,8 +35,6 @@ export interface CreateRuntimeApiDependencies {
 	resolveInteractiveShellCommand: () => { binary: string; args: string[] };
 	runCommand: (command: string, cwd: string) => Promise<RuntimeCommandRunResponse>;
 	prepareForStateReset?: () => Promise<void>;
-	getUpdateStatus: () => RuntimeUpdateStatusResponse;
-	runUpdateNow: () => Promise<RuntimeRunUpdateResponse>;
 }
 
 async function resolveExistingTaskCwdOrEnsure(options: {
@@ -320,12 +314,6 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			}
 			openInBrowser(filePath);
 			return { ok: true };
-		},
-		getUpdateStatus: async () => {
-			return deps.getUpdateStatus();
-		},
-		runUpdateNow: async () => {
-			return await deps.runUpdateNow();
 		},
 	};
 }

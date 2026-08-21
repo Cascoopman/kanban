@@ -5,8 +5,6 @@ import type {
 	RuntimeConfigResponse,
 	RuntimeDebugResetAllStateResponse,
 	RuntimeProjectShortcut,
-	RuntimeRunUpdateResponse,
-	RuntimeUpdateStatusResponse,
 } from "@/runtime/types";
 
 export async function fetchRuntimeConfig(workspaceId: string | null): Promise<RuntimeConfigResponse> {
@@ -38,14 +36,4 @@ export async function resetRuntimeDebugState(workspaceId: string | null): Promis
 export async function openFileOnHost(workspaceId: string | null, filePath: string): Promise<void> {
 	const trpcClient = getRuntimeTrpcClient(workspaceId);
 	await trpcClient.runtime.openFile.mutate({ filePath });
-}
-
-export async function fetchRuntimeUpdateStatus(workspaceId: string | null): Promise<RuntimeUpdateStatusResponse> {
-	const trpcClient = getRuntimeTrpcClient(workspaceId);
-	return await trpcClient.runtime.getUpdateStatus.query();
-}
-
-export async function runRuntimeUpdateNow(workspaceId: string | null): Promise<RuntimeRunUpdateResponse> {
-	const trpcClient = getRuntimeTrpcClient(workspaceId);
-	return await trpcClient.runtime.runUpdateNow.mutate();
 }

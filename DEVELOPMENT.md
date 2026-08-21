@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22+
 - npm 10+
 
 ## Install
@@ -220,7 +220,7 @@ Important behavior details:
 
 For a full technical breakdown, see:
 
-- `.plan/docs/runtime-hooks-architecture.md`
+- `docs/runtime-hooks-architecture.md`
 
 ## PostHog telemetry config
 
@@ -233,10 +233,4 @@ Local development:
 - Set these in `web-ui/.env.local` (see `web-ui/.env.example`).
 - If `POSTHOG_KEY` or `POSTHOG_HOST` is missing, telemetry does not initialize.
 
-Release builds:
-- The publish workflow injects `POSTHOG_KEY` and `POSTHOG_HOST` from GitHub Secrets.
-- `POSTHOG_HOST` is required when telemetry is enabled.
-
-Result:
-- Official releases have telemetry enabled.
-- Forks and source builds have telemetry disabled unless a key is explicitly provided.
+Source builds have telemetry disabled unless both values are explicitly provided.

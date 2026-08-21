@@ -4,12 +4,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { join } from "node:path";
 
 import { createHTTPHandler } from "@trpc/server/adapters/standalone";
-import type {
-	RuntimeCommandRunResponse,
-	RuntimeRunUpdateResponse,
-	RuntimeUpdateStatusResponse,
-	RuntimeWorkspaceStateResponse,
-} from "../core/api-contract";
+import type { RuntimeCommandRunResponse, RuntimeWorkspaceStateResponse } from "../core/api-contract";
 import {
 	buildKanbanRuntimeUrl,
 	getKanbanRuntimeHost,
@@ -66,8 +61,6 @@ export interface CreateRuntimeServerDependencies {
 	) => DisposeTrackedWorkspaceResult;
 	collectProjectWorktreeTaskIdsForRemoval: (board: RuntimeWorkspaceStateResponse["board"]) => Set<string>;
 	pickDirectoryPathFromSystemDialog: () => string | null;
-	getUpdateStatus: () => RuntimeUpdateStatusResponse;
-	runUpdateNow: () => Promise<RuntimeRunUpdateResponse>;
 }
 
 export interface RuntimeServer {
@@ -167,8 +160,6 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				resolveInteractiveShellCommand: deps.resolveInteractiveShellCommand,
 				runCommand: deps.runCommand,
 				prepareForStateReset,
-				getUpdateStatus: deps.getUpdateStatus,
-				runUpdateNow: deps.runUpdateNow,
 			}),
 			workspaceApi: createWorkspaceApi({
 				ensureTerminalManagerForWorkspace: deps.ensureTerminalManagerForWorkspace,

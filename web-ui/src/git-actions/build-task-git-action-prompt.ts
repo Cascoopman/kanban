@@ -14,7 +14,7 @@ export const TASK_GIT_BASE_REF_PROMPT_VARIABLE: TaskGitPromptVariable = {
 	description: "the branch this task worktree was created from",
 };
 
-export interface TaskGitPromptTemplates {
+interface TaskGitPromptTemplates {
 	commitPromptTemplate?: string | null;
 	openPrPromptTemplate?: string | null;
 	commitPromptTemplateDefault?: string | null;

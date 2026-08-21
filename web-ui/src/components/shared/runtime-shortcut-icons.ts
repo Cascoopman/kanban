@@ -23,7 +23,7 @@ const DEFAULT_SHORTCUT_ICON_ID: RuntimeShortcutIconId = "console";
 
 const SHORTCUT_PICKER_ICON_IDS = ["play", "console", "bug", "download", "upload", "build", "code", "rocket"] as const;
 
-export type RuntimeShortcutIconId = keyof typeof SHORTCUT_ICON_DEFINITIONS;
+type RuntimeShortcutIconId = keyof typeof SHORTCUT_ICON_DEFINITIONS;
 export type RuntimeShortcutPickerIconId = (typeof SHORTCUT_PICKER_ICON_IDS)[number];
 export interface RuntimeShortcutIconOption {
 	value: RuntimeShortcutPickerIconId;

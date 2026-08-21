@@ -60,7 +60,7 @@ export function evaluateHost(input: HostGateInput): HostDecision {
 	return { kind: "allow" };
 }
 
-export function getAllowedHostHeaders(): ReadonlySet<string> {
+function getAllowedHostHeaders(): ReadonlySet<string> {
 	const port = getKanbanRuntimePort();
 	const boundHost = getKanbanRuntimeHost().toLowerCase();
 	const allowed = new Set<string>();

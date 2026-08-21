@@ -62,7 +62,7 @@ type GateState = "idle" | "submitting" | "error" | "locked";
 
 const MIN_ERROR_DISPLAY_MS = 800;
 
-export function PasscodeGate({ onAuthenticated }: PasscodeGateProps): ReactElement {
+function PasscodeGate({ onAuthenticated }: PasscodeGateProps): ReactElement {
 	const [passcode, setPasscode] = useState("");
 	const [state, setState] = useState<GateState>("idle");
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);

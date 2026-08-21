@@ -12,7 +12,7 @@ import type {
 } from "@/runtime/types";
 import { useTrpcQuery } from "@/runtime/use-trpc-query";
 
-export type GitHistoryViewMode = "working-copy" | "commit";
+type GitHistoryViewMode = "working-copy" | "commit";
 
 const INITIAL_COMMIT_PAGE_SIZE = 150;
 const COMMIT_PAGE_SIZE = 150;

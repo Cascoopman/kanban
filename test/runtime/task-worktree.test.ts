@@ -48,7 +48,6 @@ vi.mock("../../src/state/workspace-state.js", () => ({
 
 vi.mock("../../src/workspace/task-worktree-path.js", () => ({
 	getWorkspaceFolderLabelForWorktreePath: taskWorktreePathMocks.getWorkspaceFolderLabelForWorktreePath,
-	KANBAN_TASK_WORKTREES_DIR_NAME: "worktrees",
 	normalizeTaskIdForWorktreePath: taskWorktreePathMocks.normalizeTaskIdForWorktreePath,
 }));
 

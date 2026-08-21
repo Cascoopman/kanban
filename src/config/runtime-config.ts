@@ -188,11 +188,11 @@ function hasOwnKey<T extends object>(value: T | null, key: keyof T): boolean {
 	return Object.hasOwn(value, key);
 }
 
-export function getRuntimeGlobalConfigPath(): string {
+function getRuntimeGlobalConfigPath(): string {
 	return join(getRuntimeHomePath(), CONFIG_FILENAME);
 }
 
-export function getRuntimeProjectConfigPath(cwd: string): string {
+function getRuntimeProjectConfigPath(cwd: string): string {
 	return join(resolve(cwd), PROJECT_CONFIG_DIR, PROJECT_CONFIG_FILENAME);
 }
 

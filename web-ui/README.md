@@ -5,15 +5,14 @@ This package contains the Kanban frontend served by the runtime.
 ## Stack
 
 - React + TypeScript + Vite
-- Palantir Blueprint v6 (`@blueprintjs/core`, `@blueprintjs/icons`, `@blueprintjs/select`)
-- Atlassian pragmatic drag-and-drop
+- Tailwind CSS v4 and Radix UI
+- `@hello-pangea/dnd`
 - Vitest
 - Playwright
 
 ## Telemetry
 
-PostHog telemetry is enabled in official release builds published from this repository.
-For local builds, forks, and source builds, telemetry is off unless you set a PostHog key.
+PostHog telemetry is off unless you explicitly configure a PostHog key and host.
 
 1. Copy `web-ui/.env.example` to `web-ui/.env.local`.
 2. Set `POSTHOG_KEY` to your PostHog project key.

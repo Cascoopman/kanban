@@ -254,15 +254,6 @@ async function buildCommitRelationMap(repoRoot: string, refs: string[]): Promise
 	return relationMap;
 }
 
-export interface CommitDiffFile {
-	path: string;
-	previousPath?: string;
-	status: "modified" | "added" | "deleted" | "renamed";
-	additions: number;
-	deletions: number;
-	patch: string;
-}
-
 interface CommitDiffStatEntry {
 	path: string;
 	previousPath?: string;

@@ -20,7 +20,7 @@ export enum LocalStorageKey {
 	Theme = "kanban.theme",
 }
 
-export const LAYOUT_CUSTOMIZATION_LOCAL_STORAGE_KEYS = [
+const LAYOUT_CUSTOMIZATION_LOCAL_STORAGE_KEYS = [
 	LocalStorageKey.BottomTerminalPaneHeight,
 	LocalStorageKey.DetailAgentPanelRatio,
 	LocalStorageKey.DetailTaskCardsPanelRatio,

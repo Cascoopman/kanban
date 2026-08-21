@@ -174,7 +174,7 @@ function getWorkspaceIndexPath(): string {
 	return join(getWorkspacesRootPath(), INDEX_FILENAME);
 }
 
-export function getWorkspaceDirectoryPath(workspaceId: string): string {
+function getWorkspaceDirectoryPath(workspaceId: string): string {
 	return join(getWorkspacesRootPath(), workspaceId);
 }
 

@@ -2,7 +2,7 @@ import { rootCertificates } from "node:tls";
 import { Agent } from "undici";
 import { getInternalToken } from "../security/passcode-manager";
 
-export const DEFAULT_KANBAN_RUNTIME_HOST = "127.0.0.1";
+const DEFAULT_KANBAN_RUNTIME_HOST = "127.0.0.1";
 export const DEFAULT_KANBAN_RUNTIME_PORT = 3484;
 const KANBAN_RUNTIME_HTTPS_ENV = "KANBAN_RUNTIME_HTTPS";
 const KANBAN_RUNTIME_TLS_CA_ENV = "KANBAN_RUNTIME_TLS_CA";
@@ -106,7 +106,7 @@ export function getKanbanRuntimeOrigin(): string {
 	return `${scheme}://${getKanbanRuntimeHost()}:${getKanbanRuntimePort()}`;
 }
 
-export function getKanbanRuntimeWsOrigin(): string {
+function getKanbanRuntimeWsOrigin(): string {
 	const scheme = isKanbanRuntimeHttps() ? "wss" : "ws";
 	return `${scheme}://${getKanbanRuntimeHost()}:${getKanbanRuntimePort()}`;
 }

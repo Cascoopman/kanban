@@ -17,7 +17,7 @@ import {
 } from "../state/workspace-state";
 import { TerminalSessionManager } from "../terminal/session-manager";
 
-export interface WorkspaceRegistryScope {
+interface WorkspaceRegistryScope {
 	workspaceId: string;
 	workspacePath: string;
 }
@@ -31,7 +31,7 @@ export interface CreateWorkspaceRegistryDependencies {
 	onTerminalManagerReady?: (workspaceId: string, manager: TerminalSessionManager) => void;
 }
 
-export interface DisposeWorkspaceRegistryOptions {
+interface DisposeWorkspaceRegistryOptions {
 	stopTerminalSessions?: boolean;
 }
 
@@ -42,7 +42,7 @@ export interface ResolvedWorkspaceStreamTarget {
 	didPruneProjects: boolean;
 }
 
-export interface RemovedWorkspaceNotice {
+interface RemovedWorkspaceNotice {
 	workspaceId: string;
 	repoPath: string;
 	message: string;

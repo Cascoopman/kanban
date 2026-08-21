@@ -1,11 +1,8 @@
 {
   "name": "kanban",
   "version": "0.1.70",
+  "private": true,
   "description": "A kanban foundation for coding agents",
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "keywords": [
     "kanban",
     "agents",
@@ -59,8 +56,7 @@
     "test:integration": "vitest run test/integration",
     "test:precommit": "npm run test:fast",
     "test:watch": "vitest",
-    "prepare": "husky",
-    "prepublishOnly": "npm run build && npm run check"
+    "prepare": "husky"
   },
   "license": "Apache-2.0",
   "devDependencies": {

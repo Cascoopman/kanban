@@ -1,7 +1,6 @@
 // Defines the typed TRPC boundary between the browser and the local runtime.
 // Keep request and response contracts plus workspace-scoped procedures here,
 // and delegate domain behavior to runtime-api.ts and lower-level services.
-import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 
@@ -35,7 +34,6 @@ import type {
 	RuntimeProjectRemoveRequest,
 	RuntimeProjectRemoveResponse,
 	RuntimeProjectsResponse,
-	RuntimeRunUpdateResponse,
 	RuntimeShellSessionStartRequest,
 	RuntimeShellSessionStartResponse,
 	RuntimeTaskSessionInputRequest,
@@ -47,7 +45,6 @@ import type {
 	RuntimeTaskWorkspaceBranchRequest,
 	RuntimeTaskWorkspaceInfoRequest,
 	RuntimeTaskWorkspaceInfoResponse,
-	RuntimeUpdateStatusResponse,
 	RuntimeWorkspaceChangesRequest,
 	RuntimeWorkspaceChangesResponse,
 	RuntimeWorkspaceFileSearchRequest,
@@ -90,7 +87,6 @@ import {
 	runtimeProjectRemoveRequestSchema,
 	runtimeProjectRemoveResponseSchema,
 	runtimeProjectsResponseSchema,
-	runtimeRunUpdateResponseSchema,
 	runtimeShellSessionStartRequestSchema,
 	runtimeShellSessionStartResponseSchema,
 	runtimeTaskSessionInputRequestSchema,
@@ -102,7 +98,6 @@ import {
 	runtimeTaskWorkspaceBranchRequestSchema,
 	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTaskWorkspaceInfoResponseSchema,
-	runtimeUpdateStatusResponseSchema,
 	runtimeWorkspaceChangesRequestSchema,
 	runtimeWorkspaceChangesResponseSchema,
 	runtimeWorkspaceFileSearchRequestSchema,
@@ -152,8 +147,6 @@ export interface RuntimeTrpcContext {
 		) => Promise<RuntimeCommandRunResponse>;
 		resetAllState: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeDebugResetAllStateResponse>;
 		openFile: (input: RuntimeOpenFileRequest) => Promise<RuntimeOpenFileResponse>;
-		getUpdateStatus: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeUpdateStatusResponse>;
-		runUpdateNow: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeRunUpdateResponse>;
 	};
 	workspaceApi: {
 		loadGitSummary: (
@@ -339,12 +332,6 @@ export const runtimeAppRouter = t.router({
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.openFile(input);
 			}),
-		getUpdateStatus: t.procedure.output(runtimeUpdateStatusResponseSchema).query(async ({ ctx }) => {
-			return await ctx.runtimeApi.getUpdateStatus(ctx.workspaceScope);
-		}),
-		runUpdateNow: t.procedure.output(runtimeRunUpdateResponseSchema).mutation(async ({ ctx }) => {
-			return await ctx.runtimeApi.runUpdateNow(ctx.workspaceScope);
-		}),
 	}),
 	workspace: t.router({
 		getGitSummary: workspaceProcedure
@@ -483,5 +470,3 @@ export const runtimeAppRouter = t.router({
 });
 
 export type RuntimeAppRouter = typeof runtimeAppRouter;
-export type RuntimeAppRouterInputs = inferRouterInputs<RuntimeAppRouter>;
-export type RuntimeAppRouterOutputs = inferRouterOutputs<RuntimeAppRouter>;
