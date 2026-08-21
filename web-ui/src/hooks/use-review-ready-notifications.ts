@@ -149,9 +149,6 @@ export function useReviewReadyNotifications({
 		if (!latestTaskReadyForReview) {
 			return;
 		}
-		if (!activeWorkspaceId || latestTaskReadyForReview.workspaceId !== activeWorkspaceId) {
-			return;
-		}
 		const eventKey = `${latestTaskReadyForReview.workspaceId}:${latestTaskReadyForReview.taskId}:${latestTaskReadyForReview.triggeredAt}`;
 		if (handledReadyForReviewEventKeysRef.current.has(eventKey)) {
 			return;
@@ -187,7 +184,8 @@ export function useReviewReadyNotifications({
 			taskSessions,
 		);
 		setPendingReviewReadyNotificationCount((current) => current + 1);
-		const notificationTitle = workspaceTitle ? `${workspaceTitle} ready for review` : "Ready for review";
+		const projectName = selection?.card.projectName?.trim() || workspaceTitle;
+		const notificationTitle = projectName ? `${projectName} ready for review` : "Ready for review";
 		showReadyForReviewNotification(latestTaskReadyForReview.taskId, notificationTitle, notificationBody);
 	}, [
 		activeWorkspaceId,
@@ -223,12 +221,6 @@ export function useReviewReadyNotifications({
 			broadcastNotificationBadgeClear(notificationBadgeSyncSourceIdRef.current, activeWorkspaceId);
 		}
 	}, [activeWorkspaceId, readyForReviewNotificationsEnabled]);
-
-	useEffect(() => {
-		handledReadyForReviewEventKeysRef.current.clear();
-		handledReadyForReviewEventKeyQueueRef.current = [];
-		setPendingReviewReadyNotificationCount(0);
-	}, [activeWorkspaceId]);
 
 	const baseTitle = workspaceTitle || "Kanban";
 	const documentTitle =

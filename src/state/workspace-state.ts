@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFile, realpath, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 
 import {
@@ -17,7 +18,7 @@ import {
 	runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
-import { updateTaskDependencies } from "../core/task-board-mutations";
+import { getTaskColumnId, moveTaskToColumn, updateTaskDependencies } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 
 const RUNTIME_HOME_DIR = ".kanban";
@@ -696,6 +697,88 @@ export interface RuntimeWorkspaceAtomicMutationResponse<T> {
 	value: T;
 	state: RuntimeWorkspaceStateResponse;
 	saved: boolean;
+}
+
+export interface ReconcileWorkspaceSessionSummaryResult {
+	boardMoved: boolean;
+	sessionUpdated: boolean;
+}
+
+function getSessionOwnedTargetColumn(
+	board: RuntimeBoardData,
+	summary: RuntimeTaskSessionSummary,
+): RuntimeBoardColumnId | null {
+	const currentColumnId = getTaskColumnId(board, summary.taskId);
+	if (summary.state === "awaiting_review" && currentColumnId === "in_progress") {
+		return "review";
+	}
+	if (summary.state === "running" && (currentColumnId === "backlog" || currentColumnId === "review")) {
+		return "in_progress";
+	}
+	return null;
+}
+
+export function reconcileBoardWithSessionSummary(
+	board: RuntimeBoardData,
+	summary: RuntimeTaskSessionSummary,
+): { board: RuntimeBoardData; moved: boolean } {
+	const targetColumnId = getSessionOwnedTargetColumn(board, summary);
+	if (!targetColumnId) {
+		return { board, moved: false };
+	}
+	const moveResult = moveTaskToColumn(board, summary.taskId, targetColumnId, summary.updatedAt);
+	return {
+		board: moveResult.board,
+		moved: moveResult.moved,
+	};
+}
+
+export async function reconcileWorkspaceSessionSummary(
+	cwd: string,
+	summary: RuntimeTaskSessionSummary,
+): Promise<RuntimeWorkspaceAtomicMutationResponse<ReconcileWorkspaceSessionSummaryResult>> {
+	return await mutateWorkspaceState(cwd, (state) => {
+		const persistedSummary = state.sessions[summary.taskId] ?? null;
+		const isIncomingSummaryStale = persistedSummary !== null && persistedSummary.updatedAt > summary.updatedAt;
+		if (isIncomingSummaryStale) {
+			return {
+				board: state.board,
+				value: {
+					boardMoved: false,
+					sessionUpdated: false,
+				},
+				save: false,
+			};
+		}
+
+		const boardResult = reconcileBoardWithSessionSummary(state.board, summary);
+		const nextBoard = boardResult.board;
+		const sessionUpdated = !persistedSummary || !isDeepStrictEqual(persistedSummary, summary);
+		if (!boardResult.moved && !sessionUpdated) {
+			return {
+				board: state.board,
+				value: {
+					boardMoved: false,
+					sessionUpdated: false,
+				},
+				save: false,
+			};
+		}
+
+		return {
+			board: nextBoard,
+			sessions: sessionUpdated
+				? {
+						...state.sessions,
+						[summary.taskId]: summary,
+					}
+				: state.sessions,
+			value: {
+				boardMoved: boardResult.moved,
+				sessionUpdated,
+			},
+		};
+	});
 }
 
 export async function mutateWorkspaceState<T>(

@@ -184,6 +184,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				collectProjectWorktreeTaskIdsForRemoval: deps.collectProjectWorktreeTaskIdsForRemoval,
 				warn: deps.warn,
 				buildProjectsPayload: deps.workspaceRegistry.buildProjectsPayload,
+				buildProjectBoardSnapshots: deps.workspaceRegistry.buildProjectBoardSnapshots,
+				ensureTerminalManagerForWorkspace: deps.workspaceRegistry.ensureTerminalManagerForWorkspace,
 				pickDirectoryPathFromSystemDialog: deps.pickDirectoryPathFromSystemDialog,
 				serverCwd: process.cwd(),
 			}),
@@ -192,6 +194,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				ensureTerminalManagerForWorkspace: deps.ensureTerminalManagerForWorkspace,
 				broadcastRuntimeWorkspaceStateUpdated: deps.runtimeStateHub.broadcastRuntimeWorkspaceStateUpdated,
 				broadcastTaskReadyForReview: deps.runtimeStateHub.broadcastTaskReadyForReview,
+				reconcileWorkspaceSessionSummary: deps.workspaceRegistry.reconcileWorkspaceSessionSummary,
 			}),
 		};
 	};

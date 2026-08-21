@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { RuntimeBoardData, RuntimeTaskSessionSummary } from "../../src/core/api-contract";
+import { moveTaskToColumn } from "../../src/core/task-board-mutations";
 import type { WorkspaceStateConflictError } from "../../src/state/workspace-state";
 import {
 	getWorkspacesRootPath,
@@ -12,6 +13,7 @@ import {
 	loadWorkspaceContext,
 	loadWorkspaceContextById,
 	loadWorkspaceState,
+	reconcileWorkspaceSessionSummary,
 	removeWorkspaceIndexEntry,
 	saveWorkspaceState,
 } from "../../src/state/workspace-state";
@@ -96,6 +98,52 @@ function initGitRepository(path: string): void {
 }
 
 describe.sequential("workspace-state integration", () => {
+	it("atomically reconciles session lifecycle state with its board column", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspace-session-reconcile-");
+			try {
+				const workspacePath = join(sandboxRoot, "project-status");
+				mkdirSync(workspacePath, { recursive: true });
+				initGitRepository(workspacePath);
+
+				const initial = await loadWorkspaceState(workspacePath);
+				const inProgressBoard = moveTaskToColumn(createBoard("Server-owned status"), "task-1", "in_progress").board;
+				await saveWorkspaceState(workspacePath, {
+					board: inProgressBoard,
+					sessions: {},
+					expectedRevision: initial.revision,
+				});
+
+				const awaitingReview = createSessionSummary("task-1");
+				awaitingReview.state = "awaiting_review";
+				awaitingReview.reviewReason = "hook";
+				const reviewResult = await reconcileWorkspaceSessionSummary(workspacePath, awaitingReview);
+				expect(reviewResult.saved).toBe(true);
+				expect(reviewResult.value).toEqual({ boardMoved: true, sessionUpdated: true });
+				expect(
+					reviewResult.state.board.columns.find((column) => column.id === "review")?.cards.map((card) => card.id),
+				).toEqual(["task-1"]);
+				expect(reviewResult.state.sessions["task-1"]?.state).toBe("awaiting_review");
+
+				const running = {
+					...awaitingReview,
+					state: "running" as const,
+					reviewReason: null,
+					updatedAt: awaitingReview.updatedAt + 1,
+				};
+				const runningResult = await reconcileWorkspaceSessionSummary(workspacePath, running);
+				expect(runningResult.saved).toBe(true);
+				expect(
+					runningResult.state.board.columns
+						.find((column) => column.id === "in_progress")
+						?.cards.map((card) => card.id),
+				).toEqual(["task-1"]);
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
 	it("persists revision numbers and rejects stale writes", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspace-");

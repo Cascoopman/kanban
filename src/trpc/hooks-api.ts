@@ -15,6 +15,7 @@ export interface CreateHooksApiDependencies {
 	ensureTerminalManagerForWorkspace: (workspaceId: string, repoPath: string) => Promise<TerminalSessionManager>;
 	broadcastRuntimeWorkspaceStateUpdated: (workspaceId: string, workspacePath: string) => Promise<void> | void;
 	broadcastTaskReadyForReview: (workspaceId: string, taskId: string) => void;
+	reconcileWorkspaceSessionSummary: (workspaceId: string, summary: RuntimeTaskSessionSummary) => Promise<unknown>;
 	captureTaskTurnCheckpoint?: (input: {
 		cwd: string;
 		taskId: string;
@@ -111,8 +112,10 @@ export function createHooksApi(deps: CreateHooksApiDependencies): RuntimeTrpcCon
 				if (body.metadata) {
 					manager.applyHookActivity(taskId, body.metadata);
 				}
+				const finalSummary = manager.getSummary(taskId) ?? transitionedSummary;
+				await deps.reconcileWorkspaceSessionSummary(workspaceId, finalSummary);
 
-				void deps.broadcastRuntimeWorkspaceStateUpdated(workspaceId, workspacePath);
+				await deps.broadcastRuntimeWorkspaceStateUpdated(workspaceId, workspacePath);
 				if (event === "to_review") {
 					deps.broadcastTaskReadyForReview(workspaceId, taskId);
 				}

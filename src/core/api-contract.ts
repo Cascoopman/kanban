@@ -293,10 +293,18 @@ export const runtimeWorkspaceMetadataSchema = z.object({
 });
 export type RuntimeWorkspaceMetadata = z.infer<typeof runtimeWorkspaceMetadataSchema>;
 
+export const runtimeProjectBoardSnapshotSchema = z.object({
+	project: runtimeProjectSummarySchema,
+	board: runtimeBoardDataSchema,
+	sessions: z.record(z.string(), runtimeTaskSessionSummarySchema),
+});
+export type RuntimeProjectBoardSnapshot = z.infer<typeof runtimeProjectBoardSnapshotSchema>;
+
 export const runtimeStateStreamSnapshotMessageSchema = z.object({
 	type: z.literal("snapshot"),
 	currentProjectId: z.string().nullable(),
 	projects: z.array(runtimeProjectSummarySchema),
+	projectBoards: z.array(runtimeProjectBoardSnapshotSchema),
 	workspaceState: runtimeWorkspaceStateResponseSchema.nullable(),
 	workspaceMetadata: runtimeWorkspaceMetadataSchema.nullable(),
 });
@@ -320,6 +328,7 @@ export const runtimeStateStreamProjectsMessageSchema = z.object({
 	type: z.literal("projects_updated"),
 	currentProjectId: z.string().nullable(),
 	projects: z.array(runtimeProjectSummarySchema),
+	projectBoards: z.array(runtimeProjectBoardSnapshotSchema),
 });
 export type RuntimeStateStreamProjectsMessage = z.infer<typeof runtimeStateStreamProjectsMessageSchema>;
 
@@ -364,13 +373,6 @@ export const runtimeProjectsResponseSchema = z.object({
 	projects: z.array(runtimeProjectSummarySchema),
 });
 export type RuntimeProjectsResponse = z.infer<typeof runtimeProjectsResponseSchema>;
-
-export const runtimeProjectBoardSnapshotSchema = z.object({
-	project: runtimeProjectSummarySchema,
-	board: runtimeBoardDataSchema,
-	sessions: z.record(z.string(), runtimeTaskSessionSummarySchema),
-});
-export type RuntimeProjectBoardSnapshot = z.infer<typeof runtimeProjectBoardSnapshotSchema>;
 
 export const runtimeProjectBoardsResponseSchema = z.object({
 	projects: z.array(runtimeProjectBoardSnapshotSchema),

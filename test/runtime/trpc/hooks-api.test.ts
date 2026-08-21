@@ -36,6 +36,7 @@ describe("createHooksApi", () => {
 			ensureTerminalManagerForWorkspace: vi.fn(async () => manager),
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastTaskReadyForReview: vi.fn(),
+			reconcileWorkspaceSessionSummary: vi.fn(async () => undefined),
 		});
 
 		const response = await api.ingest({
@@ -63,6 +64,7 @@ describe("createHooksApi", () => {
 			ensureTerminalManagerForWorkspace: vi.fn(async () => manager),
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastTaskReadyForReview: vi.fn(),
+			reconcileWorkspaceSessionSummary: vi.fn(async () => undefined),
 		});
 
 		const response = await api.ingest({
@@ -123,6 +125,7 @@ describe("createHooksApi", () => {
 			ensureTerminalManagerForWorkspace: vi.fn(async () => manager),
 			broadcastRuntimeWorkspaceStateUpdated: vi.fn(),
 			broadcastTaskReadyForReview: vi.fn(),
+			reconcileWorkspaceSessionSummary: vi.fn(async () => undefined),
 			captureTaskTurnCheckpoint,
 			deleteTaskTurnCheckpointRef,
 		});
