@@ -12,6 +12,7 @@ import {
 	Circle,
 	CircleDot,
 	ExternalLink,
+	FileText,
 	FolderOpen,
 	GitCommit,
 	Palette,
@@ -42,6 +43,7 @@ import {
 	resolveSupportedAgentId,
 } from "@/runtime/supported-agents";
 import type { RuntimeAgentId, RuntimeConfigResponse, RuntimeProjectShortcut } from "@/runtime/types";
+import { useAgentInstructions } from "@/runtime/use-agent-instructions";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
 	type BrowserNotificationPermission,
@@ -83,7 +85,7 @@ export type RuntimeSettingsSection = "shortcuts";
 
 const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["claude", "codex"];
 
-type SettingsNavId = "general" | "git-prompts" | "notifications" | "appearance" | "project";
+type SettingsNavId = "general" | "git-prompts" | "notifications" | "appearance" | "agents" | "project";
 
 const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	id: SettingsNavId;
@@ -94,6 +96,7 @@ const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	{ id: "git-prompts", label: "Git Prompts", icon: <GitCommit size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
+	{ id: "agents", label: "AGENTS.md", icon: <FileText size={16} /> },
 	{ id: "project", label: "Project", icon: <FolderOpen size={16} /> },
 ];
 
@@ -347,6 +350,13 @@ export function RuntimeSettingsDialog({
 	initialSection?: RuntimeSettingsSection | null;
 }): React.ReactElement {
 	const { config, isLoading, isSaving, save } = useRuntimeConfig(open, workspaceId, initialConfig);
+	const {
+		instructions: agentInstructions,
+		isLoading: areAgentInstructionsLoading,
+		isSaving: areAgentInstructionsSaving,
+		loadError: agentInstructionsLoadError,
+		save: saveAgentInstructions,
+	} = useAgentInstructions(open, workspaceId);
 	const { resetLayoutCustomizations } = useLayoutCustomizations();
 	const [selectedAgentId, setSelectedAgentId] = useState<RuntimeAgentId>("claude");
 	const [agentAutonomousModeEnabled, setAgentAutonomousModeEnabled] = useState(true);
@@ -357,6 +367,7 @@ export function RuntimeSettingsDialog({
 	const [shortcuts, setShortcuts] = useState<RuntimeProjectShortcut[]>([]);
 	const [commitPromptTemplate, setCommitPromptTemplate] = useState("");
 	const [openPrPromptTemplate, setOpenPrPromptTemplate] = useState("");
+	const [agentInstructionsContent, setAgentInstructionsContent] = useState("");
 	const [selectedPromptVariant, setSelectedPromptVariant] = useState<TaskGitAction>("commit");
 	const [copiedVariableToken, setCopiedVariableToken] = useState<string | null>(null);
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -416,7 +427,7 @@ export function RuntimeSettingsDialog({
 	const initialShortcuts = config?.shortcuts ?? [];
 	const initialCommitPromptTemplate = config?.commitPromptTemplate ?? "";
 	const initialOpenPrPromptTemplate = config?.openPrPromptTemplate ?? "";
-	const hasUnsavedChanges = useMemo(() => {
+	const hasRuntimeConfigChanges = useMemo(() => {
 		if (!config) {
 			return false;
 		}
@@ -427,9 +438,6 @@ export function RuntimeSettingsDialog({
 			return true;
 		}
 		if (readyForReviewNotificationsEnabled !== initialReadyForReviewNotificationsEnabled) {
-			return true;
-		}
-		if (draftThemeId !== initialThemeId) {
 			return true;
 		}
 		if (!areRuntimeProjectShortcutsEqual(shortcuts, initialShortcuts)) {
@@ -449,7 +457,6 @@ export function RuntimeSettingsDialog({
 		agentAutonomousModeEnabled,
 		commitPromptTemplate,
 		config,
-		draftThemeId,
 		initialAgentAutonomousModeEnabled,
 		initialCommitPromptTemplate,
 		initialOpenPrPromptTemplate,
@@ -462,6 +469,9 @@ export function RuntimeSettingsDialog({
 		selectedAgentId,
 		shortcuts,
 	]);
+	const hasAgentInstructionsChanges =
+		agentInstructions !== null && agentInstructionsContent !== agentInstructions.content;
+	const hasUnsavedChanges = hasRuntimeConfigChanges || draftThemeId !== initialThemeId || hasAgentInstructionsChanges;
 
 	useEffect(() => {
 		if (!open) {
@@ -493,6 +503,13 @@ export function RuntimeSettingsDialog({
 		setInitialThemeId(persistedThemeId);
 		setDraftThemeId(persistedThemeId);
 	}, [open]);
+
+	useEffect(() => {
+		if (!open || !agentInstructions) {
+			return;
+		}
+		setAgentInstructionsContent(agentInstructions.content);
+	}, [agentInstructions, open]);
 
 	useEffect(() => {
 		if (!open) {
@@ -626,17 +643,28 @@ export function RuntimeSettingsDialog({
 			const nextPermission = await requestBrowserNotificationPermission();
 			setNotificationPermission(nextPermission);
 		}
-		const saved = await save({
-			selectedAgentId,
-			agentAutonomousModeEnabled,
-			readyForReviewNotificationsEnabled,
-			shortcuts,
-			commitPromptTemplate,
-			openPrPromptTemplate,
-		});
-		if (!saved) {
-			setSaveError("Could not save runtime settings. Check runtime logs and try again.");
-			return;
+		if (hasRuntimeConfigChanges) {
+			const saved = await save({
+				selectedAgentId,
+				agentAutonomousModeEnabled,
+				readyForReviewNotificationsEnabled,
+				shortcuts,
+				commitPromptTemplate,
+				openPrPromptTemplate,
+			});
+			if (!saved) {
+				setSaveError("Could not save runtime settings. Check runtime logs and try again.");
+				return;
+			}
+		}
+		if (hasAgentInstructionsChanges) {
+			try {
+				await saveAgentInstructions(agentInstructionsContent);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				setSaveError(`Could not save AGENTS.md: ${message}`);
+				return;
+			}
 		}
 		if (draftThemeId !== initialThemeId) {
 			saveThemeId(draftThemeId);
@@ -937,6 +965,64 @@ export function RuntimeSettingsDialog({
 							Reset board columns, sidebar, split pane, and terminal customizations back to their defaults.
 						</p>
 					</div>
+
+					{/* ---- Agent instructions ---- */}
+					<div data-settings-section="agents" />
+					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
+						<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
+							<FileText size={16} className="text-text-secondary" />
+							AGENTS.md
+						</h2>
+					</div>
+					<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
+						<p className="text-text-secondary text-[13px] mt-0 mb-2">
+							Instructions that apply to coding agents working in this project and its task worktrees.
+						</p>
+						<p
+							className="text-text-secondary font-mono text-xs m-0 mb-2 break-all"
+							style={{ cursor: agentInstructions?.exists ? "pointer" : undefined }}
+							onClick={() => {
+								if (agentInstructions?.exists) {
+									handleOpenFilePath(agentInstructions.path);
+								}
+							}}
+						>
+							{agentInstructions?.path ? formatPathForDisplay(agentInstructions.path) : "<project>/AGENTS.md"}
+							{agentInstructions?.exists ? (
+								<ExternalLink size={12} className="inline ml-1.5 align-middle" />
+							) : null}
+						</p>
+						<textarea
+							aria-label="AGENTS.md contents"
+							rows={12}
+							value={agentInstructionsContent}
+							onChange={(event) => setAgentInstructionsContent(event.target.value)}
+							placeholder="# Project instructions"
+							spellCheck={false}
+							disabled={
+								workspaceId === null ||
+								areAgentInstructionsLoading ||
+								areAgentInstructionsSaving ||
+								agentInstructions === null
+							}
+							className="w-full rounded-md border border-border bg-surface-2 p-3 text-[13px] leading-5 text-text-primary font-mono placeholder:text-text-tertiary focus:border-border-focus focus:outline-none resize-y disabled:opacity-40"
+						/>
+						{workspaceId === null ? (
+							<p className="text-text-secondary text-[13px] mt-2 mb-0">Select a project to edit AGENTS.md.</p>
+						) : agentInstructionsLoadError ? (
+							<p className="text-status-red text-[13px] mt-2 mb-0">
+								Could not load AGENTS.md: {agentInstructionsLoadError.message}
+							</p>
+						) : areAgentInstructionsLoading ? (
+							<p className="text-text-secondary text-[13px] mt-2 mb-0">Loading AGENTS.md...</p>
+						) : agentInstructions && !agentInstructions.exists ? (
+							<p className="text-text-secondary text-[13px] mt-2 mb-0">
+								This project does not have an AGENTS.md yet. Saving will create it.
+							</p>
+						) : null}
+					</div>
+
+					{/* ---- Project ---- */}
 					<div data-settings-section="project" />
 					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
 						<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
@@ -1068,13 +1154,16 @@ export function RuntimeSettingsDialog({
 				>
 					Read the docs
 				</Button>
-				<Button onClick={() => handleDialogOpenChange(false)} disabled={controlsDisabled}>
+				<Button
+					onClick={() => handleDialogOpenChange(false)}
+					disabled={controlsDisabled || areAgentInstructionsSaving}
+				>
 					Cancel
 				</Button>
 				<Button
 					variant="primary"
 					onClick={() => void handleSave()}
-					disabled={controlsDisabled || !hasUnsavedChanges}
+					disabled={controlsDisabled || areAgentInstructionsSaving || !hasUnsavedChanges}
 				>
 					Save
 				</Button>
