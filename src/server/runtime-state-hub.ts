@@ -28,7 +28,11 @@ interface DisposeRuntimeStateWorkspaceOptions {
 export interface CreateRuntimeStateHubDependencies {
 	workspaceRegistry: Pick<
 		WorkspaceRegistry,
-		"resolveWorkspaceForStream" | "buildProjectsPayload" | "buildWorkspaceStateSnapshot"
+		| "resolveWorkspaceForStream"
+		| "buildProjectsPayload"
+		| "buildWorkspaceStateSnapshot"
+		| "buildProjectBoardSnapshots"
+		| "reconcileWorkspaceSessionSummary"
 	>;
 }
 
@@ -90,12 +94,16 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 			return;
 		}
 		try {
-			const payload = await deps.workspaceRegistry.buildProjectsPayload(preferredCurrentProjectId);
+			const [payload, projectBoards] = await Promise.all([
+				deps.workspaceRegistry.buildProjectsPayload(preferredCurrentProjectId),
+				deps.workspaceRegistry.buildProjectBoardSnapshots(),
+			]);
 			for (const client of runtimeStateClients) {
 				sendRuntimeStateMessage(client, {
 					type: "projects_updated",
 					currentProjectId: payload.currentProjectId,
 					projects: payload.projects,
+					projectBoards,
 				} satisfies RuntimeStateStreamProjectsMessage);
 			}
 		} catch {
@@ -110,14 +118,13 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 		}
 		pendingTaskSessionSummariesByWorkspaceId.delete(workspaceId);
 		const summaries = Array.from(pending.values());
-		const runtimeClients = runtimeStateClientsByWorkspaceId.get(workspaceId);
-		if (runtimeClients && runtimeClients.size > 0) {
+		if (runtimeStateClients.size > 0) {
 			const payload: RuntimeStateStreamTaskSessionsMessage = {
 				type: "task_sessions_updated",
 				workspaceId,
 				summaries,
 			};
-			for (const client of runtimeClients) {
+			for (const client of runtimeStateClients) {
 				sendRuntimeStateMessage(client, payload);
 			}
 		}
@@ -206,8 +213,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 	};
 
 	const broadcastRuntimeWorkspaceStateUpdated = async (workspaceId: string, workspacePath: string): Promise<void> => {
-		const clients = runtimeStateClientsByWorkspaceId.get(workspaceId);
-		if (!clients || clients.size === 0) {
+		if (runtimeStateClients.size === 0) {
 			return;
 		}
 		try {
@@ -217,22 +223,23 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 				workspaceId,
 				workspaceState,
 			};
-			for (const client of clients) {
+			for (const client of runtimeStateClients) {
 				sendRuntimeStateMessage(client, payload);
 			}
-			await workspaceMetadataMonitor.updateWorkspaceState({
-				workspaceId,
-				workspacePath,
-				board: workspaceState.board,
-			});
+			if (runtimeStateClientsByWorkspaceId.has(workspaceId)) {
+				await workspaceMetadataMonitor.updateWorkspaceState({
+					workspaceId,
+					workspacePath,
+					board: workspaceState.board,
+				});
+			}
 		} catch {
 			// Ignore transient state read failures; next update will resync.
 		}
 	};
 
 	const broadcastTaskReadyForReview = (workspaceId: string, taskId: string) => {
-		const runtimeClients = runtimeStateClientsByWorkspaceId.get(workspaceId);
-		if (!runtimeClients || runtimeClients.size === 0) {
+		if (runtimeStateClients.size === 0) {
 			return;
 		}
 		const payload: RuntimeStateStreamTaskReadyForReviewMessage = {
@@ -241,7 +248,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 			taskId,
 			triggeredAt: Date.now(),
 		};
-		for (const client of runtimeClients) {
+		for (const client of runtimeStateClients) {
 			sendRuntimeStateMessage(client, payload);
 		}
 	};
@@ -313,12 +320,14 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 					currentProjectId: string | null;
 					projects: RuntimeStateStreamProjectsMessage["projects"];
 				};
+				let projectBoards: RuntimeStateStreamSnapshotMessage["projectBoards"];
 				let workspaceState: RuntimeStateStreamSnapshotMessage["workspaceState"];
 				let workspaceMetadata: RuntimeStateStreamSnapshotMessage["workspaceMetadata"];
 				if (workspace.workspaceId && workspace.workspacePath) {
 					monitorWorkspaceId = workspace.workspaceId;
-					[projectsPayload, workspaceState] = await Promise.all([
+					[projectsPayload, projectBoards, workspaceState] = await Promise.all([
 						deps.workspaceRegistry.buildProjectsPayload(workspace.workspaceId),
+						deps.workspaceRegistry.buildProjectBoardSnapshots(),
 						deps.workspaceRegistry.buildWorkspaceStateSnapshot(workspace.workspaceId, workspace.workspacePath),
 					]);
 					workspaceMetadata = await workspaceMetadataMonitor.connectWorkspace({
@@ -328,7 +337,10 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 					});
 					didConnectWorkspaceMonitor = true;
 				} else {
-					projectsPayload = await deps.workspaceRegistry.buildProjectsPayload(null);
+					[projectsPayload, projectBoards] = await Promise.all([
+						deps.workspaceRegistry.buildProjectsPayload(null),
+						deps.workspaceRegistry.buildProjectBoardSnapshots(),
+					]);
 					workspaceState = null;
 					workspaceMetadata = null;
 				}
@@ -343,6 +355,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 					type: "snapshot",
 					currentProjectId: projectsPayload.currentProjectId,
 					projects: projectsPayload.projects,
+					projectBoards,
 					workspaceState,
 					workspaceMetadata,
 				} satisfies RuntimeStateStreamSnapshotMessage);
@@ -394,8 +407,44 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 			if (terminalSummaryUnsubscribeByWorkspaceId.has(workspaceId)) {
 				return;
 			}
+			const lifecycleByTaskId = new Map(
+				manager.listSummaries().map((summary) => [
+					summary.taskId,
+					{
+						state: summary.state,
+						reviewReason: summary.reviewReason,
+						pid: summary.pid,
+					},
+				]),
+			);
 			const unsubscribe = manager.onSummary((summary) => {
-				queueTaskSessionSummaryBroadcast(workspaceId, summary);
+				const previousLifecycle = lifecycleByTaskId.get(summary.taskId);
+				const lifecycleChanged =
+					!previousLifecycle ||
+					previousLifecycle.state !== summary.state ||
+					previousLifecycle.reviewReason !== summary.reviewReason ||
+					previousLifecycle.pid !== summary.pid;
+				lifecycleByTaskId.set(summary.taskId, {
+					state: summary.state,
+					reviewReason: summary.reviewReason,
+					pid: summary.pid,
+				});
+				void (async () => {
+					if (lifecycleChanged) {
+						try {
+							const reconciled = await deps.workspaceRegistry.reconcileWorkspaceSessionSummary(
+								workspaceId,
+								summary,
+							);
+							if (reconciled.saved) {
+								await broadcastRuntimeWorkspaceStateUpdated(workspaceId, reconciled.state.repoPath);
+							}
+						} catch {
+							// The live session stream remains useful even if persistence temporarily fails.
+						}
+					}
+					queueTaskSessionSummaryBroadcast(workspaceId, summary);
+				})();
 			});
 			terminalSummaryUnsubscribeByWorkspaceId.set(workspaceId, unsubscribe);
 		},

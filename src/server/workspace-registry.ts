@@ -2,6 +2,7 @@ import { type RuntimeConfigState, toGlobalRuntimeConfigState } from "../config/r
 import type {
 	RuntimeBoardColumnId,
 	RuntimeBoardData,
+	RuntimeProjectBoardSnapshot,
 	RuntimeProjectSummary,
 	RuntimeProjectTaskCounts,
 	RuntimeWorkspaceStateResponse,
@@ -12,6 +13,7 @@ import {
 	loadWorkspaceContext,
 	loadWorkspaceState,
 	type RuntimeWorkspaceIndexEntry,
+	reconcileWorkspaceSessionSummary,
 	removeWorkspaceIndexEntry,
 	removeWorkspaceStateFiles,
 } from "../state/workspace-state";
@@ -74,6 +76,11 @@ export interface WorkspaceRegistry {
 		taskCounts: RuntimeProjectTaskCounts;
 	}) => RuntimeProjectSummary;
 	buildWorkspaceStateSnapshot: (workspaceId: string, workspacePath: string) => Promise<RuntimeWorkspaceStateResponse>;
+	buildProjectBoardSnapshots: () => Promise<RuntimeProjectBoardSnapshot[]>;
+	reconcileWorkspaceSessionSummary: (
+		workspaceId: string,
+		summary: RuntimeWorkspaceStateResponse["sessions"][string],
+	) => ReturnType<typeof reconcileWorkspaceSessionSummary>;
 	buildProjectsPayload: (preferredCurrentProjectId: string | null) => Promise<{
 		currentProjectId: string | null;
 		projects: RuntimeProjectSummary[];
@@ -323,6 +330,45 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 		return response;
 	};
 
+	const buildProjectBoardSnapshots = async (): Promise<RuntimeProjectBoardSnapshot[]> => {
+		const projects = await listWorkspaceIndexEntries();
+		return await Promise.all(
+			projects.map(async (project) => {
+				const terminalManager = await ensureTerminalManagerForWorkspace(project.workspaceId, project.repoPath);
+				const workspaceState = await loadWorkspaceState(project.repoPath);
+				for (const summary of terminalManager.listSummaries()) {
+					workspaceState.sessions[summary.taskId] = summary;
+				}
+				const persistedCounts = countTasksByColumn(workspaceState.board);
+				const taskCounts = applyLiveSessionStateToProjectTaskCounts(
+					persistedCounts,
+					workspaceState.board,
+					workspaceState.sessions,
+				);
+				return {
+					project: toProjectSummary({
+						workspaceId: project.workspaceId,
+						repoPath: project.repoPath,
+						taskCounts,
+					}),
+					board: workspaceState.board,
+					sessions: workspaceState.sessions,
+				};
+			}),
+		);
+	};
+
+	const reconcileSessionSummary = async (
+		workspaceId: string,
+		summary: RuntimeWorkspaceStateResponse["sessions"][string],
+	): ReturnType<typeof reconcileWorkspaceSessionSummary> => {
+		const workspacePath = workspacePathsById.get(workspaceId);
+		if (!workspacePath) {
+			throw new Error(`Workspace "${workspaceId}" is not loaded.`);
+		}
+		return await reconcileWorkspaceSessionSummary(workspacePath, summary);
+	};
+
 	const buildProjectsPayload = async (preferredCurrentProjectId: string | null) => {
 		const projects = await listWorkspaceIndexEntries();
 		const fallbackProjectId =
@@ -433,9 +479,15 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 		};
 	};
 
-	if (initialWorkspace) {
-		await ensureTerminalManagerForWorkspace(initialWorkspace.workspaceId, initialWorkspace.repoPath);
-	}
+	const indexedProjects = await listWorkspaceIndexEntries();
+	await Promise.all(
+		indexedProjects.map(async (project) => {
+			const manager = await ensureTerminalManagerForWorkspace(project.workspaceId, project.repoPath);
+			for (const summary of manager.listSummaries()) {
+				await reconcileWorkspaceSessionSummary(project.repoPath, summary);
+			}
+		}),
+	);
 
 	return {
 		getActiveWorkspaceId: () => activeWorkspaceId,
@@ -461,6 +513,8 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 		summarizeProjectTaskCounts,
 		createProjectSummary: toProjectSummary,
 		buildWorkspaceStateSnapshot,
+		buildProjectBoardSnapshots,
+		reconcileWorkspaceSessionSummary: reconcileSessionSummary,
 		buildProjectsPayload,
 		resolveWorkspaceForStream,
 		listManagedWorkspaces: () => {

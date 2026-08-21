@@ -4,6 +4,7 @@ import type {
 	RuntimeBoardData,
 	RuntimeDirectoryListResponse,
 	RuntimeProjectAddResponse,
+	RuntimeProjectBoardSnapshot,
 	RuntimeProjectBoardsResponse,
 	RuntimeProjectSummary,
 	RuntimeProjectTaskCounts,
@@ -55,6 +56,8 @@ export interface CreateProjectsApiDependencies {
 		currentProjectId: string | null;
 		projects: RuntimeProjectSummary[];
 	}>;
+	buildProjectBoardSnapshots: () => Promise<RuntimeProjectBoardSnapshot[]>;
+	ensureTerminalManagerForWorkspace: (workspaceId: string, repoPath: string) => Promise<TerminalSessionManager>;
 	pickDirectoryPathFromSystemDialog: () => string | null;
 	serverCwd: string;
 }
@@ -71,28 +74,7 @@ export function createProjectsApi(deps: CreateProjectsApiDependencies): RuntimeT
 			};
 		},
 		listProjectBoards: async () => {
-			const indexedProjects = await listWorkspaceIndexEntries();
-			const projects = await Promise.all(
-				indexedProjects.map(async (project) => {
-					const workspaceState = await loadWorkspaceState(project.repoPath);
-					const terminalManager = deps.getTerminalManagerForWorkspace(project.workspaceId);
-					if (terminalManager) {
-						for (const summary of terminalManager.listSummaries()) {
-							workspaceState.sessions[summary.taskId] = summary;
-						}
-					}
-					const taskCounts = await deps.summarizeProjectTaskCounts(project.workspaceId, project.repoPath);
-					return {
-						project: deps.createProjectSummary({
-							workspaceId: project.workspaceId,
-							repoPath: project.repoPath,
-							taskCounts,
-						}),
-						board: workspaceState.board,
-						sessions: workspaceState.sessions,
-					};
-				}),
-			);
+			const projects = await deps.buildProjectBoardSnapshots();
 			return { projects } satisfies RuntimeProjectBoardsResponse;
 		},
 		addProject: async (preferredWorkspaceId, input) => {
@@ -154,6 +136,7 @@ export function createProjectsApi(deps: CreateProjectsApiDependencies): RuntimeT
 				}
 				const context = await loadWorkspaceContext(projectPath);
 				deps.rememberWorkspace(context.workspaceId, context.repoPath);
+				await deps.ensureTerminalManagerForWorkspace(context.workspaceId, context.repoPath);
 				const projectsAfterAdd = await listWorkspaceIndexEntries();
 				const activeWorkspaceId = deps.getActiveWorkspaceId();
 				const hasActiveWorkspace = activeWorkspaceId

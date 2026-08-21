@@ -15,7 +15,11 @@ import {
 	parseWorktreeDeleteRequest,
 	parseWorktreeEnsureRequest,
 } from "../core/api-validation";
-import { saveWorkspaceState, WorkspaceStateConflictError } from "../state/workspace-state";
+import {
+	reconcileBoardWithSessionSummary,
+	saveWorkspaceState,
+	WorkspaceStateConflictError,
+} from "../state/workspace-state";
 import type { TerminalSessionManager } from "../terminal/session-manager";
 import {
 	createEmptyWorkspaceChangesResponse,
@@ -339,10 +343,15 @@ export function createWorkspaceApi(deps: CreateWorkspaceApiDependencies): Runtim
 					workspaceScope.workspaceId,
 					workspaceScope.workspacePath,
 				);
+				let board = input.board;
 				for (const summary of terminalManager.listSummaries()) {
 					input.sessions[summary.taskId] = summary;
+					board = reconcileBoardWithSessionSummary(board, summary).board;
 				}
-				const response = await saveWorkspaceState(workspaceScope.workspacePath, input);
+				const response = await saveWorkspaceState(workspaceScope.workspacePath, {
+					...input,
+					board,
+				});
 				void deps.broadcastRuntimeWorkspaceStateUpdated(workspaceScope.workspaceId, workspaceScope.workspacePath);
 				void deps.broadcastRuntimeProjectsUpdated(workspaceScope.workspaceId);
 				return response;

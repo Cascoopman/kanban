@@ -47,6 +47,7 @@ export interface UseProjectNavigationResult {
 	pendingNativeGitInitPath: string | null;
 	currentProjectId: string | null;
 	projects: ReturnType<typeof useRuntimeStateStream>["projects"];
+	projectBoards: ReturnType<typeof useRuntimeStateStream>["projectBoards"];
 	workspaceState: ReturnType<typeof useRuntimeStateStream>["workspaceState"];
 	workspaceMetadata: ReturnType<typeof useRuntimeStateStream>["workspaceMetadata"];
 	latestTaskReadyForReview: ReturnType<typeof useRuntimeStateStream>["latestTaskReadyForReview"];
@@ -77,6 +78,7 @@ export function useProjectNavigation({ onProjectSwitchStart }: UseProjectNavigat
 	const {
 		currentProjectId,
 		projects,
+		projectBoards,
 		workspaceState,
 		workspaceMetadata,
 		latestTaskReadyForReview,
@@ -262,6 +264,7 @@ export function useProjectNavigation({ onProjectSwitchStart }: UseProjectNavigat
 		pendingNativeGitInitPath: pendingGitInitPath,
 		currentProjectId,
 		projects,
+		projectBoards,
 		workspaceState,
 		workspaceMetadata,
 		latestTaskReadyForReview,

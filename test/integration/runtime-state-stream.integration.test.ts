@@ -108,6 +108,34 @@ function createReviewBoard(taskId: string, title: string, existingTrashTaskId?: 
 	};
 }
 
+function createInProgressBoard(taskId: string, title: string): RuntimeBoardData {
+	const now = Date.now();
+	return {
+		columns: [
+			{ id: "backlog", title: "Backlog", cards: [] },
+			{
+				id: "in_progress",
+				title: "In Progress",
+				cards: [
+					{
+						id: taskId,
+						title,
+						prompt: title,
+						startInPlanMode: false,
+						baseRef: "main",
+						createdAt: now,
+						updatedAt: now,
+					},
+				],
+			},
+			{ id: "review", title: "Review", cards: [] },
+			{ id: "on_hold", title: "On Hold", cards: [] },
+			{ id: "trash", title: "Done", cards: [] },
+		],
+		dependencies: [],
+	};
+}
+
 async function getAvailablePort(): Promise<number> {
 	const server = createServer();
 	await new Promise<void>((resolveListen, rejectListen) => {
@@ -690,7 +718,7 @@ describe.sequential("runtime state stream integration", () => {
 		}
 	}, 45_000);
 
-	it("streams per-project snapshots and isolates workspace updates", async () => {
+	it("streams every project board while retaining a selected workspace context", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-stream-");
 		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-projects-stream-");
 
@@ -744,6 +772,9 @@ describe.sequential("runtime state stream integration", () => {
 			expect(snapshotA.currentProjectId).toBe(workspaceAId);
 			expect(snapshotA.workspaceState?.repoPath).toBe(expectedProjectAPath);
 			expect(snapshotA.projects.map((project) => project.id).sort()).toEqual([workspaceAId, workspaceBId].sort());
+			expect(snapshotA.projectBoards.map((snapshot) => snapshot.project.id).sort()).toEqual(
+				[workspaceAId, workspaceBId].sort(),
+			);
 
 			streamB = await connectRuntimeStream(
 				`ws://127.0.0.1:${port}/api/runtime/ws?workspaceId=${encodeURIComponent(workspaceBId)}`,
@@ -753,6 +784,9 @@ describe.sequential("runtime state stream integration", () => {
 			)) as RuntimeStateStreamSnapshotMessage;
 			expect(snapshotB.currentProjectId).toBe(workspaceBId);
 			expect(snapshotB.workspaceState?.repoPath).toBe(expectedProjectBPath);
+			expect(snapshotB.projectBoards.map((snapshot) => snapshot.project.id).sort()).toEqual(
+				[workspaceAId, workspaceBId].sort(),
+			);
 
 			const currentWorkspaceBState = await requestJson<RuntimeWorkspaceStateResponse>({
 				baseUrl: `http://127.0.0.1:${port}`,
@@ -782,12 +816,11 @@ describe.sequential("runtime state stream integration", () => {
 			expect(workspaceUpdateB.workspaceState.revision).toBe(previousRevision + 1);
 			expect(workspaceUpdateB.workspaceState.board.columns[0]?.cards[0]?.prompt).toBe("Realtime Task");
 
-			const streamAMessages = await streamA.collectFor(500);
-			expect(
-				streamAMessages.some(
-					(message) => message.type === "workspace_state_updated" && message.workspaceId === workspaceBId,
-				),
-			).toBe(false);
+			const workspaceUpdateBOnStreamA = (await streamA.waitForMessage(
+				(message): message is RuntimeStateStreamWorkspaceStateMessage =>
+					message.type === "workspace_state_updated" && message.workspaceId === workspaceBId,
+			)) as RuntimeStateStreamWorkspaceStateMessage;
+			expect(workspaceUpdateBOnStreamA.workspaceState.revision).toBe(previousRevision + 1);
 
 			const projectsAfterUpdate = await requestJson<RuntimeProjectsResponse>({
 				baseUrl: `http://127.0.0.1:${port}`,
@@ -840,6 +873,23 @@ describe.sequential("runtime state stream integration", () => {
 			);
 
 			const taskId = "hook-review-task";
+			const initialWorkspaceState = await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId,
+			});
+			await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.saveState",
+				type: "mutation",
+				workspaceId,
+				payload: {
+					board: createInProgressBoard(taskId, "Hook review task"),
+					sessions: initialWorkspaceState.payload.sessions,
+					expectedRevision: initialWorkspaceState.payload.revision,
+				},
+			});
 			const startShellResponse = await requestJson<RuntimeShellSessionStartResponse>({
 				baseUrl: `http://127.0.0.1:${port}`,
 				procedure: "runtime.startShellSession",
@@ -874,6 +924,16 @@ describe.sequential("runtime state stream integration", () => {
 			)) as RuntimeStateStreamTaskReadyForReviewMessage;
 			expect(readyMessage.type).toBe("task_ready_for_review");
 			expect(readyMessage.triggeredAt).toBeGreaterThan(0);
+
+			const reviewStateMessage = (await stream.waitForMessage(
+				(message): message is RuntimeStateStreamWorkspaceStateMessage =>
+					message.type === "workspace_state_updated" &&
+					message.workspaceId === workspaceId &&
+					message.workspaceState.board.columns
+						.find((column) => column.id === "review")
+						?.cards.some((card) => card.id === taskId) === true,
+			)) as RuntimeStateStreamWorkspaceStateMessage;
+			expect(reviewStateMessage.workspaceState.sessions[taskId]?.state).toBe("awaiting_review");
 
 			await requestJson({
 				baseUrl: `http://127.0.0.1:${port}`,

@@ -1,16 +1,12 @@
 import type { DropResult } from "@hello-pangea/dnd";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 
-import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 import type { RuntimeProjectBoardSnapshot, RuntimeProjectSummary, RuntimeTaskSessionSummary } from "@/runtime/types";
-import { useTrpcQuery } from "@/runtime/use-trpc-query";
 import type { BoardColumnId, BoardData } from "@/types";
-import { useInterval } from "@/utils/react-use";
-
-const PROJECT_BOARD_REFRESH_INTERVAL_MS = 5_000;
 
 interface UseProjectBoardsInput {
 	projects: RuntimeProjectSummary[];
+	projectBoards: RuntimeProjectBoardSnapshot[];
 	currentProjectId: string | null;
 	currentBoard: BoardData;
 	currentSessions: Record<string, RuntimeTaskSessionSummary>;
@@ -21,7 +17,6 @@ export interface ProjectBoardsResult {
 	snapshots: RuntimeProjectBoardSnapshot[];
 	isLoading: boolean;
 	error: Error | null;
-	refetch: () => Promise<unknown>;
 }
 
 export interface ProjectBoardMove {
@@ -74,16 +69,6 @@ export function scopeProjectBoardMove(board: BoardData, move: ProjectBoardMove):
 			index: Math.min(move.destinationIndex, destinationColumn.cards.length),
 		},
 	};
-}
-
-function getProjectsRefreshKey(projects: RuntimeProjectSummary[]): string {
-	return projects
-		.map((project) => {
-			const counts = project.taskCounts;
-			return `${project.id}:${counts.backlog}:${counts.in_progress}:${counts.review}:${counts.on_hold}:${counts.trash}`;
-		})
-		.sort()
-		.join("|");
 }
 
 export function buildUnifiedProjectBoard(
@@ -142,30 +127,14 @@ export function buildUnifiedProjectBoard(
 
 export function useProjectBoards({
 	projects,
+	projectBoards,
 	currentProjectId,
 	currentBoard,
 	currentSessions,
 	canUseCurrentBoard,
 }: UseProjectBoardsInput): ProjectBoardsResult {
-	const queryFn = useCallback(async () => await getRuntimeTrpcClient(null).projects.listBoards.query(), []);
-	const query = useTrpcQuery({ enabled: true, queryFn, retainDataOnError: true });
-	const refreshKey = getProjectsRefreshKey(projects);
-	const previousRefreshKeyRef = useRef(refreshKey);
-
-	useEffect(() => {
-		if (previousRefreshKeyRef.current === refreshKey) {
-			return;
-		}
-		previousRefreshKeyRef.current = refreshKey;
-		void query.refetch();
-	}, [query.refetch, refreshKey]);
-
-	useInterval(() => {
-		void query.refetch();
-	}, PROJECT_BOARD_REFRESH_INTERVAL_MS);
-
 	const snapshots = useMemo(() => {
-		const fetched = query.data?.projects ?? [];
+		const fetched = projectBoards;
 		if (!canUseCurrentBoard || !currentProjectId) {
 			return fetched;
 		}
@@ -183,12 +152,11 @@ export function useProjectBoards({
 			return [...fetched, currentSnapshot];
 		}
 		return fetched.map((snapshot, index) => (index === existingIndex ? currentSnapshot : snapshot));
-	}, [canUseCurrentBoard, currentBoard, currentProjectId, currentSessions, projects, query.data?.projects]);
+	}, [canUseCurrentBoard, currentBoard, currentProjectId, currentSessions, projectBoards, projects]);
 
 	return {
 		snapshots,
-		isLoading: query.isLoading && query.data === null,
-		error: query.error,
-		refetch: query.refetch,
+		isLoading: projectBoards.length === 0 && projects.length > 0,
+		error: null,
 	};
 }

@@ -45,7 +45,6 @@ interface PendingProgrammaticStartMoveCompletion {
 interface UseBoardInteractionsInput {
 	board: BoardData;
 	setBoard: Dispatch<SetStateAction<BoardData>>;
-	sessions: Record<string, RuntimeTaskSessionSummary>;
 	setSessions: Dispatch<SetStateAction<Record<string, RuntimeTaskSessionSummary>>>;
 	selectedCard: SelectedBoardCard | null;
 	selectedTaskId: string | null;
@@ -90,7 +89,6 @@ export interface UseBoardInteractionsResult {
 export function useBoardInteractions({
 	board,
 	setBoard,
-	sessions,
 	setSessions,
 	selectedCard,
 	selectedTaskId,
@@ -106,7 +104,6 @@ export function useBoardInteractions({
 	sendTaskSessionInput,
 	readyForReviewNotificationsEnabled,
 }: UseBoardInteractionsInput): UseBoardInteractionsResult {
-	const previousSessionsRef = useRef<Record<string, RuntimeTaskSessionSummary>>({});
 	const notificationPermissionPromptInFlightRef = useRef(false);
 	const moveToTrashLoadingByIdRef = useRef<Record<string, true>>({});
 	const pendingProgrammaticStartMoveCompletionByTaskIdRef = useRef<
@@ -122,7 +119,6 @@ export function useBoardInteractions({
 		waitForProgrammaticCardMoveAvailability,
 		resetProgrammaticCardMoves,
 		requestMoveTaskToTrashWithAnimation,
-		programmaticCardMoveCycle,
 	} = useProgrammaticCardMoves();
 
 	const resolvePendingProgrammaticStartMove = useCallback((taskId: string, started: boolean) => {
@@ -420,44 +416,6 @@ export function useBoardInteractions({
 			waitForProgrammaticCardMoveAvailability,
 		],
 	);
-
-	useEffect(() => {
-		setBoard((currentBoard) => {
-			let nextBoard = currentBoard;
-			const previousSessions = previousSessionsRef.current;
-			for (const summary of Object.values(sessions)) {
-				const previous = previousSessions[summary.taskId];
-				if (previous && previous.updatedAt > summary.updatedAt) {
-					continue;
-				}
-				const columnId = getTaskColumnId(nextBoard, summary.taskId);
-				if (summary.state === "awaiting_review" && columnId === "in_progress") {
-					const programmaticMoveAttempt = tryProgrammaticCardMove(summary.taskId, columnId, "review");
-					if (programmaticMoveAttempt === "started" || programmaticMoveAttempt === "blocked") {
-						continue;
-					}
-					const moved = moveTaskToColumn(nextBoard, summary.taskId, "review", { insertAtTop: true });
-					if (moved.moved) {
-						nextBoard = moved.board;
-					}
-				}
-				if (summary.state === "running" && columnId === "review") {
-					const programmaticMoveAttempt = tryProgrammaticCardMove(summary.taskId, columnId, "in_progress", {
-						skipKickoff: true,
-					});
-					if (programmaticMoveAttempt === "started" || programmaticMoveAttempt === "blocked") {
-						continue;
-					}
-					const moved = moveTaskToColumn(nextBoard, summary.taskId, "in_progress", { insertAtTop: true });
-					if (moved.moved) {
-						nextBoard = moved.board;
-					}
-				}
-			}
-			previousSessionsRef.current = { ...sessions };
-			return nextBoard;
-		});
-	}, [programmaticCardMoveCycle, sessions, setBoard, tryProgrammaticCardMove]);
 
 	const { confirmMoveTaskToTrash, handleCreateDependency, handleDeleteDependency, requestMoveTaskToTrash } =
 		useLinkedBacklogTaskActions({
@@ -788,7 +746,6 @@ export function useBoardInteractions({
 	]);
 
 	const resetBoardInteractionsState = useCallback(() => {
-		previousSessionsRef.current = {};
 		moveToTrashLoadingByIdRef.current = {};
 		setMoveToTrashLoadingById({});
 		for (const taskId of Object.keys(pendingProgrammaticStartMoveCompletionByTaskIdRef.current)) {

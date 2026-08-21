@@ -104,6 +104,7 @@ export default function App(): ReactElement {
 	const {
 		currentProjectId,
 		projects,
+		projectBoards: streamedProjectBoards,
 		workspaceState: streamedWorkspaceState,
 		workspaceMetadata,
 		latestTaskReadyForReview,
@@ -262,6 +263,7 @@ export default function App(): ReactElement {
 		});
 	const projectBoards = useProjectBoards({
 		projects: displayedProjects,
+		projectBoards: streamedProjectBoards,
 		currentProjectId,
 		currentBoard: board,
 		currentSessions: sessions,
@@ -302,10 +304,10 @@ export default function App(): ReactElement {
 
 	useReviewReadyNotifications({
 		activeWorkspaceId: activeNotificationWorkspaceId,
-		board,
+		board: unifiedProjectBoard.board,
 		isDocumentVisible,
 		latestTaskReadyForReview,
-		taskSessions: sessions,
+		taskSessions: unifiedProjectBoard.sessions,
 		readyForReviewNotificationsEnabled,
 		workspacePath,
 	});
@@ -610,7 +612,6 @@ export default function App(): ReactElement {
 	} = useBoardInteractions({
 		board,
 		setBoard,
-		sessions,
 		setSessions,
 		selectedCard,
 		selectedTaskId,
