@@ -7,12 +7,14 @@ import {
 
 function createRunner(responses = new Map()) {
 	const calls = [];
-	const run = (command, args) => {
+	const invocations = [];
+	const run = (command, args, options) => {
 		const key = [command, ...args].join(" ");
 		calls.push(key);
+		invocations.push({ key, options });
 		return responses.get(key) ?? { status: 0, stdout: "", stderr: "" };
 	};
-	return { calls, run };
+	return { calls, invocations, run };
 }
 
 function missingAliasResponses(client) {
@@ -170,6 +172,36 @@ describe("setup MCP account aliases", () => {
 		expect(runner.calls).not.toContain(
 			"claude plugin disable notion@claude-plugins-official --scope user",
 		);
+	});
+
+	it("passes OAuth login through as an interactive subprocess", () => {
+		const responses = new Map([
+			...MCP_ACCOUNT_ALIASES.claude.map((alias) => [
+				`claude mcp get ${alias.name}`,
+				{
+					status: 0,
+					stdout: `${alias.name}:\n  URL: ${alias.url}\n`,
+					stderr: "",
+				},
+			]),
+			["claude plugin list", { status: 0, stdout: "", stderr: "" }],
+		]);
+		const runner = createRunner(responses);
+
+		setupMcpAccountAliases(
+			{
+				client: "claude",
+				dryRun: false,
+				replace: false,
+				login: true,
+				keepClaudeNotionPlugin: false,
+			},
+			{ run: runner.run, log: () => undefined },
+		);
+
+		const loginInvocations = runner.invocations.filter(({ key }) => key.includes(" mcp login "));
+		expect(loginInvocations).toHaveLength(4);
+		expect(loginInvocations.every(({ options }) => options?.interactive === true)).toBe(true);
 	});
 
 	it("parses client and safety options", () => {

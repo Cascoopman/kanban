@@ -83,10 +83,10 @@ export function parseArguments(argv) {
 	return options;
 }
 
-function runProcess(command, args) {
+function runProcess(command, args, options = {}) {
 	const result = spawnSync(command, args, {
 		encoding: "utf8",
-		stdio: ["inherit", "pipe", "pipe"],
+		stdio: options.interactive ? "inherit" : ["inherit", "pipe", "pipe"],
 	});
 	return {
 		status: result.status,
@@ -102,8 +102,8 @@ function formatCommand(command, args) {
 		.join(" ");
 }
 
-function runRequired(run, command, args) {
-	const result = run(command, args);
+function runRequired(run, command, args, options) {
+	const result = run(command, args, options);
 	if (result.status !== 0) {
 		const detail = [result.stderr, result.stdout].find((value) => value.trim().length > 0)?.trim();
 		throw new Error(`${formatCommand(command, args)} failed${detail ? `: ${detail}` : ""}`);
@@ -137,10 +137,10 @@ function removeArguments(client, aliasName) {
 	return ["mcp", "remove", "--scope", "user", aliasName];
 }
 
-function logMutation({ dryRun, log, run }, command, args) {
+function logMutation({ dryRun, log, run }, command, args, options) {
 	log(`${dryRun ? "Would run" : "Running"}: ${formatCommand(command, args)}`);
 	if (!dryRun) {
-		runRequired(run, command, args);
+		runRequired(run, command, args, options);
 	}
 }
 
@@ -219,7 +219,7 @@ export function setupMcpAccountAliases(options, dependencies = {}) {
 
 	if (options.login) {
 		for (const target of loginTargets) {
-			logMutation(context, target.client, ["mcp", "login", target.name]);
+			logMutation(context, target.client, ["mcp", "login", target.name], { interactive: true });
 		}
 		return;
 	}
