@@ -1,6 +1,11 @@
 import { join } from "node:path";
 
-import type { RuntimeAgentId, RuntimeHookEvent, RuntimeTaskSessionSummary } from "../core/api-contract";
+import type {
+	RuntimeAgentId,
+	RuntimeHookEvent,
+	RuntimeTaskImage,
+	RuntimeTaskSessionSummary,
+} from "../core/api-contract";
 import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
@@ -9,6 +14,7 @@ import { configureCodexHooks, hasCodexConfigOverride } from "./codex-hook-config
 import { createHookRuntimeEnv } from "./hook-runtime-context";
 import { stripAnsi } from "./output-utils";
 import type { SessionTransitionEvent } from "./session-state-machine";
+import { prepareTaskPromptWithImages } from "./task-image-prompt";
 
 export interface AgentAdapterLaunchInput {
 	taskId: string;
@@ -18,6 +24,7 @@ export interface AgentAdapterLaunchInput {
 	autonomousModeEnabled?: boolean;
 	cwd: string;
 	prompt: string;
+	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
 	resumeExistingSession?: boolean;
@@ -326,5 +333,12 @@ export async function prepareAgentLaunch(input: AgentAdapterLaunchInput): Promis
 	if (!adapter) {
 		throw new Error(`Unsupported runtime agent: ${input.agentId}`);
 	}
-	return await adapter.prepare(input);
+	const preparedPrompt = await prepareTaskPromptWithImages({
+		prompt: input.prompt,
+		images: input.images,
+	});
+	return await adapter.prepare({
+		...input,
+		prompt: preparedPrompt,
+	});
 }

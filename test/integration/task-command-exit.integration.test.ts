@@ -316,6 +316,43 @@ describe("source task commands", () => {
 				expect(didExit, `task create did not exit in time.\nstdout:\n${stdout}\nstderr:\n${stderr}`).toBe(true);
 				expect(commandProcess.exitCode).toBe(0);
 				expect(stdout).toContain('"ok": true');
+
+				const createdPayload = JSON.parse(stdout) as { task?: { id?: string } };
+				const taskId = createdPayload.task?.id;
+				if (!taskId) {
+					throw new Error(`task create did not return an id.\nstdout:\n${stdout}`);
+				}
+				const workspaceIndex = JSON.parse(
+					readFileSync(join(homeDir, ".kanban", "workspaces", "index.json"), "utf8"),
+				) as { entries?: Record<string, { workspaceId?: string }> };
+				const workspaceId = Object.values(workspaceIndex.entries ?? {})[0]?.workspaceId;
+				if (!workspaceId) {
+					throw new Error(`Could not resolve workspace id for ${projectPath}.`);
+				}
+				const taskSessionEnv = createGitTestEnv({
+					...env,
+					KANBAN_TASK_ID: taskId,
+					KANBAN_WORKSPACE_ID: workspaceId,
+				});
+
+				const current = await runCliCommandAndCollectOutput({
+					args: ["task", "whoami"],
+					cwd: homeDir,
+					env: taskSessionEnv,
+				});
+				expect(current.didExit, `task whoami did not exit.\nstdout:\n${current.stdout}`).toBe(true);
+				expect(current.exitCode).toBe(0);
+				expect(current.stdout).toContain(`"id": "${taskId}"`);
+
+				const updatedTitle = "Implement prompt-first task creation";
+				const updated = await runCliCommandAndCollectOutput({
+					args: ["task", "update", "--title", updatedTitle],
+					cwd: homeDir,
+					env: taskSessionEnv,
+				});
+				expect(updated.didExit, `task update did not exit.\nstdout:\n${updated.stdout}`).toBe(true);
+				expect(updated.exitCode).toBe(0);
+				expect(updated.stdout).toContain(`"title": "${updatedTitle}"`);
 			} finally {
 				await requestGracefulShutdown(serverProcess);
 				const stopped = await waitForExit(serverProcess, 5_000);

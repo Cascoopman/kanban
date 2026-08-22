@@ -4,7 +4,10 @@ import {
 	createHookRuntimeEnv,
 	KANBAN_HOOK_TASK_ID_ENV,
 	KANBAN_HOOK_WORKSPACE_ID_ENV,
+	KANBAN_TASK_ID_ENV,
+	KANBAN_WORKSPACE_ID_ENV,
 	parseHookRuntimeContextFromEnv,
+	readTaskSessionContextFromEnv,
 } from "../../../src/terminal/hook-runtime-context";
 
 describe("hook-runtime-context", () => {
@@ -14,9 +17,26 @@ describe("hook-runtime-context", () => {
 			workspaceId: "workspace-1",
 		});
 		expect(env).toEqual({
+			[KANBAN_TASK_ID_ENV]: "task-1",
+			[KANBAN_WORKSPACE_ID_ENV]: "workspace-1",
 			[KANBAN_HOOK_TASK_ID_ENV]: "task-1",
 			[KANBAN_HOOK_WORKSPACE_ID_ENV]: "workspace-1",
 		});
+	});
+
+	it("reads agent-facing task session variables with legacy hook fallbacks", () => {
+		expect(
+			readTaskSessionContextFromEnv({
+				[KANBAN_TASK_ID_ENV]: "task-current",
+				[KANBAN_WORKSPACE_ID_ENV]: "workspace-current",
+			}),
+		).toEqual({ taskId: "task-current", workspaceId: "workspace-current" });
+		expect(
+			readTaskSessionContextFromEnv({
+				[KANBAN_HOOK_TASK_ID_ENV]: "task-legacy",
+				[KANBAN_HOOK_WORKSPACE_ID_ENV]: "workspace-legacy",
+			}),
+		).toEqual({ taskId: "task-legacy", workspaceId: "workspace-legacy" });
 	});
 
 	it("parses hook runtime context from env", () => {

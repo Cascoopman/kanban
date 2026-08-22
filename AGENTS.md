@@ -63,6 +63,11 @@ When reading issues:
 When closing issues via commit:
 - Include fixes #<number> or closes #<number> in the commit message. This automatically closes the issue when the commit is merged.
 
+Kanban task sessions
+- When `KANBAN_TASK_ID` is present, begin by running `kanban task current` to identify the card and confirm its current title and state.
+- Treat the task title as agent-owned metadata. If it is generic, unclear, or no longer reflects the work, update it early with `kanban task update --title "<concise outcome-oriented title>"`; inside a task session the CLI infers the task and workspace automatically.
+- Keep the title concise and useful on the board. Do not change the prompt, base ref, agent, or workflow mode unless the user requests it or the task requires it.
+
 web-ui Stack
 - Kanban web-ui uses Tailwind CSS v4 for styling, Radix UI for accessible headless primitives, and Lucide React for icons.
 - Custom UI primitives live in `src/components/ui/` (button, dialog, tooltip, kbd, spinner, cn utility).

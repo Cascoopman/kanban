@@ -317,15 +317,11 @@ export default function App(): ReactElement {
 
 	const {
 		isInlineTaskCreateOpen,
-		newTaskTitle,
-		onNewTaskTitleChange,
-		newTaskStartInPlanMode,
-		setNewTaskStartInPlanMode,
-		isNewTaskStartInPlanModeDisabled,
+		newTaskPrompt,
+		setNewTaskPrompt,
+		newTaskImages,
+		setNewTaskImages,
 		newTaskBranchRef,
-		setNewTaskBranchRef,
-		newTaskAgentId,
-		setNewTaskAgentId,
 		editingTaskId,
 		editTaskStartInPlanMode,
 		setEditTaskStartInPlanMode,
@@ -1045,18 +1041,13 @@ export default function App(): ReactElement {
 				<TaskCreateDialog
 					open={isInlineTaskCreateOpen}
 					onOpenChange={handleCreateDialogOpenChange}
-					title={newTaskTitle}
-					onTitleChange={onNewTaskTitleChange}
-					onCreateAndOpen={handleCreateStartAndOpenTask}
-					startInPlanMode={newTaskStartInPlanMode}
-					onStartInPlanModeChange={setNewTaskStartInPlanMode}
-					startInPlanModeDisabled={isNewTaskStartInPlanModeDisabled}
-					branchRef={newTaskBranchRef}
-					branchOptions={createTaskBranchOptions}
-					onBranchRefChange={setNewTaskBranchRef}
-					agentId={newTaskAgentId}
-					onAgentIdChange={setNewTaskAgentId}
-					defaultAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
+					prompt={newTaskPrompt}
+					onPromptChange={setNewTaskPrompt}
+					images={newTaskImages}
+					onImagesChange={setNewTaskImages}
+					onCreateStartAndOpen={handleCreateStartAndOpenTask}
+					workspaceId={currentProjectId}
+					canStart={Boolean(newTaskBranchRef)}
 				/>
 				<TaskBranchDialog
 					open={taskBranching.sourceTask !== null}

@@ -72,6 +72,14 @@ export const runtimeBoardColumnIdSchema = z.union([
 ]);
 export type RuntimeBoardColumnId = z.infer<typeof runtimeBoardColumnIdEnum>;
 
+export const runtimeTaskImageSchema = z.object({
+	id: z.string(),
+	data: z.string(),
+	mimeType: z.string(),
+	name: z.string().optional(),
+});
+export type RuntimeTaskImage = z.infer<typeof runtimeTaskImageSchema>;
+
 export const runtimeBoardCardSchema = z.object({
 	id: z.string(),
 	title: z.string().trim().min(1),
@@ -574,6 +582,7 @@ export type RuntimeConfigSaveRequest = z.infer<typeof runtimeConfigSaveRequestSc
 export const runtimeTaskSessionStartRequestSchema = z.object({
 	taskId: z.string(),
 	prompt: z.string(),
+	images: z.array(runtimeTaskImageSchema).optional(),
 	startInPlanMode: z.boolean().optional(),
 	resumeFromTrash: z.boolean().optional(),
 	resumeExistingSession: z.enum(["running", "awaiting_review"]).optional(),

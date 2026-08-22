@@ -1,13 +1,15 @@
 import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useState } from "react";
 
+import type { CreatedTask } from "@/hooks/use-task-editor";
+import type { StartTaskSessionOptions } from "@/hooks/use-task-sessions";
 import { findCardSelection } from "@/state/board-state";
 import type { BoardData } from "@/types";
 
 interface UseTaskStartActionsInput {
 	board: BoardData;
-	handleCreateTask: () => string | null;
-	handleStartTask: (taskId: string) => void;
+	handleCreateTask: () => CreatedTask | null;
+	handleStartTask: (taskId: string, options?: StartTaskSessionOptions) => void;
 	handleStartAllBacklogTasks: (taskIds?: string[]) => void;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
 }
@@ -53,7 +55,7 @@ export function useTaskStartActions({
 	handleStartAllBacklogTasks,
 	setSelectedTaskId,
 }: UseTaskStartActionsInput): UseTaskStartActionsResult {
-	const [pendingTaskStartAfterCreateIds, setPendingTaskStartAfterCreateIds] = useState<string[] | null>(null);
+	const [pendingTaskStartAfterCreate, setPendingTaskStartAfterCreate] = useState<CreatedTask | null>(null);
 
 	const startBacklogTasks = useCallback(
 		(taskIds: string[]) => {
@@ -101,29 +103,29 @@ export function useTaskStartActions({
 	}, [board, startBacklogTasks]);
 
 	const handleCreateStartAndOpenTask = useCallback((): string | null => {
-		const taskId = handleCreateTask();
-		if (!taskId) {
+		const createdTask = handleCreateTask();
+		if (!createdTask) {
 			return null;
 		}
-		setPendingTaskStartAfterCreateIds([taskId]);
-		setSelectedTaskId(taskId);
-		return taskId;
+		setPendingTaskStartAfterCreate(createdTask);
+		setSelectedTaskId(createdTask.taskId);
+		return createdTask.taskId;
 	}, [handleCreateTask, setSelectedTaskId]);
 
 	useEffect(() => {
-		if (!pendingTaskStartAfterCreateIds || pendingTaskStartAfterCreateIds.length === 0) {
+		if (!pendingTaskStartAfterCreate) {
 			return;
 		}
-		const allInBacklog = pendingTaskStartAfterCreateIds.every((taskId) => {
-			const selection = findCardSelection(board, taskId);
-			return selection?.column.id === "backlog";
+		const selection = findCardSelection(board, pendingTaskStartAfterCreate.taskId);
+		if (selection?.column.id !== "backlog") {
+			return;
+		}
+		handleStartTask(pendingTaskStartAfterCreate.taskId, {
+			initialPrompt: pendingTaskStartAfterCreate.prompt,
+			images: pendingTaskStartAfterCreate.images,
 		});
-		if (!allInBacklog) {
-			return;
-		}
-		startBacklogTasks(pendingTaskStartAfterCreateIds);
-		setPendingTaskStartAfterCreateIds(null);
-	}, [board, pendingTaskStartAfterCreateIds, startBacklogTasks]);
+		setPendingTaskStartAfterCreate(null);
+	}, [board, handleStartTask, pendingTaskStartAfterCreate]);
 
 	return {
 		handleCreateStartAndOpenTask,

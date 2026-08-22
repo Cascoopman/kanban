@@ -18,7 +18,7 @@ import { trackTaskResumedFromTrash } from "@/telemetry/events";
 import { getTerminalController } from "@/terminal/terminal-controller-registry";
 import { getTerminalGeometry } from "@/terminal/terminal-geometry-registry";
 import type { SendTerminalInputOptions } from "@/terminal/terminal-input";
-import type { BoardCard } from "@/types";
+import type { BoardCard, TaskImage } from "@/types";
 
 interface UseTaskSessionsInput {
 	currentProjectId: string | null;
@@ -41,10 +41,12 @@ interface StartTaskSessionResult {
 	message?: string;
 }
 
-interface StartTaskSessionOptions {
+export interface StartTaskSessionOptions {
 	resumeFromTrash?: boolean;
 	resumeExistingSession?: "running" | "awaiting_review";
 	continuationPrompt?: string;
+	initialPrompt?: string;
+	images?: TaskImage[];
 }
 
 export interface UseTaskSessionsResult {
@@ -142,7 +144,7 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 					? ""
 					: options?.resumeExistingSession
 						? (options.continuationPrompt?.trim() ?? "")
-						: "";
+						: (options?.initialPrompt?.trim() ?? "");
 				const trpcClient = getRuntimeTrpcClient(projectId);
 				const geometry =
 					(projectId === currentProjectId ? getTerminalGeometry(task.id) : null) ??
@@ -150,6 +152,7 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				const payload = await trpcClient.runtime.startTaskSession.mutate({
 					taskId: task.id,
 					prompt: kickoffPrompt,
+					images: isResumingSession ? undefined : options?.images,
 					startInPlanMode: isResumingSession ? undefined : task.startInPlanMode,
 					resumeFromTrash: options?.resumeFromTrash,
 					resumeExistingSession: options?.resumeExistingSession,

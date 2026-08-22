@@ -28,7 +28,7 @@ kanban
 Run this from the root of any git repo. Kanban detects Claude Code or OpenAI Codex and launches a local webserver in your browser. No account or setup is required.
 
 ### 2. Create tasks
-Create a task card with the new-task shortcut or the board controls, then configure its agent and workflow options.
+Create a task with the new-task shortcut or board controls, describe the outcome you want, and start it. Kanban chooses the current branch and default agent, derives the initial title, and opens the agent terminal for follow-up prompts and commands.
 
 ### 3. Link and automate
 <kbd>⌘</kbd> + click a card to link it to another task. When a card is completed and moved to trash, linked tasks auto-start. Combine with auto-commit for fully autonomous dependency chains: one task completes → commits → kicks off the next → repeat. It’s a pretty magical experience asking your agent to decompose a big task into subtasks that auto-commit - he’ll cleverly do it in a way that parallelizes for maximum efficiency and links tasks together for end-to-end autonomy.
