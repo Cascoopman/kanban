@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildAgentRuntimeEnv } from "./agent-runtime-env.mjs";
+import { isTcpPortReachable, parseFixedRuntimePort } from "./dogfood-port-guard.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -363,6 +364,19 @@ function runRuntimeCommand(command, args, spawnOptions = {}) {
 
 async function main() {
 	const args = parseArgs(process.argv.slice(2));
+	const fixedRuntimePort = parseFixedRuntimePort(args.port);
+	if (!args.skipBuild && fixedRuntimePort !== null && (await isTcpPortReachable(fixedRuntimePort))) {
+		console.error(
+			`[dogfood] Refusing to rebuild while port ${fixedRuntimePort} is already in use.`,
+		);
+		console.error(
+			"[dogfood] Stop the running Kanban instance before rebuilding so its backend and web assets stay on the same version.",
+		);
+		console.error(
+			"[dogfood] To open the existing instance without rebuilding, rerun with --skip-build.",
+		);
+		return 1;
+	}
 	const cleanupOwnership = await acquireCleanupOwnership();
 	const skipShutdownCleanup = !cleanupOwnership.isCleanupOwner;
 	if (skipShutdownCleanup) {

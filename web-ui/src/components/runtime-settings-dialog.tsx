@@ -36,6 +36,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { TASK_GIT_BASE_REF_PROMPT_VARIABLE, type TaskGitAction } from "@/git-actions/build-task-git-action-prompt";
 import { previewThemeId, readStoredThemeId, saveThemeId, THEME_GROUPS, THEMES, type ThemeId } from "@/hooks/use-theme";
 import { useLayoutCustomizations } from "@/resize/layout-customizations";
+import { formatAgentInstructionsLoadError } from "@/runtime/agent-instructions-error";
 import { openFileOnHost } from "@/runtime/runtime-config-query";
 import {
 	filterSupportedAgentDefinitions,
@@ -1011,7 +1012,7 @@ export function RuntimeSettingsDialog({
 							<p className="text-text-secondary text-[13px] mt-2 mb-0">Select a project to edit AGENTS.md.</p>
 						) : agentInstructionsLoadError ? (
 							<p className="text-status-red text-[13px] mt-2 mb-0">
-								Could not load AGENTS.md: {agentInstructionsLoadError.message}
+								Could not load AGENTS.md: {formatAgentInstructionsLoadError(agentInstructionsLoadError)}
 							</p>
 						) : areAgentInstructionsLoading ? (
 							<p className="text-text-secondary text-[13px] mt-2 mb-0">Loading AGENTS.md...</p>

@@ -374,4 +374,29 @@ describe("RuntimeSettingsDialog", () => {
 		expect(agentInstructionsHookMocks.save).toHaveBeenCalledWith("# Updated instructions\n\nRun tests.\n");
 		expect(handleOpenChange).toHaveBeenCalledWith(false);
 	});
+
+	it("explains that a missing AGENTS.md procedure requires a runtime restart", async () => {
+		agentInstructionsHookMocks.useAgentInstructions.mockReturnValue({
+			instructions: null,
+			isLoading: false,
+			isSaving: false,
+			loadError: new Error('No procedure found on path "runtime.getAgentInstructions"'),
+			save: agentInstructionsHookMocks.save,
+		});
+
+		await act(async () => {
+			root.render(
+				<RuntimeSettingsDialog
+					open={true}
+					workspaceId={"workspace-1"}
+					initialConfig={savedRuntimeConfig}
+					onOpenChange={vi.fn()}
+				/>,
+			);
+		});
+
+		expect(document.body.textContent).toContain(
+			"The Kanban interface is newer than the running runtime. Restart Kanban to load the AGENTS.md editor.",
+		);
+	});
 });
