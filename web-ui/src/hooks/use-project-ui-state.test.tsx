@@ -38,13 +38,6 @@ function HookHarness({ onResult }: { onResult: (result: ReturnType<typeof usePro
 			},
 		],
 		navigationCurrentProjectId: "project-b",
-		selectedTaskId: null,
-		streamError: null,
-		isProjectSwitching: false,
-		isInitialRuntimeLoad: false,
-		isAwaitingWorkspaceSnapshot: false,
-		isWorkspaceMetadataPending: true,
-		hasReceivedSnapshot: true,
 	});
 
 	onResult(result);
@@ -78,7 +71,7 @@ describe("useProjectUiState", () => {
 		}
 	});
 
-	it("keeps the project loading state visible while workspace metadata is still syncing", async () => {
+	it("uses the hydrated board counts without exposing workspace loading state", async () => {
 		let latestResult: ProjectUiStateResult | null = null;
 
 		await act(async () => {
@@ -95,7 +88,12 @@ describe("useProjectUiState", () => {
 			throw new Error("Expected a hook result.");
 		}
 		const result: ProjectUiStateResult = latestResult;
-		expect(result.shouldShowProjectLoadingState).toBe(true);
-		expect(result.shouldUseNavigationPath).toBe(true);
+		expect(result.navigationProjectPath).toBe("/tmp/project-b");
+		expect(result.displayedProjects.find((project) => project.id === "project-b")?.taskCounts).toEqual({
+			in_progress: 0,
+			review: 0,
+			on_hold: 0,
+			trash: 0,
+		});
 	});
 });

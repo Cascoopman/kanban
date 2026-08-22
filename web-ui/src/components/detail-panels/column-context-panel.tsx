@@ -31,6 +31,7 @@ function ColumnSection({
 	moveToTrashLoadingById,
 	activeDragSourceColumnId,
 	workspacePath,
+	mutableProjectId,
 }: {
 	column: BoardColumn;
 	selectedCardId: string;
@@ -46,6 +47,7 @@ function ColumnSection({
 	moveToTrashLoadingById?: Record<string, boolean>;
 	activeDragSourceColumnId?: BoardColumnId | null;
 	workspacePath?: string | null;
+	mutableProjectId?: string | null;
 }): React.ReactElement {
 	const [open, setOpen] = useState(defaultOpen);
 	const canCreate = column.id === "in_progress" && onCreateTask;
@@ -149,6 +151,7 @@ function ColumnSection({
 									const items: ReactNode[] = [];
 									let draggableIndex = 0;
 									for (const card of column.cards) {
+										const isCardMutable = mutableProjectId === undefined || card.projectId === mutableProjectId;
 										items.push(
 											<BoardCard
 												key={card.id}
@@ -157,12 +160,13 @@ function ColumnSection({
 												columnId={column.id}
 												sessionSummary={taskSessions[card.id]}
 												selected={card.id === selectedCardId}
-												onBranch={onBranchTask}
-												onMoveToTrash={onMoveToTrashTask}
-												onRestoreFromTrash={onRestoreFromTrashTask}
+												onBranch={isCardMutable ? onBranchTask : undefined}
+												onMoveToTrash={isCardMutable ? onMoveToTrashTask : undefined}
+												onRestoreFromTrash={isCardMutable ? onRestoreFromTrashTask : undefined}
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
-												workspacePath={workspacePath}
-												onSaveTitle={onSaveTitle}
+												workspacePath={card.projectPath ?? workspacePath}
+												onSaveTitle={isCardMutable ? onSaveTitle : undefined}
+												isDragDisabled={!isCardMutable}
 												onClick={() => onCardClick(card)}
 											/>,
 										);
@@ -197,6 +201,7 @@ export function ColumnContextPanel({
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
 	panelWidth,
+	mutableProjectId,
 }: {
 	selection: CardSelection;
 	workspacePath?: string | null;
@@ -211,6 +216,7 @@ export function ColumnContextPanel({
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	panelWidth?: string;
+	mutableProjectId?: string | null;
 }): React.ReactElement {
 	const [activeDragSourceColumnId, setActiveDragSourceColumnId] = useState<BoardColumnId | null>(null);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -292,6 +298,7 @@ export function ColumnContextPanel({
 							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							workspacePath={workspacePath}
+							mutableProjectId={mutableProjectId}
 						/>
 					))}
 				</div>
