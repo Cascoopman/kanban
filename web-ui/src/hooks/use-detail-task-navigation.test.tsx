@@ -16,7 +16,6 @@ function createBoard(): BoardData {
 					{
 						id: "task-1",
 						title: "Task 1",
-						prompt: "Task 1",
 						startInPlanMode: false,
 						baseRef: "main",
 						createdAt: 1,
@@ -204,7 +203,6 @@ describe("useDetailTaskNavigation", () => {
 						{
 							id: "in-progress-top",
 							title: "In progress",
-							prompt: "",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,
@@ -219,7 +217,6 @@ describe("useDetailTaskNavigation", () => {
 						{
 							id: "review-top",
 							title: "Review",
-							prompt: "",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,
@@ -301,7 +298,6 @@ describe("useDetailTaskNavigation", () => {
 								{
 									id: "task-requested",
 									title: "Requested task",
-									prompt: "Requested task",
 									startInPlanMode: false,
 									baseRef: "main",
 									createdAt: 2,

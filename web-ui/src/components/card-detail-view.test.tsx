@@ -79,7 +79,6 @@ function createSelection(taskId: string): CardSelection {
 	const card = {
 		id: taskId,
 		title: `Task ${taskId}`,
-		prompt: "Test prompt",
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt: 1,

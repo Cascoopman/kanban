@@ -8,7 +8,6 @@ import type { BoardCard } from "@/types";
 const sourceTask: BoardCard = {
 	id: "source-task",
 	title: "Source task",
-	prompt: "Original work",
 	startInPlanMode: false,
 	baseRef: "main",
 	createdAt: 1,
@@ -40,8 +39,6 @@ describe("TaskBranchDialog", () => {
 					sourceTask={sourceTask}
 					title="New task"
 					onTitleChange={() => {}}
-					prompt="Try another approach"
-					onPromptChange={() => {}}
 					isPending={false}
 					onOpenChange={() => {}}
 					onCreate={onCreate}
@@ -50,7 +47,6 @@ describe("TaskBranchDialog", () => {
 			);
 		});
 
-		const textarea = document.body.querySelector("textarea");
 		expect(document.body.textContent).toContain("Create task");
 		expect(document.body.textContent).toContain("Create & start");
 		const buttons = Array.from(document.body.querySelectorAll("button"));
@@ -61,22 +57,14 @@ describe("TaskBranchDialog", () => {
 		expect(createAndStartButton?.querySelector(".lucide-command")).not.toBeNull();
 		expect(createAndStartButton?.querySelector(".lucide-arrow-big-up")).not.toBeNull();
 		expect(createAndStartButton?.querySelector(".lucide-corner-down-left")).not.toBeNull();
-		await act(async () => {
-			textarea?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }));
-			textarea?.dispatchEvent(
-				new KeyboardEvent("keydown", { key: "Enter", metaKey: true, shiftKey: true, bubbles: true }),
-			);
-			textarea?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, bubbles: true }));
-			textarea?.dispatchEvent(
-				new KeyboardEvent("keydown", { key: "Enter", ctrlKey: true, shiftKey: true, bubbles: true }),
-			);
-		});
+		await act(async () => createButton?.click());
+		await act(async () => createAndStartButton?.click());
 
-		expect(onCreate).toHaveBeenCalledTimes(2);
-		expect(onCreateAndStart).toHaveBeenCalledTimes(2);
+		expect(onCreate).toHaveBeenCalledOnce();
+		expect(onCreateAndStart).toHaveBeenCalledOnce();
 	});
 
-	it("opens with the title focused and selected before the prompt", async () => {
+	it("opens with the title focused and selected", async () => {
 		await act(async () => {
 			root.render(
 				<TaskBranchDialog
@@ -84,8 +72,6 @@ describe("TaskBranchDialog", () => {
 					sourceTask={sourceTask}
 					title="New task"
 					onTitleChange={() => {}}
-					prompt=""
-					onPromptChange={() => {}}
 					isPending={false}
 					onOpenChange={() => {}}
 					onCreate={() => {}}
@@ -98,15 +84,13 @@ describe("TaskBranchDialog", () => {
 		});
 
 		const titleInput = document.body.querySelector<HTMLInputElement>('input[value="New task"]');
-		const promptInput = document.body.querySelector<HTMLTextAreaElement>("textarea");
 		expect(titleInput).not.toBeNull();
-		expect(promptInput).not.toBeNull();
-		if (!titleInput || !promptInput) {
-			throw new Error("Expected the title and prompt fields to render.");
+		expect(document.body.querySelector("textarea")).toBeNull();
+		if (!titleInput) {
+			throw new Error("Expected the title field to render.");
 		}
 		expect(document.activeElement).toBe(titleInput);
 		expect(titleInput.selectionStart).toBe(0);
 		expect(titleInput.selectionEnd).toBe("New task".length);
-		expect(titleInput.compareDocumentPosition(promptInput) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
 	});
 });

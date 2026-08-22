@@ -47,7 +47,7 @@ Subcommands:
 .RI [ --column " " backlog|in_progress|review ]
 .br
 .B create
-.B --prompt
+.B --title
 .RI " " text
 .RI [ --project-path " " path ]
 .RI [ --base-ref " " branch ]
@@ -56,7 +56,7 @@ Subcommands:
 .B update
 .B --task-id
 .RI " " id
-.RI [ --prompt " " text ]
+.RI [ --title " " text ]
 .RI [ --project-path " " path ]
 .RI [ --base-ref " " branch ]
 .RI [ --start-in-plan-mode " " true|false ]
@@ -127,8 +127,8 @@ Start server on a custom port:
 List tasks for the current workspace:
 .B kanban task list
 .TP
-Create and start a task manually:
-.B kanban task create --prompt "Implement API pagination"
+Create a task manually:
+.B kanban task create --title "Implement API pagination"
 .TP
 Ingest a hook event:
 .B kanban hooks ingest --event to_review

@@ -71,7 +71,6 @@ describe("useTaskBranching", () => {
 	it("creates a backlog task linked to the source task", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
 			title: "Source task",
-			prompt: "Original work",
 			startInPlanMode: true,
 			agentId: "codex",
 			baseRef: "main",
@@ -81,7 +80,7 @@ describe("useTaskBranching", () => {
 		});
 		await act(async () => {
 			latestSnapshot?.handleOpenBranchTask(source.task);
-			latestSnapshot?.setPrompt("Try the alternative design");
+			latestSnapshot?.onTitleChange("Try the alternative design");
 		});
 		await act(async () => {
 			await latestSnapshot?.handleCreateBranch();
@@ -94,7 +93,6 @@ describe("useTaskBranching", () => {
 		expect(branch).toEqual(
 			expect.objectContaining({
 				title: "Try the alternative design",
-				prompt: "Try the alternative design",
 				agentId: "codex",
 				branchedFromTaskId: source.task.id,
 			}),
@@ -104,10 +102,9 @@ describe("useTaskBranching", () => {
 		);
 	});
 
-	it("uses a custom title for the branched task", async () => {
+	it("requires a title for the branched task", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
 			title: "Source task",
-			prompt: "Original work",
 			startInPlanMode: false,
 			baseRef: "main",
 		});
@@ -116,26 +113,19 @@ describe("useTaskBranching", () => {
 		});
 		await act(async () => {
 			latestSnapshot?.handleOpenBranchTask(source.task);
-			latestSnapshot?.onTitleChange("Alternative architecture");
-			latestSnapshot?.setPrompt("Try the alternative design. Keep the current worktree state.");
 		});
 		await act(async () => {
 			await latestSnapshot?.handleCreateBranch();
 		});
 
 		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
-		expect(branch).toEqual(
-			expect.objectContaining({
-				title: "Alternative architecture",
-				prompt: "Try the alternative design. Keep the current worktree state.",
-			}),
-		);
+		expect(branch).toBeUndefined();
+		expect(branchTaskWorkspaceMock).not.toHaveBeenCalled();
 	});
 
-	it("previews the derived title until the branch title is customized", async () => {
+	it("resets the title when the branch dialog opens", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
 			title: "Source task",
-			prompt: "Original work",
 			startInPlanMode: false,
 			baseRef: "main",
 		});
@@ -145,16 +135,10 @@ describe("useTaskBranching", () => {
 		await act(async () => {
 			latestSnapshot?.handleOpenBranchTask(source.task);
 		});
-		expect(latestSnapshot?.title).toBe("New task");
-
-		await act(async () => {
-			latestSnapshot?.setPrompt("Explore another implementation. Preserve the original task.");
-		});
-		expect(latestSnapshot?.title).toBe("Explore another implementation.");
+		expect(latestSnapshot?.title).toBe("");
 
 		await act(async () => {
 			latestSnapshot?.onTitleChange("Custom branch title");
-			latestSnapshot?.setPrompt("A changed prompt that should not replace the title.");
 		});
 		expect(latestSnapshot?.title).toBe("Custom branch title");
 	});
@@ -162,7 +146,6 @@ describe("useTaskBranching", () => {
 	it("starts the branched task after adding it to the backlog", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "in_progress", {
 			title: "Source task",
-			prompt: "Original work",
 			startInPlanMode: false,
 			agentId: "codex",
 			baseRef: "main",
@@ -172,7 +155,7 @@ describe("useTaskBranching", () => {
 		});
 		await act(async () => {
 			latestSnapshot?.handleOpenBranchTask(source.task);
-			latestSnapshot?.setPrompt("Continue in another direction");
+			latestSnapshot?.onTitleChange("Continue in another direction");
 		});
 		await act(async () => {
 			await latestSnapshot?.handleCreateBranch({ start: true });

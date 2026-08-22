@@ -1,6 +1,6 @@
 import { DEFAULT_TASK_TITLE_MAX_CHARS } from "@runtime-task-title";
 import { ArrowBigUp, Command, Copy, CornerDownLeft, Play } from "lucide-react";
-import { type FormEvent, type KeyboardEvent, type ReactElement, useEffect, useRef } from "react";
+import { type FormEvent, type ReactElement, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
 import { Button } from "@/components/ui/button";
@@ -23,8 +23,6 @@ export function TaskBranchDialog({
 	sourceTask,
 	title,
 	onTitleChange,
-	prompt,
-	onPromptChange,
 	isPending,
 	onOpenChange,
 	onCreate,
@@ -34,8 +32,6 @@ export function TaskBranchDialog({
 	sourceTask: BoardCard | null;
 	title: string;
 	onTitleChange: (value: string) => void;
-	prompt: string;
-	onPromptChange: (value: string) => void;
 	isPending: boolean;
 	onOpenChange: (open: boolean) => void;
 	onCreate: () => void;
@@ -55,30 +51,15 @@ export function TaskBranchDialog({
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!isPending && prompt.trim()) {
+		if (!isPending && title.trim()) {
 			onCreate();
 		}
-	};
-
-	const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-		if (event.key !== "Enter" || (!event.metaKey && !event.ctrlKey)) {
-			return;
-		}
-		event.preventDefault();
-		if (isPending || !prompt.trim()) {
-			return;
-		}
-		if (event.shiftKey) {
-			onCreateAndStart();
-			return;
-		}
-		onCreate();
 	};
 
 	useHotkeys(
 		"mod+enter, mod+shift+enter",
 		(event) => {
-			if (isPending || !prompt.trim()) {
+			if (isPending || !title.trim()) {
 				return;
 			}
 			if (event.shiftKey) {
@@ -94,7 +75,7 @@ export function TaskBranchDialog({
 			ignoreEventWhen: (event) => event.defaultPrevented,
 			preventDefault: true,
 		},
-		[open, isPending, onCreate, onCreateAndStart, prompt],
+		[open, isPending, onCreate, onCreateAndStart, title],
 	);
 
 	return (
@@ -113,23 +94,9 @@ export function TaskBranchDialog({
 							type="text"
 							value={title}
 							onChange={(event) => onTitleChange(event.currentTarget.value)}
-							placeholder="Generated from the prompt"
+							placeholder="Branch task title"
 							maxLength={DEFAULT_TASK_TITLE_MAX_CHARS}
 							className="h-10 w-full rounded-md border border-border-bright bg-surface-2 px-3 text-[15px] font-medium text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
-						/>
-						<span className="mt-1 block text-[11px] text-text-tertiary">
-							Leave blank to generate a title from the prompt.
-						</span>
-					</label>
-					<label className="block">
-						<span className="mb-1.5 block text-xs font-medium text-text-secondary">Prompt</span>
-						<textarea
-							value={prompt}
-							onChange={(event) => onPromptChange(event.currentTarget.value)}
-							onKeyDown={handlePromptKeyDown}
-							placeholder="Describe the new task..."
-							rows={5}
-							className="w-full resize-y rounded-md border border-border-bright bg-surface-2 px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none"
 						/>
 					</label>
 				</DialogBody>
@@ -140,7 +107,7 @@ export function TaskBranchDialog({
 					<div className="flex gap-2">
 						<Button
 							type="submit"
-							disabled={isPending || !prompt.trim()}
+							disabled={isPending || !title.trim()}
 							icon={isPending ? <Spinner size={14} /> : <Copy size={14} />}
 						>
 							<span className="inline-flex items-center">
@@ -151,7 +118,7 @@ export function TaskBranchDialog({
 						<Button
 							type="button"
 							variant="primary"
-							disabled={isPending || !prompt.trim()}
+							disabled={isPending || !title.trim()}
 							icon={isPending ? <Spinner size={14} /> : <Play size={14} />}
 							onClick={onCreateAndStart}
 						>

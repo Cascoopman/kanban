@@ -214,7 +214,7 @@ function formatTaskRecord(
 	const session = state.sessions[task.id] ?? null;
 	return {
 		id: task.id,
-		prompt: task.prompt,
+		title: task.title,
 		column: columnId,
 		baseRef: task.baseRef,
 		startInPlanMode: task.startInPlanMode,
@@ -340,8 +340,7 @@ async function deleteTaskWorkspace(
 
 async function createTask(input: {
 	cwd: string;
-	title?: string;
-	prompt: string;
+	title: string;
 	projectPath?: string;
 	baseRef?: string;
 	startInPlanMode?: boolean;
@@ -360,7 +359,6 @@ async function createTask(input: {
 			"backlog",
 			{
 				title: input.title,
-				prompt: input.prompt,
 				startInPlanMode: input.startInPlanMode,
 				agentId: input.agentId,
 				baseRef: resolvedBaseRef,
@@ -380,7 +378,6 @@ async function createTask(input: {
 			column: "backlog",
 			workspacePath: workspaceRepoPath,
 			title: created.title,
-			prompt: created.prompt,
 			baseRef: created.baseRef,
 			startInPlanMode: created.startInPlanMode,
 			...(created.agentId ? { agentId: created.agentId } : {}),
@@ -393,14 +390,12 @@ async function updateTaskCommand(input: {
 	taskId: string;
 	title?: string;
 	projectPath?: string;
-	prompt?: string;
 	baseRef?: string;
 	startInPlanMode?: boolean;
 	agentId?: RuntimeAgentId | null;
 }): Promise<JsonRecord> {
 	if (
 		input.title === undefined &&
-		input.prompt === undefined &&
 		input.baseRef === undefined &&
 		input.startInPlanMode === undefined &&
 		input.agentId === undefined
@@ -418,7 +413,6 @@ async function updateTaskCommand(input: {
 		}
 		const updatedTask = updateTask(runtimeState.board, input.taskId, {
 			title: input.title ?? taskRecord.task.title,
-			prompt: input.prompt ?? taskRecord.task.prompt,
 			baseRef: input.baseRef ?? taskRecord.task.baseRef,
 			startInPlanMode: input.startInPlanMode ?? taskRecord.task.startInPlanMode,
 			agentId: input.agentId,
@@ -544,7 +538,7 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 
 		const started = await runtimeClient.runtime.startTaskSession.mutate({
 			taskId: task.id,
-			prompt: task.prompt,
+			prompt: "",
 			startInPlanMode: task.startInPlanMode,
 			baseRef: task.baseRef,
 			agentId: task.agentId,
@@ -577,7 +571,7 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 			message: `Task "${input.taskId}" is already in progress.`,
 			task: {
 				id: task.id,
-				prompt: task.prompt,
+				title: task.title,
 				column: "in_progress",
 				workspacePath: workspaceRepoPath,
 			},
@@ -588,7 +582,7 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 		ok: true,
 		task: {
 			id: task.id,
-			prompt: task.prompt,
+			title: task.title,
 			column: "in_progress",
 			workspacePath: workspaceRepoPath,
 		},
@@ -954,16 +948,14 @@ export function registerTaskCommand(program: Command): void {
 	task
 		.command("create")
 		.description("Create a task in backlog.")
-		.option("--title <text>", "Task title.")
-		.requiredOption("--prompt <text>", "Task prompt text.")
+		.requiredOption("--title <text>", "Task title.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Task base branch/ref.")
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
 		.option("--agent-id <id>", "Agent override: claude | codex | default.")
 		.action(
 			async (options: {
-				title?: string;
-				prompt: string;
+				title: string;
 				projectPath?: string;
 				baseRef?: string;
 				startInPlanMode?: unknown;
@@ -974,7 +966,6 @@ export function registerTaskCommand(program: Command): void {
 						await createTask({
 							cwd: process.cwd(),
 							title: options.title,
-							prompt: options.prompt,
 							projectPath: options.projectPath,
 							baseRef: options.baseRef,
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
@@ -989,7 +980,6 @@ export function registerTaskCommand(program: Command): void {
 		.description("Update an existing task.")
 		.requiredOption("--task-id <id>", "Task ID.")
 		.option("--title <text>", "Replacement task title.")
-		.option("--prompt <text>", "Replacement task prompt.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Replacement base branch/ref.")
 		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
@@ -998,7 +988,6 @@ export function registerTaskCommand(program: Command): void {
 			async (options: {
 				taskId: string;
 				title?: string;
-				prompt?: string;
 				projectPath?: string;
 				baseRef?: string;
 				startInPlanMode?: unknown;
@@ -1011,7 +1000,6 @@ export function registerTaskCommand(program: Command): void {
 							taskId: options.taskId,
 							title: options.title,
 							projectPath: options.projectPath,
-							prompt: options.prompt,
 							baseRef: options.baseRef,
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
 							agentId: parseAgentId(options.agentId),

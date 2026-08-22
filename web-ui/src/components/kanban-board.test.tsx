@@ -169,7 +169,6 @@ describe("KanbanBoard", () => {
 						{
 							id: "source-task",
 							title: "Source task",
-							prompt: "Source task",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,
@@ -184,7 +183,6 @@ describe("KanbanBoard", () => {
 						{
 							id: "target-task-1",
 							title: "Target task 1",
-							prompt: "Target task 1",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,
@@ -302,7 +300,6 @@ describe("KanbanBoard", () => {
 						{
 							id: "source-task",
 							title: "Source task",
-							prompt: "Source task",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,
@@ -374,7 +371,6 @@ describe("KanbanBoard", () => {
 						{
 							id: "source-task",
 							title: "Source task",
-							prompt: "Source task",
 							startInPlanMode: false,
 							baseRef: "main",
 							createdAt: 1,

@@ -29,11 +29,10 @@ vi.mock("@/hooks/use-review-auto-actions", () => ({
 	useReviewAutoActions: () => ({}) as ReturnType<typeof useBoardInteractions>,
 }));
 
-function createTask(taskId: string, prompt: string, createdAt: number): BoardCard {
+function createTask(taskId: string, title: string, createdAt: number): BoardCard {
 	return {
 		id: taskId,
-		title: prompt,
-		prompt,
+		title,
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt,
@@ -583,7 +582,7 @@ describe("useBoardInteractions", () => {
 		// moveTaskToColumn updates updatedAt with Date.now(), so match fields except updatedAt.
 		const expectedTask = expect.objectContaining({
 			id: trashTask.id,
-			prompt: trashTask.prompt,
+			title: trashTask.title,
 			baseRef: trashTask.baseRef,
 			createdAt: trashTask.createdAt,
 		});

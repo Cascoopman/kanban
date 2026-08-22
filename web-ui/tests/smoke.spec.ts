@@ -3,15 +3,8 @@ import { expect, type Page, test } from "@playwright/test";
 async function createTaskFromBacklog(page: Page, title: string) {
 	await page.getByRole("button", { name: /New task/ }).click();
 	await page.getByRole("menuitem").first().click();
-	const prompt = page.getByPlaceholder("Describe the task");
-	await prompt.fill(title);
-	await prompt.press("Control+Enter");
-}
-
-async function openTaskFromBoard(page: Page, title: string) {
-	const card = page.locator("[data-task-id]").filter({ hasText: title }).first();
-	await expect(card).toBeVisible();
-	await card.click();
+	await page.getByPlaceholder("What are you working on?").fill(title);
+	await page.getByRole("button", { name: /Create and open terminal/ }).click();
 }
 
 test("renders kanban top bar and columns", async ({ page }) => {
@@ -26,26 +19,23 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
 });
 
-test("creating and opening a backlog task shows the inline editor", async ({ page }) => {
+test("creating a task opens it without a description editor", async ({ page }) => {
 	await page.goto("/");
 	const taskTitle = `smoke-${Date.now()}`;
 	await createTaskFromBacklog(page, taskTitle);
-	await openTaskFromBoard(page, taskTitle);
-	await expect(page.getByPlaceholder("Describe the task")).toHaveValue(taskTitle);
-	await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
-	await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle }).first()).toBeVisible();
+	await expect(page.getByPlaceholder("Describe the task")).toHaveCount(0);
 });
 
-test("escape key closes the backlog inline editor", async ({ page }) => {
+test("escape key closes the create task dialog", async ({ page }) => {
 	await page.goto("/");
 	const taskTitle = `escape-${Date.now()}`;
-	await createTaskFromBacklog(page, taskTitle);
-	await openTaskFromBoard(page, taskTitle);
-	await expect(page.getByPlaceholder("Describe the task")).toHaveValue(taskTitle);
+	await page.getByRole("button", { name: /New task/ }).click();
+	await page.getByRole("menuitem").first().click();
+	await page.getByPlaceholder("What are you working on?").fill(taskTitle);
 	await page.keyboard.press("Escape");
-	await expect(page.getByPlaceholder("Describe the task")).toHaveCount(0);
-	await expect(page.getByText("Backlog", { exact: true })).toBeVisible();
-	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle }).first()).toBeVisible();
+	await expect(page.getByPlaceholder("What are you working on?")).toHaveCount(0);
+	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle })).toHaveCount(0);
 });
 
 test("settings button opens runtime settings dialog", async ({ page }) => {

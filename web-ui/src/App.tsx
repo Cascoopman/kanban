@@ -319,10 +319,6 @@ export default function App(): ReactElement {
 		isInlineTaskCreateOpen,
 		newTaskTitle,
 		onNewTaskTitleChange,
-		newTaskPrompt,
-		setNewTaskPrompt,
-		newTaskImages,
-		setNewTaskImages,
 		newTaskStartInPlanMode,
 		setNewTaskStartInPlanMode,
 		isNewTaskStartInPlanModeDisabled,
@@ -331,10 +327,6 @@ export default function App(): ReactElement {
 		newTaskAgentId,
 		setNewTaskAgentId,
 		editingTaskId,
-		editTaskPrompt,
-		setEditTaskPrompt,
-		editTaskImages,
-		setEditTaskImages,
 		editTaskStartInPlanMode,
 		setEditTaskStartInPlanMode,
 		isEditTaskStartInPlanModeDisabled,
@@ -350,7 +342,6 @@ export default function App(): ReactElement {
 		handleSaveAndStartEditedTask,
 		handleSaveTaskTitle,
 		handleCreateTask,
-		handleCreateTasks,
 		resetTaskEditorState,
 	} = useTaskEditor({
 		board,
@@ -697,20 +688,14 @@ export default function App(): ReactElement {
 		pendingUnifiedBoardMove,
 	]);
 
-	const {
-		handleCreateAndStartTask,
-		handleCreateAndStartTasks,
-		handleCreateStartAndOpenTask,
-		handleStartTaskFromBoard,
-		handleStartAllBacklogTasksFromBoard,
-	} = useTaskStartActions({
-		board,
-		handleCreateTask,
-		handleCreateTasks,
-		handleStartTask,
-		handleStartAllBacklogTasks,
-		setSelectedTaskId,
-	});
+	const { handleCreateStartAndOpenTask, handleStartTaskFromBoard, handleStartAllBacklogTasksFromBoard } =
+		useTaskStartActions({
+			board,
+			handleCreateTask,
+			handleStartTask,
+			handleStartAllBacklogTasks,
+			setSelectedTaskId,
+		});
 	const taskBranching = useTaskBranching({
 		board,
 		setBoard,
@@ -819,24 +804,18 @@ export default function App(): ReactElement {
 
 	const inlineTaskEditor = editingTaskId ? (
 		<TaskInlineCreateCard
-			prompt={editTaskPrompt}
-			onPromptChange={setEditTaskPrompt}
-			images={editTaskImages}
-			onImagesChange={setEditTaskImages}
 			onCreate={handleSaveEditedTask}
 			onCreateAndStart={handleSaveAndStartEditedTask}
 			onCancel={handleCancelEditTask}
 			startInPlanMode={editTaskStartInPlanMode}
 			onStartInPlanModeChange={setEditTaskStartInPlanMode}
 			startInPlanModeDisabled={isEditTaskStartInPlanModeDisabled}
-			workspaceId={currentProjectId}
 			branchRef={editTaskBranchRef}
 			branchOptions={createTaskBranchOptions}
 			onBranchRefChange={setEditTaskBranchRef}
 			agentId={editTaskAgentId}
 			onAgentIdChange={setEditTaskAgentId}
 			defaultAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
-			mode="edit"
 			idPrefix={`inline-edit-task-${editingTaskId}`}
 		/>
 	) : undefined;
@@ -1068,19 +1047,10 @@ export default function App(): ReactElement {
 					onOpenChange={handleCreateDialogOpenChange}
 					title={newTaskTitle}
 					onTitleChange={onNewTaskTitleChange}
-					prompt={newTaskPrompt}
-					onPromptChange={setNewTaskPrompt}
-					images={newTaskImages}
-					onImagesChange={setNewTaskImages}
-					onCreate={handleCreateTask}
-					onCreateAndStart={handleCreateAndStartTask}
-					onCreateStartAndOpen={handleCreateStartAndOpenTask}
-					onCreateMultiple={handleCreateTasks}
-					onCreateAndStartMultiple={handleCreateAndStartTasks}
+					onCreateAndOpen={handleCreateStartAndOpenTask}
 					startInPlanMode={newTaskStartInPlanMode}
 					onStartInPlanModeChange={setNewTaskStartInPlanMode}
 					startInPlanModeDisabled={isNewTaskStartInPlanModeDisabled}
-					workspaceId={currentProjectId}
 					branchRef={newTaskBranchRef}
 					branchOptions={createTaskBranchOptions}
 					onBranchRefChange={setNewTaskBranchRef}
@@ -1093,8 +1063,6 @@ export default function App(): ReactElement {
 					sourceTask={taskBranching.sourceTask}
 					title={taskBranching.title}
 					onTitleChange={taskBranching.onTitleChange}
-					prompt={taskBranching.prompt}
-					onPromptChange={taskBranching.setPrompt}
 					isPending={taskBranching.isPending}
 					onOpenChange={taskBranching.handleOpenChange}
 					onCreate={() => void taskBranching.handleCreateBranch()}

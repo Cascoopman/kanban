@@ -39,7 +39,6 @@ function createTask(): BoardCard {
 	return {
 		id: "task-1",
 		title: "Resume me",
-		prompt: "Resume me",
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt: 1,
@@ -191,7 +190,7 @@ describe("useTaskSessions", () => {
 		);
 	});
 
-	it("resumes an existing session with a continuation prompt and no kickoff attachments", async () => {
+	it("resumes an existing session with a continuation prompt", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -208,7 +207,6 @@ describe("useTaskSessions", () => {
 			await latestSnapshot?.startTaskSession(
 				{
 					...createTask(),
-					images: [{ id: "image-1", data: "abc", mimeType: "image/png" }],
 					startInPlanMode: true,
 				},
 				{
@@ -221,7 +219,6 @@ describe("useTaskSessions", () => {
 		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				prompt: "Continue working on the task from where you left off.",
-				images: undefined,
 				startInPlanMode: undefined,
 				resumeFromTrash: undefined,
 				resumeExistingSession: "running",
@@ -256,8 +253,7 @@ describe("useTaskSessions", () => {
 
 		expect(startTaskSessionMutateMock).toHaveBeenCalledWith({
 			taskId: "task-1",
-			prompt: "Resume me",
-			images: undefined,
+			prompt: "",
 			startInPlanMode: true,
 			resumeFromTrash: undefined,
 			resumeExistingSession: undefined,
@@ -267,48 +263,5 @@ describe("useTaskSessions", () => {
 			agentId: undefined,
 			branchedFromTaskId: undefined,
 		});
-	});
-
-	it("forwards task images when starting a task", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		if (latestSnapshot === null) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
-		await act(async () => {
-			await latestSnapshot?.startTaskSession({
-				...createTask(),
-				images: [
-					{
-						id: "img-1",
-						data: "abc123",
-						mimeType: "image/png",
-					},
-				],
-			});
-		});
-
-		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				images: [
-					{
-						id: "img-1",
-						data: "abc123",
-						mimeType: "image/png",
-					},
-				],
-			}),
-		);
 	});
 });

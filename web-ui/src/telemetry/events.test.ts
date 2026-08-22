@@ -28,31 +28,27 @@ describe("telemetry events", () => {
 		isTelemetryEnabledMock.mockReturnValue(true);
 	});
 
-	it("captures task creation with auto review metadata", () => {
+	it("captures task creation settings", () => {
 		trackTaskCreated({
 			selected_agent_id: "unknown",
 			start_in_plan_mode: true,
-			prompt_character_count: 42,
 		});
 
 		expect(captureMock).toHaveBeenCalledWith("task_created", {
 			selected_agent_id: "unknown",
 			start_in_plan_mode: true,
-			prompt_character_count: 42,
 		});
 	});
 
-	it("captures task creation without auto review metadata when automation is disabled", () => {
+	it("captures task creation outside plan mode", () => {
 		trackTaskCreated({
 			selected_agent_id: "unknown",
 			start_in_plan_mode: false,
-			prompt_character_count: 12,
 		});
 
 		expect(captureMock).toHaveBeenCalledWith("task_created", {
 			selected_agent_id: "unknown",
 			start_in_plan_mode: false,
-			prompt_character_count: 12,
 		});
 	});
 

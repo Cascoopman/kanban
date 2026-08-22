@@ -14,11 +14,10 @@ vi.mock("@/telemetry/events", () => ({
 	trackTasksAutoStartedFromDependency: trackTasksAutoStartedFromDependencyMock,
 }));
 
-function createTask(taskId: string, prompt: string, createdAt: number): BoardCard {
+function createTask(taskId: string, title: string, createdAt: number): BoardCard {
 	return {
 		id: taskId,
-		title: prompt,
-		prompt,
+		title,
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt,

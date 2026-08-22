@@ -11,7 +11,6 @@ function createTask(id: string): BoardCard {
 	return {
 		id,
 		title: id,
-		prompt: "",
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt: 1,
@@ -76,7 +75,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "b1",
 								title: "b1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -91,7 +89,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "i1",
 								title: "i1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -100,7 +97,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "i2",
 								title: "i2",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -115,7 +111,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "r1",
 								title: "r1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -145,7 +140,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "i1",
 								title: "i1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -160,7 +154,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "r1",
 								title: "r1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -189,7 +182,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "b1",
 								title: "b1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -204,7 +196,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "i1",
 								title: "i1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -219,7 +210,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "r1",
 								title: "r1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
@@ -248,7 +238,6 @@ describe("getNextDetailTaskIdAfterTrashMove", () => {
 							{
 								id: "b1",
 								title: "b1",
-								prompt: "",
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,

@@ -14,7 +14,7 @@ import {
 	Trash2,
 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
@@ -24,14 +24,6 @@ import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
 import { type BoardCard as BoardCardModel, type BoardColumnId, isReviewLikeColumnId } from "@/types";
 import { formatPathForDisplay } from "@/utils/path-display";
-import { useMeasure } from "@/utils/react-use";
-import {
-	clampTextWithInlineSuffix,
-	getTaskPromptDescription,
-	normalizePromptForDisplay,
-	truncateTaskPromptLabel,
-} from "@/utils/task-prompt";
-import { DEFAULT_TEXT_MEASURE_FONT, measureTextWidth, readElementFontShorthand } from "@/utils/text-measure";
 
 interface CardSessionActivity {
 	dotColor: string;
@@ -47,13 +39,6 @@ const SESSION_ACTIVITY_COLOR = {
 	muted: "var(--color-text-tertiary)",
 	secondary: "var(--color-text-secondary)",
 } as const;
-
-const DESCRIPTION_COLLAPSE_LINES = 3;
-const DESCRIPTION_EXPANDED_MAX_LINES = 10;
-const DESCRIPTION_EXPAND_LABEL = "See more";
-const DESCRIPTION_COLLAPSE_LABEL = "Less";
-const DESCRIPTION_COLLAPSE_SUFFIX = `… ${DESCRIPTION_EXPAND_LABEL}`;
-const DESCRIPTION_EXPANDED_SUFFIX = `… ${DESCRIPTION_COLLAPSE_LABEL}`;
 
 function reconstructTaskWorktreeDisplayPath(taskId: string, workspacePath: string | null | undefined): string | null {
 	if (!workspacePath) {
@@ -271,15 +256,9 @@ export function BoardCard({
 	const [draftTitle, setDraftTitle] = useState(card.title);
 	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	const titleEditCancelledRef = useRef(false);
-	const [descriptionContainerRef, descriptionRect] = useMeasure<HTMLDivElement>();
-	const descriptionRef = useRef<HTMLParagraphElement | null>(null);
-	const [descriptionWidthFallback, setDescriptionWidthFallback] = useState(0);
-	const [descriptionFont, setDescriptionFont] = useState(DEFAULT_TEXT_MEASURE_FONT);
-	const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 	const reviewWorkspaceSnapshot = useTaskWorkspaceSnapshotValue(card.id);
 	const isTrashCard = columnId === "trash";
 	const isCardInteractive = !isTrashCard;
-	const descriptionWidth = descriptionRect.width > 0 ? descriptionRect.width : descriptionWidthFallback;
 	const rawSessionActivity = useMemo(() => getCardSessionActivity(sessionSummary), [sessionSummary]);
 	const lastSessionActivityRef = useRef<CardSessionActivity | null>(null);
 	const lastSessionActivityCardIdRef = useRef<string | null>(null);
@@ -291,32 +270,7 @@ export function BoardCard({
 		lastSessionActivityRef.current = rawSessionActivity;
 	}
 	const sessionActivity = rawSessionActivity ?? lastSessionActivityRef.current;
-	const displayTitle = useMemo(
-		() => normalizePromptForDisplay(card.title) || truncateTaskPromptLabel(card.prompt),
-		[card.prompt, card.title],
-	);
-	const displayDescription = useMemo(
-		() => getTaskPromptDescription(card.prompt, displayTitle),
-		[card.prompt, displayTitle],
-	);
-
-	useLayoutEffect(() => {
-		if (descriptionRect.width > 0 || !displayDescription) {
-			return;
-		}
-		const nextWidth = descriptionRef.current?.parentElement?.getBoundingClientRect().width ?? 0;
-		if (nextWidth > 0 && nextWidth !== descriptionWidthFallback) {
-			setDescriptionWidthFallback(nextWidth);
-		}
-	}, [descriptionRect.width, descriptionWidthFallback, displayDescription]);
-
-	useLayoutEffect(() => {
-		setDescriptionFont(readElementFontShorthand(descriptionRef.current, DEFAULT_TEXT_MEASURE_FONT));
-	}, [descriptionWidth, displayDescription]);
-
-	useEffect(() => {
-		setIsDescriptionExpanded(false);
-	}, [card.id, displayDescription]);
+	const displayTitle = card.title;
 
 	useEffect(() => {
 		setDraftTitle(card.title);
@@ -348,6 +302,10 @@ export function BoardCard({
 			return;
 		}
 		const trimmed = draftTitle.trim();
+		if (!trimmed) {
+			setDraftTitle(card.title);
+			return;
+		}
 		if (trimmed === card.title) {
 			return;
 		}
@@ -370,38 +328,6 @@ export function BoardCard({
 			titleInputRef.current?.blur();
 		}
 	};
-
-	const isDescriptionMeasured = descriptionRect.width > 0;
-
-	const descriptionDisplay = useMemo(() => {
-		if (!displayDescription) {
-			return {
-				collapsed: { text: "", isTruncated: false },
-				expanded: { text: "", isTruncated: false },
-			};
-		}
-		if (descriptionWidth <= 0) {
-			return {
-				collapsed: { text: displayDescription, isTruncated: false },
-				expanded: { text: displayDescription, isTruncated: false },
-			};
-		}
-		const measure = (value: string) => measureTextWidth(value, descriptionFont);
-		return {
-			collapsed: clampTextWithInlineSuffix(displayDescription, {
-				maxWidthPx: descriptionWidth,
-				maxLines: DESCRIPTION_COLLAPSE_LINES,
-				suffix: DESCRIPTION_COLLAPSE_SUFFIX,
-				measureText: measure,
-			}),
-			expanded: clampTextWithInlineSuffix(displayDescription, {
-				maxWidthPx: descriptionWidth,
-				maxLines: DESCRIPTION_EXPANDED_MAX_LINES,
-				suffix: DESCRIPTION_EXPANDED_SUFFIX,
-				measureText: measure,
-			}),
-		};
-	}, [descriptionFont, descriptionWidth, displayDescription]);
 
 	const isCreditLimit = isCardCreditLimitError(sessionSummary);
 	const renderStatusMarker = () => {
@@ -440,8 +366,6 @@ export function BoardCard({
 		[card.agentId],
 	);
 	const taskAgentSettingsLabel = agentOverrideLabel;
-
-	const activeDescriptionDisplay = isDescriptionExpanded ? descriptionDisplay.expanded : descriptionDisplay.collapsed;
 
 	return (
 		<Draggable draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
@@ -641,64 +565,6 @@ export function BoardCard({
 									</Tooltip>
 								) : null}
 							</div>
-							{displayDescription ? (
-								<div ref={descriptionContainerRef}>
-									<p
-										ref={descriptionRef}
-										className={cn(
-											"text-sm leading-[1.4]",
-											isTrashCard ? "text-text-tertiary" : "text-text-secondary",
-											!isDescriptionMeasured && !isDescriptionExpanded && "line-clamp-3",
-										)}
-										style={{
-											margin: "2px 0 0",
-										}}
-									>
-										{activeDescriptionDisplay.isTruncated
-											? activeDescriptionDisplay.text
-											: displayDescription}
-										{activeDescriptionDisplay.isTruncated ? (
-											<>
-												{"… "}
-												<button
-													type="button"
-													className="inline cursor-pointer rounded-sm text-text-tertiary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [font:inherit]"
-													aria-expanded={isDescriptionExpanded}
-													aria-label={
-														isDescriptionExpanded
-															? "Collapse task description"
-															: "Expand task description"
-													}
-													onMouseDown={stopEvent}
-													onClick={(event) => {
-														stopEvent(event);
-														setIsDescriptionExpanded(!isDescriptionExpanded);
-													}}
-												>
-													{isDescriptionExpanded ? DESCRIPTION_COLLAPSE_LABEL : DESCRIPTION_EXPAND_LABEL}
-												</button>
-											</>
-										) : isDescriptionExpanded && descriptionDisplay.collapsed.isTruncated ? (
-											<>
-												{" "}
-												<button
-													type="button"
-													className="inline cursor-pointer rounded-sm text-text-tertiary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [font:inherit]"
-													aria-expanded={isDescriptionExpanded}
-													aria-label="Collapse task description"
-													onMouseDown={stopEvent}
-													onClick={(event) => {
-														stopEvent(event);
-														setIsDescriptionExpanded(false);
-													}}
-												>
-													{DESCRIPTION_COLLAPSE_LABEL}
-												</button>
-											</>
-										) : null}
-									</p>
-								</div>
-							) : null}
 							{taskAgentSettingsLabel ? (
 								<div className="mt-1">
 									<span

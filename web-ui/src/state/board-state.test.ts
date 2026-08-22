@@ -14,31 +14,31 @@ import {
 } from "@/state/board-state";
 import type { ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
 
-function createBacklogBoard(taskPrompts: string[]): {
+function createBacklogBoard(taskTitles: string[]): {
 	board: ReturnType<typeof createInitialBoardData>;
-	taskIdByPrompt: Record<string, string>;
+	taskIdByTitle: Record<string, string>;
 } {
 	let board = createInitialBoardData();
-	for (const taskPrompt of taskPrompts) {
+	for (const taskTitle of taskTitles) {
 		board = addTaskToColumn(board, "backlog", {
-			prompt: taskPrompt,
+			title: taskTitle,
 			baseRef: "main",
 		});
 	}
 	const backlogCards = board.columns.find((column) => column.id === "backlog")?.cards ?? [];
-	const taskIdByPrompt: Record<string, string> = {};
+	const taskIdByTitle: Record<string, string> = {};
 	for (const card of backlogCards) {
-		taskIdByPrompt[card.prompt] = card.id;
+		taskIdByTitle[card.title] = card.id;
 	}
 	return {
 		board,
-		taskIdByPrompt,
+		taskIdByTitle,
 	};
 }
 
-function requireTaskId(taskId: string | undefined, taskPrompt: string): string {
+function requireTaskId(taskId: string | undefined, taskTitle: string): string {
 	if (!taskId) {
-		throw new Error(`Missing task id for ${taskPrompt}`);
+		throw new Error(`Missing task id for ${taskTitle}`);
 	}
 	return taskId;
 }
@@ -49,11 +49,21 @@ afterEach(() => {
 });
 
 describe("board dependency state", () => {
+	it("creates title-only tasks", () => {
+		const board = addTaskToColumn(createInitialBoardData(), "backlog", {
+			title: "Open an interactive agent terminal",
+			baseRef: "main",
+		});
+		const task = board.columns.find((column) => column.id === "backlog")?.cards[0];
+
+		expect(task?.title).toBe("Open an interactive agent terminal");
+	});
+
 	it("creates tasks when randomUUID is unavailable", () => {
 		vi.stubGlobal("crypto", { randomUUID: undefined });
 
 		const board = addTaskToColumn(createInitialBoardData(), "backlog", {
-			prompt: "Task A",
+			title: "Task A",
 			baseRef: "main",
 		});
 		const backlogCards = board.columns.find((column) => column.id === "backlog")?.cards ?? [];
@@ -67,7 +77,7 @@ describe("board dependency state", () => {
 		vi.spyOn(Math, "random").mockReturnValue(0.123456789);
 
 		const board = addTaskToColumn(createInitialBoardData(), "backlog", {
-			prompt: "Task A",
+			title: "Task A",
 			baseRef: "main",
 		});
 		const backlogCards = board.columns.find((column) => column.id === "backlog")?.cards ?? [];
@@ -77,9 +87,9 @@ describe("board dependency state", () => {
 
 	it("prevents duplicate links in either direction", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedA.moved).toBe(true);
 
@@ -101,8 +111,8 @@ describe("board dependency state", () => {
 
 	it("preserves backlog-to-backlog link order and reorients it when one task starts", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 
 		const bothBacklog = addTaskDependency(fixture.board, taskA, taskB);
 		expect(bothBacklog.added).toBe(true);
@@ -123,8 +133,8 @@ describe("board dependency state", () => {
 
 	it("allows backlog-to-backlog links in either direction", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 
 		const firstDirection = addTaskDependency(fixture.board, taskA, taskB);
 		expect(firstDirection.added).toBe(true);
@@ -138,9 +148,9 @@ describe("board dependency state", () => {
 
 	it("only unlocks backlog cards when a review card is trashed", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "review");
 		expect(movedA.moved).toBe(true);
 		const movedB = moveTaskToColumn(movedA.board, taskB, "review");
@@ -163,8 +173,8 @@ describe("board dependency state", () => {
 
 	it("does not unlock backlog cards when an in-progress card is trashed", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedA.moved).toBe(true);
 
@@ -178,8 +188,8 @@ describe("board dependency state", () => {
 
 	it("removes dependency links once both linked cards are in trash", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedA.moved).toBe(true);
 
@@ -196,8 +206,8 @@ describe("board dependency state", () => {
 
 	it("removes links once neither endpoint remains in backlog", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedA.moved).toBe(true);
 
@@ -211,9 +221,9 @@ describe("board dependency state", () => {
 
 	it("drops links automatically when an unlocked backlog card starts", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		const movedB = moveTaskToColumn(movedA.board, taskB, "review");
 		const firstLink = addTaskDependency(movedB.board, taskC, taskA);
@@ -232,7 +242,7 @@ describe("board dependency state", () => {
 
 	it("keeps manual in-progress to review drags disabled", () => {
 		const fixture = createBacklogBoard(["Task A"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
 		const movedToInProgress = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedToInProgress.moved).toBe(true);
 
@@ -251,7 +261,7 @@ describe("board dependency state", () => {
 
 	it("allows manual drags between review and on hold", () => {
 		const fixture = createBacklogBoard(["Task A"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
 		const movedToReview = moveTaskToColumn(fixture.board, taskA, "review");
 		expect(movedToReview.moved).toBe(true);
 
@@ -290,7 +300,7 @@ describe("board dependency state", () => {
 
 	it("keeps manual in-progress to on-hold drags disabled", () => {
 		const fixture = createBacklogBoard(["Task A"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
 		const movedToInProgress = moveTaskToColumn(fixture.board, taskA, "in_progress");
 
 		const attemptedOnHoldMove = applyDragResult(movedToInProgress.board, {
@@ -308,9 +318,9 @@ describe("board dependency state", () => {
 
 	it("preserves manual backlog to in-progress drop positions", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 
 		const movedB = moveTaskToColumn(fixture.board, taskB, "in_progress");
 		expect(movedB.moved).toBe(true);
@@ -337,9 +347,9 @@ describe("board dependency state", () => {
 
 	it("inserts programmatic backlog to in-progress moves at the top", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 
 		const movedB = moveTaskToColumn(fixture.board, taskB, "in_progress");
 		expect(movedB.moved).toBe(true);
@@ -377,9 +387,9 @@ describe("board dependency state", () => {
 
 	it("supports programmatic drag transitions between in-progress and review", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 		const movedToInProgress = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedToInProgress.moved).toBe(true);
 		const movedBToReview = moveTaskToColumn(movedToInProgress.board, taskB, "review");
@@ -450,9 +460,9 @@ describe("board dependency state", () => {
 
 	it("preserves manual cross-column trash drop positions", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 
 		const movedAToTrash = moveTaskToColumn(fixture.board, taskA, "trash");
 		expect(movedAToTrash.moved).toBe(true);
@@ -481,8 +491,8 @@ describe("board dependency state", () => {
 
 	it("allows manual trash to review drags", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 
 		const movedAToTrash = moveTaskToColumn(fixture.board, taskA, "trash");
 		expect(movedAToTrash.moved).toBe(true);
@@ -510,9 +520,9 @@ describe("board dependency state", () => {
 
 	it("inserts programmatic trash drags at the top of trash", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 
 		const movedAToTrash = moveTaskToColumn(fixture.board, taskA, "trash");
 		expect(movedAToTrash.moved).toBe(true);
@@ -552,9 +562,9 @@ describe("board dependency state", () => {
 
 	it("can insert moved cards at the top when requested", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B", "Task C"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
-		const taskC = requireTaskId(fixture.taskIdByPrompt["Task C"], "Task C");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
+		const taskC = requireTaskId(fixture.taskIdByTitle["Task C"], "Task C");
 
 		const movedA = moveTaskToColumn(fixture.board, taskA, "in_progress");
 		expect(movedA.moved).toBe(true);
@@ -570,8 +580,8 @@ describe("board dependency state", () => {
 
 	it("removes dependencies when trash is cleared", () => {
 		const fixture = createBacklogBoard(["Task A", "Task B"]);
-		const taskA = requireTaskId(fixture.taskIdByPrompt["Task A"], "Task A");
-		const taskB = requireTaskId(fixture.taskIdByPrompt["Task B"], "Task B");
+		const taskA = requireTaskId(fixture.taskIdByTitle["Task A"], "Task A");
+		const taskB = requireTaskId(fixture.taskIdByTitle["Task B"], "Task B");
 		const movedA = moveTaskToColumn(fixture.board, taskA, "review");
 		expect(movedA.moved).toBe(true);
 
@@ -594,18 +604,18 @@ describe("board dependency state", () => {
 					cards: [
 						{
 							id: "b",
-							prompt: "Task B",
+							title: "Task B",
 							startInPlanMode: false,
 							autoReviewEnabled: true,
 							autoReviewMode: "pr",
 							baseRef: "main",
 						},
-						{ id: "c", prompt: "Task C", startInPlanMode: false, baseRef: "main" },
+						{ id: "c", title: "Task C", startInPlanMode: false, baseRef: "main" },
 					],
 				},
 				{
 					id: "in_progress",
-					cards: [{ id: "a", prompt: "Task A", startInPlanMode: false, baseRef: "main" }],
+					cards: [{ id: "a", title: "Task A", startInPlanMode: false, baseRef: "main" }],
 				},
 				{ id: "review", cards: [] },
 				{ id: "trash", cards: [] },
@@ -642,11 +652,24 @@ describe("board dependency state", () => {
 		]);
 	});
 
+	it("keeps normalized tasks that have a title", () => {
+		const normalized = normalizeBoardData({
+			columns: [
+				{
+					id: "backlog",
+					cards: [{ id: "task-1", title: "Interactive task", baseRef: "main" }],
+				},
+			],
+			dependencies: [],
+		});
+
+		expect(normalized?.columns.find((column) => column.id === "backlog")?.cards[0]?.title).toBe("Interactive task");
+	});
+
 	it("updates only the task title", () => {
 		let board = createInitialBoardData();
 		board = addTaskToColumn(board, "backlog", {
 			title: "Initial",
-			prompt: "Task A prompt",
 			baseRef: "main",
 		});
 		const task = board.columns.find((column) => column.id === "backlog")?.cards[0];
@@ -658,7 +681,6 @@ describe("board dependency state", () => {
 		expect(updated.updated).toBe(true);
 		const updatedTask = updated.board.columns.find((column) => column.id === "backlog")?.cards[0];
 		expect(updatedTask?.title).toBe("Updated title");
-		expect(updatedTask?.prompt).toBe("Task A prompt");
 		expect(updatedTask?.baseRef).toBe("main");
 	});
 });

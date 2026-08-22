@@ -4,11 +4,10 @@ import { getStartableBacklogTaskIds } from "@/hooks/use-task-start-actions";
 import type { BoardCard, BoardData, BoardDependency } from "@/types";
 
 describe("getStartableBacklogTaskIds", () => {
-	function createCard(id: string, prompt = "Do something"): BoardCard {
+	function createCard(id: string, title = "Do something"): BoardCard {
 		return {
 			id,
-			title: prompt,
-			prompt,
+			title,
 			startInPlanMode: false,
 			baseRef: "main",
 			createdAt: Date.now(),

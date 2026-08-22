@@ -40,7 +40,6 @@ function createSnapshot(input: {
 								{
 									id: input.taskId,
 									title: `${input.projectName} task`,
-									prompt: "Do the work",
 									startInPlanMode: false,
 									baseRef: "main",
 									createdAt: now,
