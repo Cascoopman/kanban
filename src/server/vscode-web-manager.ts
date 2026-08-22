@@ -1,11 +1,9 @@
-import { type ChildProcess, execFile, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { connect, createServer } from "node:net";
-import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
-import { promisify } from "node:util";
 import treeKill from "tree-kill";
 
 import type { RuntimeVsCodeWebRequest, RuntimeVsCodeWebResponse } from "../core/api-contract";
@@ -17,7 +15,12 @@ import { startVsCodeWebProxy, type VsCodeWebProxy } from "./vscode-web-proxy";
 
 const PROXY_BASE_PATH = "/vscode";
 const START_TIMEOUT_MS = 30_000;
-const execFileAsync = promisify(execFile);
+
+export interface VsCodeServerLaunch {
+	executable: string;
+	argumentPrefix: string[];
+	standalone: boolean;
+}
 
 interface ActiveVsCodeServer {
 	key: string;
@@ -60,37 +63,12 @@ async function resolveVsCodeCliPath(): Promise<string | null> {
 	return null;
 }
 
-async function resolveVsCodeServerCliPath(vsCodeCliPath: string): Promise<string | null> {
+async function resolveVsCodeServerLaunch(vsCodeCliPath: string): Promise<VsCodeServerLaunch> {
 	const configuredPath = process.env.VSCODE_SERVER_CLI_PATH?.trim();
 	if (configuredPath && (await isFileAvailable(configuredPath))) {
-		return configuredPath;
+		return { executable: configuredPath, argumentPrefix: [], standalone: true };
 	}
-
-	try {
-		const { stdout } = await execFileAsync(vsCodeCliPath, ["--version"], {
-			encoding: "utf8",
-			maxBuffer: 64 * 1024,
-		});
-		const commit = stdout
-			.split(/\r?\n/u)
-			.map((line) => line.trim())
-			.find((line) => /^[a-f\d]{40}$/iu.test(line));
-		if (!commit) {
-			return null;
-		}
-		const cliDataDirectory = process.env.VSCODE_CLI_DATA_DIR?.trim() || join(homedir(), ".vscode", "cli");
-		const executableNames =
-			process.platform === "win32" ? ["code-server.cmd", "code-server.exe", "code-server"] : ["code-server"];
-		for (const name of executableNames) {
-			const candidate = join(cliDataDirectory, "serve-web", commit, "bin", name);
-			if (await isFileAvailable(candidate)) {
-				return candidate;
-			}
-		}
-	} catch {
-		return null;
-	}
-	return null;
+	return { executable: vsCodeCliPath, argumentPrefix: ["serve-web"], standalone: false };
 }
 
 async function reservePort(): Promise<number> {
@@ -165,58 +143,23 @@ async function terminateProcessTree(child: ChildProcess): Promise<void> {
 	await exited;
 }
 
-function buildServerArgs(options: {
+export function buildVsCodeServerCommand(options: {
+	launch: VsCodeServerLaunch;
 	port: number;
 	token: string;
 	serverDataDirectory: string;
 	workspacePath: string;
-	includeTrustOverride: boolean;
-}): string[] {
-	return [
-		"--host",
-		"127.0.0.1",
-		"--port",
-		String(options.port),
-		"--connection-token",
-		options.token,
-		"--server-base-path",
-		PROXY_BASE_PATH,
-		"--server-data-dir",
-		options.serverDataDirectory,
-		"--extensions-dir",
-		join(options.serverDataDirectory, "extensions"),
-		"--user-data-dir",
-		join(options.serverDataDirectory, "data"),
-		"--default-folder",
-		options.workspacePath,
-		"--disable-telemetry",
-		"--accept-server-license-terms",
-		...(options.includeTrustOverride ? ["--disable-workspace-trust"] : []),
-	];
-}
-
-async function ensureVsCodeServerCli(options: {
-	vsCodeCliPath: string;
-	serverDataDirectory: string;
-	workspacePath: string;
-}): Promise<string | null> {
-	const existing = await resolveVsCodeServerCliPath(options.vsCodeCliPath);
-	if (existing) {
-		return existing;
-	}
-
-	const port = await reservePort();
-	const token = randomBytes(32).toString("base64url");
-	const child = spawn(
-		options.vsCodeCliPath,
-		[
-			"serve-web",
+}): { executable: string; args: string[] } {
+	return {
+		executable: options.launch.executable,
+		args: [
+			...options.launch.argumentPrefix,
 			"--host",
 			"127.0.0.1",
 			"--port",
-			String(port),
+			String(options.port),
 			"--connection-token",
-			token,
+			options.token,
 			"--server-base-path",
 			PROXY_BASE_PATH,
 			"--server-data-dir",
@@ -225,15 +168,17 @@ async function ensureVsCodeServerCli(options: {
 			options.workspacePath,
 			"--disable-telemetry",
 			"--accept-server-license-terms",
+			...(options.launch.standalone
+				? [
+						"--extensions-dir",
+						join(options.serverDataDirectory, "extensions"),
+						"--user-data-dir",
+						join(options.serverDataDirectory, "data"),
+						"--disable-workspace-trust",
+					]
+				: []),
 		],
-		{ cwd: options.workspacePath, env: process.env, stdio: "ignore" },
-	);
-	try {
-		await waitForPort(port, child);
-	} finally {
-		await terminateProcessTree(child);
-	}
-	return await resolveVsCodeServerCliPath(options.vsCodeCliPath);
+	};
 }
 
 function buildResponse(active: ActiveVsCodeServer): RuntimeVsCodeWebResponse {
@@ -316,30 +261,19 @@ export class VsCodeWebManager {
 			this.warn(`Could not synchronize the local VS Code profile: ${message}`);
 			profile = { configurationDefaults: {} };
 		}
-		const serverExecutable = await ensureVsCodeServerCli({
-			vsCodeCliPath: executable,
+		const launch = await resolveVsCodeServerLaunch(executable);
+		const command = buildVsCodeServerCommand({
+			launch,
+			port,
+			token,
 			serverDataDirectory: serverDataDir,
 			workspacePath,
 		});
-		if (!serverExecutable) {
-			return {
-				status: "error",
-				url: null,
-				workspacePath,
-				error: "VS Code Server was downloaded but its executable could not be located.",
-			};
-		}
-		const child = spawn(
-			serverExecutable,
-			buildServerArgs({
-				port,
-				token,
-				serverDataDirectory: serverDataDir,
-				workspacePath,
-				includeTrustOverride: true,
-			}),
-			{ cwd: workspacePath, env: process.env, stdio: ["ignore", "pipe", "pipe"] },
-		);
+		const child = spawn(command.executable, command.args, {
+			cwd: workspacePath,
+			env: process.env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
 		let diagnostic = "";
 		const capture = (chunk: Buffer) => {
 			diagnostic = `${diagnostic}${chunk.toString("utf8")}`.slice(-4_000);
