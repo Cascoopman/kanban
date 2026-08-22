@@ -106,9 +106,10 @@ When hook context is available, launch wiring injects:
 3. `KANBAN_HOOK_PORT`
 
 The hook-specific values and port are required by `kanban hooks ingest` to route an event to the correct session and runtime process.
-The agent-facing aliases allow `kanban task current`, `kanban task update --title "..."`, and
-`kanban task branch --title "..." --prompt "..."` to target the current card without copying an ID
-or resolving the main worktree path. Branching creates and starts a new task with the source worktree
+The agent-facing aliases allow `kanban task current`, `kanban task update --title "..."`,
+`kanban task notify --message "..."`, and `kanban task branch --title "..." --prompt "..."` to
+target the current card or alert the user without copying an ID or resolving the main worktree path.
+Branching creates and starts a new task with the source worktree
 and, when available, a fork of the source Claude Code or Codex conversation.
 
 ## Command resolution and cross-platform behavior
