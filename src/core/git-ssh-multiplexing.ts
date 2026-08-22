@@ -36,7 +36,11 @@ export function initializeGitSshMultiplexing(): boolean {
 	}
 
 	const temporaryRoot = existsSync("/tmp") ? "/tmp" : process.cwd();
-	const controlDirectory = mkdtempSync(join(temporaryRoot, `kb-ssh-${process.pid}-`));
+	// Keep this prefix extremely short. OpenSSH appends a temporary suffix while
+	// creating a control socket, and macOS limits Unix socket paths to 103 bytes.
+	// The directory is already uniquely and securely created by mkdtemp, so a
+	// process ID and a descriptive prefix only consume scarce pathname space.
+	const controlDirectory = mkdtempSync(join(temporaryRoot, "k"));
 	chmodSync(controlDirectory, 0o700);
 	state = { controlDirectory };
 	return true;

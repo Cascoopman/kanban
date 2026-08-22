@@ -23,6 +23,17 @@ describe("Git SSH multiplexing", () => {
 		expect(command).not.toContain("/repos/work/.git");
 	});
 
+	it.runIf(process.platform !== "win32")("keeps the expanded control socket path within the macOS limit", () => {
+		expect(initializeGitSshMultiplexing()).toBe(true);
+		const command = buildMultiplexedGitSshCommand("ssh", {}, "/repos/work/.git");
+		const controlPath = command?.match(/ControlPath='([^']+)'/u)?.[1];
+
+		expect(controlPath).toBeDefined();
+		const expandedPath = controlPath?.replace("%C", "c".repeat(40)).replace("%k", "github.com");
+		const openSshTemporaryPath = `${expandedPath}.${"x".repeat(16)}`;
+		expect(openSshTemporaryPath.length).toBeLessThanOrEqual(103);
+	});
+
 	it.runIf(process.platform !== "win32")("isolates control sockets by project and SSH command", () => {
 		expect(initializeGitSshMultiplexing()).toBe(true);
 		const workCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {}, "/repos/work/.git");
