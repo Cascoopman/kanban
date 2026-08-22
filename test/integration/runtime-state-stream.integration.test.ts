@@ -952,6 +952,141 @@ describe.sequential("runtime state stream integration", () => {
 		}
 	}, 30_000);
 
+	it("keeps a non-selected project lifecycle synchronized on the global stream", async () => {
+		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-background-project-");
+		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-background-project-");
+
+		const projectAPath = join(tempRoot, "project-a");
+		const projectBPath = join(tempRoot, "project-b");
+		mkdirSync(projectAPath, { recursive: true });
+		mkdirSync(projectBPath, { recursive: true });
+		initGitRepository(projectAPath);
+		initGitRepository(projectBPath);
+
+		const port = await getAvailablePort();
+		const server = await startKanbanServer({
+			cwd: projectAPath,
+			homeDir: tempHome,
+			port,
+		});
+
+		let streamA: RuntimeStreamClient | null = null;
+
+		try {
+			const runtimeUrl = new URL(server.runtimeUrl);
+			const workspaceAId = decodeURIComponent(runtimeUrl.pathname.slice(1));
+			expect(workspaceAId).not.toBe("");
+
+			const addProjectResponse = await requestJson<RuntimeProjectAddResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "projects.add",
+				type: "mutation",
+				workspaceId: workspaceAId,
+				payload: { path: projectBPath },
+			});
+			const workspaceBId = addProjectResponse.payload.project?.id ?? null;
+			expect(workspaceBId).not.toBeNull();
+			if (!workspaceBId) {
+				throw new Error("Missing project id for added workspace.");
+			}
+
+			streamA = await connectRuntimeStream(
+				`ws://127.0.0.1:${port}/api/runtime/ws?workspaceId=${encodeURIComponent(workspaceAId)}`,
+			);
+			await streamA.waitForMessage(
+				(message): message is RuntimeStateStreamSnapshotMessage => message.type === "snapshot",
+			);
+
+			const taskId = "background-review-task";
+			const initialWorkspaceBState = await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId: workspaceBId,
+			});
+			await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.saveState",
+				type: "mutation",
+				workspaceId: workspaceBId,
+				payload: {
+					board: createInProgressBoard(taskId, "Background review task"),
+					sessions: initialWorkspaceBState.payload.sessions,
+					expectedRevision: initialWorkspaceBState.payload.revision,
+				},
+			});
+
+			const startShellResponse = await requestJson<RuntimeShellSessionStartResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "runtime.startShellSession",
+				type: "mutation",
+				workspaceId: workspaceBId,
+				payload: { taskId, baseRef: "HEAD" },
+			});
+			expect(startShellResponse.payload.ok).toBe(true);
+
+			const hookResponse = await requestJson<RuntimeHookIngestResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "hooks.ingest",
+				type: "mutation",
+				payload: {
+					taskId,
+					workspaceId: workspaceBId,
+					event: "to_review",
+				},
+			});
+			expect(hookResponse.payload.ok).toBe(true);
+
+			const backgroundUpdate = (await streamA.waitForMessage(
+				(message): message is RuntimeStateStreamWorkspaceStateMessage =>
+					message.type === "workspace_state_updated" &&
+					message.workspaceId === workspaceBId &&
+					message.workspaceState.board.columns
+						.find((column) => column.id === "review")
+						?.cards.some((card) => card.id === taskId) === true,
+			)) as RuntimeStateStreamWorkspaceStateMessage;
+			expect(backgroundUpdate.workspaceState.sessions[taskId]?.state).toBe("awaiting_review");
+			expect(backgroundUpdate.workspaceState.repoPath).toBe(
+				await realpath(projectBPath).catch(() => resolve(projectBPath)),
+			);
+
+			const globalBoardUpdate = (await streamA.waitForMessage(
+				(message): message is RuntimeStateStreamProjectsMessage =>
+					message.type === "projects_updated" &&
+					message.projectBoards
+						.find((snapshot) => snapshot.project.id === workspaceBId)
+						?.board.columns.find((column) => column.id === "review")
+						?.cards.some((card) => card.id === taskId) === true,
+			)) as RuntimeStateStreamProjectsMessage;
+			expect(globalBoardUpdate.currentProjectId).toBe(workspaceBId);
+
+			const selectedWorkspaceState = await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId: workspaceAId,
+			});
+			expect(selectedWorkspaceState.payload.repoPath).toBe(
+				await realpath(projectAPath).catch(() => resolve(projectAPath)),
+			);
+
+			await requestJson({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "runtime.stopTaskSession",
+				type: "mutation",
+				workspaceId: workspaceBId,
+				payload: { taskId },
+			});
+		} finally {
+			if (streamA) {
+				await streamA.close();
+			}
+			await server.stop();
+			cleanupRoot();
+			cleanupHome();
+		}
+	}, 30_000);
+
 	it("streams centralized workspace metadata updates for task worktrees", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-metadata-stream-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-metadata-stream-");

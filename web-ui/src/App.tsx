@@ -184,6 +184,7 @@ export default function App(): ReactElement {
 		upsertSession,
 		ensureTaskWorkspace,
 		startTaskSession,
+		startTaskSessionForProject,
 		stopTaskSession,
 		sendTaskSessionInput,
 		cleanupTaskWorkspace,
@@ -214,12 +215,9 @@ export default function App(): ReactElement {
 		setCanPersistWorkspaceState,
 	});
 	useResumeInterruptedTaskSessions({
-		board,
-		sessions,
-		currentProjectId,
-		workspaceHydrationNonce,
-		isWorkspaceMetadataPending,
-		startTaskSession,
+		projectBoards: streamedProjectBoards,
+		hasReceivedSnapshot,
+		startTaskSessionForProject,
 	});
 	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectTaskSelect, handleBack } =
 		useDetailTaskNavigation({
