@@ -68,23 +68,8 @@ export function ProjectBoardToolbar({
 		);
 	}, 0);
 
-	const toggleProject = (projectId: string) => {
-		if (allProjectsVisible) {
-			onVisibleProjectIdsChange(new Set([projectId]));
-			return;
-		}
-		const next = new Set(visibleProjectIds);
-		if (next.has(projectId)) {
-			next.delete(projectId);
-		} else {
-			next.add(projectId);
-		}
-		if (next.size === 0) {
-			for (const project of sortedProjects) {
-				next.add(project.id);
-			}
-		}
-		onVisibleProjectIdsChange(next);
+	const selectProject = (projectId: string) => {
+		onVisibleProjectIdsChange(new Set([projectId]));
 	};
 
 	return (
@@ -115,7 +100,7 @@ export function ProjectBoardToolbar({
 						<button
 							key={project.id}
 							type="button"
-							onClick={() => toggleProject(project.id)}
+							onClick={() => selectProject(project.id)}
 							title={project.path}
 							className={cn(
 								"flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
