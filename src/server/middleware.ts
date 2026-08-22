@@ -18,7 +18,6 @@ export interface CorsGateInput {
 	allowedOrigin: string;
 }
 
-const isDev = process.env.NODE_ENV === "development";
 const DEFAULT_DEV_WEB_UI_PORT = 4173;
 
 function getDevWebUiPort(env: NodeJS.ProcessEnv = process.env): number {
@@ -39,7 +38,7 @@ export function evaluateCors(input: CorsGateInput): CorsDecision {
 		return { kind: "allow", origin: null };
 	}
 
-	const isDevServer = isDev && getDevServerOrigins().has(origin);
+	const isDevServer = process.env.NODE_ENV === "development" && getDevServerOrigins().has(origin);
 
 	if (origin !== input.allowedOrigin && !isDevServer) {
 		return { kind: "reject", origin };
@@ -86,7 +85,7 @@ function getAllowedHostHeaders(): ReadonlySet<string> {
 
 	addHostPort("localhost");
 	addHostPort("127.0.0.1");
-	if (isDev) {
+	if (process.env.NODE_ENV === "development") {
 		const devServerPort = getDevWebUiPort();
 		allowed.add(`localhost:${devServerPort}`);
 		allowed.add(`127.0.0.1:${devServerPort}`);

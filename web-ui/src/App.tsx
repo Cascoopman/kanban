@@ -139,18 +139,35 @@ export default function App(): ReactElement {
 		setSessions,
 	});
 	const { handleSendQuickPrompt } = useQuickPromptActions({ sendTaskSessionInput });
+	const pendingPersistBoardRef = useRef<BoardData | null>(null);
+	const getPendingPersistBoard = useCallback(() => pendingPersistBoardRef.current, []);
+	const handlePendingPersistBoardChange = useCallback((pendingBoard: BoardData | null) => {
+		pendingPersistBoardRef.current = pendingBoard;
+	}, []);
+	const handleWorkspaceStateConflict = useCallback(() => {
+		showAppToast(
+			{
+				intent: "warning",
+				icon: "warning-sign",
+				message: "Workspace changed elsewhere. Synced latest state. Retry your last edit if needed.",
+				timeout: 5000,
+			},
+			"workspace-state-conflict",
+		);
+	}, []);
 
 	const {
 		workspacePath,
 		workspaceGit,
 		workspaceRevision,
-		setWorkspaceRevision,
-		workspaceHydrationNonce,
+		workspaceBaseBoard,
 		isWorkspaceStateRefreshing,
 		isWorkspaceMetadataPending,
 		refreshWorkspaceState,
+		acceptWorkspaceState,
 		resetWorkspaceSyncState,
 	} = useWorkspaceSync({
+		board,
 		currentProjectId,
 		streamedWorkspaceState,
 		hasNoProjects,
@@ -159,6 +176,8 @@ export default function App(): ReactElement {
 		setBoard,
 		setSessions,
 		setCanPersistWorkspaceState,
+		onWorkspaceStateConflict: handleWorkspaceStateConflict,
+		getPendingPersistBoard,
 	});
 	useResumeInterruptedTaskSessions({
 		projectBoards: streamedProjectBoards,
@@ -313,32 +332,26 @@ export default function App(): ReactElement {
 			await saveWorkspaceState(input.workspaceId, input.payload),
 		[],
 	);
-	const handleWorkspaceStateConflict = useCallback(() => {
-		showAppToast(
-			{
-				intent: "warning",
-				icon: "warning-sign",
-				message: "Workspace changed elsewhere. Synced latest state. Retry your last edit if needed.",
-				timeout: 5000,
-			},
-			"workspace-state-conflict",
-		);
-	}, []);
+	const resolveWorkspaceStateConflict = useCallback(
+		async () => await refreshWorkspaceState({ discardLocalBoardChanges: true }),
+		[refreshWorkspaceState],
+	);
 
 	useWorkspacePersistence({
 		board,
+		workspaceBaseBoard,
 		sessions,
 		currentProjectId,
 		workspaceRevision,
-		hydrationNonce: workspaceHydrationNonce,
 		canPersistWorkspaceState,
 		isDocumentVisible,
 		isWorkspaceStateRefreshing,
 		persistWorkspaceState: persistWorkspaceStateAsync,
 		loadWorkspaceState: fetchWorkspaceState,
-		refetchWorkspaceState: refreshWorkspaceState,
-		onWorkspaceRevisionChange: setWorkspaceRevision,
+		resolveWorkspaceStateConflict,
+		onWorkspaceStateSaved: acceptWorkspaceState,
 		onWorkspaceStateConflict: handleWorkspaceStateConflict,
+		onPendingPersistBoardChange: handlePendingPersistBoardChange,
 	});
 
 	useEffect(() => {

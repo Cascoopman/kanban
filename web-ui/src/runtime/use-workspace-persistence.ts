@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { areWorkspaceBoardsEqual, mergeWorkspaceBoards } from "@/runtime/merge-workspace-board";
 import type {
 	RuntimeTaskSessionSummary,
 	RuntimeWorkspaceStateResponse,
@@ -9,10 +10,6 @@ import type { BoardData } from "@/types";
 
 const WORKSPACE_STATE_PERSIST_DEBOUNCE_MS = 120;
 const WORKSPACE_STATE_CONFLICT_RETRY_LIMIT = 3;
-
-function areBoardsEqual(left: BoardData, right: BoardData): boolean {
-	return JSON.stringify(left) === JSON.stringify(right);
-}
 
 function mergeSessionSummaries(
 	currentSessions: Record<string, RuntimeTaskSessionSummary>,
@@ -30,10 +27,10 @@ function mergeSessionSummaries(
 
 export interface UseWorkspacePersistenceParams {
 	board: BoardData;
+	workspaceBaseBoard: BoardData | null;
 	sessions: Record<string, RuntimeTaskSessionSummary>;
 	currentProjectId: string | null;
 	workspaceRevision: number | null;
-	hydrationNonce: number;
 	canPersistWorkspaceState: boolean;
 	isDocumentVisible: boolean;
 	isWorkspaceStateRefreshing: boolean;
@@ -42,43 +39,37 @@ export interface UseWorkspacePersistenceParams {
 		payload: RuntimeWorkspaceStateSaveRequest;
 	}) => Promise<RuntimeWorkspaceStateResponse>;
 	loadWorkspaceState: (workspaceId: string) => Promise<RuntimeWorkspaceStateResponse>;
-	refetchWorkspaceState: () => Promise<unknown>;
-	onWorkspaceRevisionChange: (revision: number) => void;
+	resolveWorkspaceStateConflict: () => Promise<unknown>;
+	onWorkspaceStateSaved: (workspaceState: RuntimeWorkspaceStateResponse, persistedBoard: BoardData) => void;
 	onWorkspaceStateConflict?: (input: { workspaceId: string; currentRevision: number }) => void;
+	onPendingPersistBoardChange?: (board: BoardData | null) => void;
 }
 
 export function useWorkspacePersistence({
 	board,
+	workspaceBaseBoard,
 	sessions,
 	currentProjectId,
 	workspaceRevision,
-	hydrationNonce,
 	canPersistWorkspaceState,
 	isDocumentVisible,
 	isWorkspaceStateRefreshing,
 	persistWorkspaceState,
 	loadWorkspaceState,
-	refetchWorkspaceState,
-	onWorkspaceRevisionChange,
+	resolveWorkspaceStateConflict,
+	onWorkspaceStateSaved,
 	onWorkspaceStateConflict,
+	onPendingPersistBoardChange,
 }: UseWorkspacePersistenceParams): void {
 	const [persistCycle, setPersistCycle] = useState(0);
-	const skipNextPersistRef = useRef(false);
-	const latestHydrationNonceRef = useRef(hydrationNonce);
 	const latestPersistRequestIdRef = useRef(0);
 	const persistInFlightRef = useRef(false);
 	const persistQueuedRef = useRef(false);
 	const currentProjectIdRef = useRef<string | null>(currentProjectId);
 	const sessionsRef = useRef(sessions);
-	const lastPersistedBoardRef = useRef<BoardData | null>(null);
-	const lastPersistedWorkspaceIdRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		currentProjectIdRef.current = currentProjectId;
-		if (lastPersistedWorkspaceIdRef.current !== currentProjectId) {
-			lastPersistedWorkspaceIdRef.current = currentProjectId;
-			lastPersistedBoardRef.current = null;
-		}
 	}, [currentProjectId]);
 
 	useEffect(() => {
@@ -86,32 +77,20 @@ export function useWorkspacePersistence({
 	}, [sessions]);
 
 	useEffect(() => {
-		if (latestHydrationNonceRef.current === hydrationNonce) {
-			return;
-		}
-		latestHydrationNonceRef.current = hydrationNonce;
-		skipNextPersistRef.current = true;
-		lastPersistedWorkspaceIdRef.current = currentProjectId;
-		lastPersistedBoardRef.current = board;
-	}, [board, currentProjectId, hydrationNonce]);
-
-	useEffect(() => {
-		if (!canPersistWorkspaceState || !isDocumentVisible || isWorkspaceStateRefreshing || workspaceRevision == null) {
+		if (
+			!canPersistWorkspaceState ||
+			!isDocumentVisible ||
+			isWorkspaceStateRefreshing ||
+			workspaceRevision == null ||
+			workspaceBaseBoard == null
+		) {
 			return;
 		}
 		if (persistInFlightRef.current) {
 			persistQueuedRef.current = true;
 			return;
 		}
-		if (skipNextPersistRef.current) {
-			skipNextPersistRef.current = false;
-			return;
-		}
-		if (
-			currentProjectId != null &&
-			lastPersistedWorkspaceIdRef.current === currentProjectId &&
-			lastPersistedBoardRef.current === board
-		) {
+		if (areWorkspaceBoardsEqual(workspaceBaseBoard, board)) {
 			return;
 		}
 		const timeoutId = window.setTimeout(() => {
@@ -126,7 +105,8 @@ export function useWorkspacePersistence({
 				sessions: sessionsRef.current,
 				expectedRevision: workspaceRevision,
 			};
-			const baseBoard = lastPersistedBoardRef.current;
+			let mergeBaseBoard = workspaceBaseBoard;
+			onPendingPersistBoardChange?.(payload.board);
 			void (async () => {
 				persistInFlightRef.current = true;
 				try {
@@ -151,26 +131,32 @@ export function useWorkspacePersistence({
 							if (currentProjectIdRef.current !== persistWorkspaceId) {
 								return;
 							}
-							const canRetryWithoutOverwritingBoardChanges =
-								baseBoard !== null && areBoardsEqual(currentWorkspaceState.board, baseBoard);
+							const mergedBoard = mergeWorkspaceBoards(
+								mergeBaseBoard,
+								pendingPayload.board,
+								currentWorkspaceState.board,
+							);
 							if (
-								!canRetryWithoutOverwritingBoardChanges ||
+								mergedBoard.status === "conflict" ||
 								conflictRetryCount >= WORKSPACE_STATE_CONFLICT_RETRY_LIMIT
 							) {
 								onWorkspaceStateConflict?.({
 									workspaceId: persistWorkspaceId,
 									currentRevision: currentWorkspaceState.revision,
 								});
-								await refetchWorkspaceState();
+								await resolveWorkspaceStateConflict();
 								return;
 							}
 
 							conflictRetryCount += 1;
+							mergeBaseBoard = currentWorkspaceState.board;
 							pendingPayload = {
-								...payload,
+								...pendingPayload,
+								board: mergedBoard.board,
 								sessions: mergeSessionSummaries(currentWorkspaceState.sessions, sessionsRef.current),
 								expectedRevision: currentWorkspaceState.revision,
 							};
+							onPendingPersistBoardChange?.(pendingPayload.board);
 						}
 					}
 					if (
@@ -179,12 +165,11 @@ export function useWorkspacePersistence({
 					) {
 						return;
 					}
-					lastPersistedWorkspaceIdRef.current = persistWorkspaceId;
-					lastPersistedBoardRef.current = board;
-					onWorkspaceRevisionChange(saved.revision);
+					onWorkspaceStateSaved(saved, pendingPayload.board);
 				} catch {
 					// Keep the UI usable even if persistence is temporarily unavailable.
 				} finally {
+					onPendingPersistBoardChange?.(null);
 					persistInFlightRef.current = false;
 					if (persistQueuedRef.current) {
 						persistQueuedRef.current = false;
@@ -203,11 +188,13 @@ export function useWorkspacePersistence({
 		isDocumentVisible,
 		isWorkspaceStateRefreshing,
 		loadWorkspaceState,
-		onWorkspaceRevisionChange,
+		onWorkspaceStateSaved,
+		onPendingPersistBoardChange,
 		persistCycle,
 		persistWorkspaceState,
-		refetchWorkspaceState,
+		resolveWorkspaceStateConflict,
 		onWorkspaceStateConflict,
+		workspaceBaseBoard,
 		workspaceRevision,
 	]);
 }

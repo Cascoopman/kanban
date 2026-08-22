@@ -44,7 +44,7 @@ Click a card to work with the agent and its VS Code workspace side by side. Use 
 ### 5. Ship it
 Review and ship changes with VS Code's Git tools or a quick prompt tailored to your workflow. Move the card to Done when the work is complete; clearing Done removes its worktree, while the saved session can still be restored later.
 
-### Isolated development preview
+### Isolated development and browser testing
 
 When developing Kanban itself, use the isolated preview instead of starting another runtime against your production data:
 
@@ -55,6 +55,19 @@ npm run dev:isolated -- --agent claude
 ```
 
 The command starts the runtime and Vite on fresh random localhost ports, opens a browser directly on the test board without first-run onboarding, and clearly labels the UI as an isolated preview. Each launch gets a separate browser origin as well as a temporary runtime home and disposable Git repository, so it does not read or write production `~/.kanban` state, production task worktrees, project-level Kanban settings, browser storage, or service workers. Stop it with `Ctrl+C`; temporary data is removed automatically. Add `--no-open` to print the URL without opening it, or `--keep-data` to preserve the temporary directory for debugging.
+
+For ordinary development, `npm run dev:full` also defaults to a worktree-specific runtime directory under `~/.kanban-dev/`. Use `npm run dev:full -- --runtime-home /path/to/state` to select another isolated directory. Only use `npm run dev:full:prod-state` when you intentionally want the development checkout to operate on production `~/.kanban` state.
+
+Browser tests launch an isolated full stack instead of connecting to an existing local runtime:
+
+```bash
+npm --prefix web-ui exec playwright install chromium # first run only
+npm run test:e2e
+```
+
+Each browser run creates and removes its own temporary `KANBAN_RUNTIME_HOME` and disposable Git project, uses dedicated runtime and web ports, and refuses to reuse an already-running server. It does not read or write production state or repositories.
+
+The browser suite also exercises workspace concurrency end to end: it pauses a browser save, applies a separate lifecycle update through the runtime API, then verifies both changes are merged and persisted without showing the workspace-conflict warning.
 
 ---
 

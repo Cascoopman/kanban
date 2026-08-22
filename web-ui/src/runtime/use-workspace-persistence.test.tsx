@@ -10,27 +10,26 @@ import type { BoardData } from "@/types";
 
 const WORKSPACE_ID = "project-a";
 
-function createBoard(title: string): BoardData {
+function createBoard(title: string, columnId: "in_progress" | "review" = "in_progress", updatedAt = 1): BoardData {
 	const board = createInitialBoardData();
 	return {
 		...board,
-		columns: board.columns.map((column, index) =>
-			index === 0
-				? {
-						...column,
-						cards: [
+		columns: board.columns.map((column) => ({
+			...column,
+			cards:
+				column.id === columnId
+					? [
 							{
 								id: "task-1",
 								title,
 								startInPlanMode: false,
 								baseRef: "main",
 								createdAt: 1,
-								updatedAt: 1,
+								updatedAt,
 							},
-						],
-					}
-				: column,
-		),
+						]
+					: [],
+		})),
 	};
 }
 
@@ -51,29 +50,29 @@ function createWorkspaceState(board: BoardData, revision: number): RuntimeWorksp
 
 interface HarnessProps {
 	board: BoardData;
-	hydrationNonce: number;
-	canPersistWorkspaceState: boolean;
+	workspaceBaseBoard: BoardData;
+	workspaceRevision?: number;
 	persistWorkspaceState: UseWorkspacePersistenceParams["persistWorkspaceState"];
 	loadWorkspaceState: UseWorkspacePersistenceParams["loadWorkspaceState"];
-	refetchWorkspaceState: UseWorkspacePersistenceParams["refetchWorkspaceState"];
-	onWorkspaceRevisionChange: UseWorkspacePersistenceParams["onWorkspaceRevisionChange"];
+	resolveWorkspaceStateConflict: UseWorkspacePersistenceParams["resolveWorkspaceStateConflict"];
+	onWorkspaceStateSaved: UseWorkspacePersistenceParams["onWorkspaceStateSaved"];
 	onWorkspaceStateConflict: NonNullable<UseWorkspacePersistenceParams["onWorkspaceStateConflict"]>;
 }
 
 function Harness(props: HarnessProps): null {
 	useWorkspacePersistence({
 		board: props.board,
+		workspaceBaseBoard: props.workspaceBaseBoard,
 		sessions: {},
 		currentProjectId: WORKSPACE_ID,
-		workspaceRevision: 1,
-		hydrationNonce: props.hydrationNonce,
-		canPersistWorkspaceState: props.canPersistWorkspaceState,
+		workspaceRevision: props.workspaceRevision ?? 1,
+		canPersistWorkspaceState: true,
 		isDocumentVisible: true,
 		isWorkspaceStateRefreshing: false,
 		persistWorkspaceState: props.persistWorkspaceState,
 		loadWorkspaceState: props.loadWorkspaceState,
-		refetchWorkspaceState: props.refetchWorkspaceState,
-		onWorkspaceRevisionChange: props.onWorkspaceRevisionChange,
+		resolveWorkspaceStateConflict: props.resolveWorkspaceStateConflict,
+		onWorkspaceStateSaved: props.onWorkspaceStateSaved,
 		onWorkspaceStateConflict: props.onWorkspaceStateConflict,
 	});
 
@@ -107,59 +106,60 @@ describe("useWorkspacePersistence", () => {
 		vi.useRealTimers();
 	});
 
-	it("retries an edit when only non-board workspace state changed", async () => {
-		const persistedBoard = createBoard("Original title");
-		const editedBoard = createBoard("Edited title");
-		const persistWorkspaceState = vi
-			.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>()
-			.mockRejectedValueOnce(new WorkspaceStateConflictError(2))
-			.mockResolvedValueOnce(createWorkspaceState(editedBoard, 3));
-		const loadWorkspaceState = vi
-			.fn<UseWorkspacePersistenceParams["loadWorkspaceState"]>()
-			.mockResolvedValue(createWorkspaceState(persistedBoard, 2));
-		const refetchWorkspaceState = vi.fn<UseWorkspacePersistenceParams["refetchWorkspaceState"]>();
-		const onWorkspaceRevisionChange = vi.fn<UseWorkspacePersistenceParams["onWorkspaceRevisionChange"]>();
-		const onWorkspaceStateConflict = vi.fn<NonNullable<UseWorkspacePersistenceParams["onWorkspaceStateConflict"]>>();
+	function createCallbacks() {
+		return {
+			resolveWorkspaceStateConflict: vi.fn<UseWorkspacePersistenceParams["resolveWorkspaceStateConflict"]>(),
+			onWorkspaceStateSaved: vi.fn<UseWorkspacePersistenceParams["onWorkspaceStateSaved"]>(),
+			onWorkspaceStateConflict: vi.fn<NonNullable<UseWorkspacePersistenceParams["onWorkspaceStateConflict"]>>(),
+		};
+	}
+
+	it("does not persist a board that matches the latest server baseline", async () => {
+		const board = createBoard("Original title");
+		const persistWorkspaceState = vi.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>();
+		const callbacks = createCallbacks();
 
 		await act(async () => {
 			root.render(
 				<Harness
-					board={persistedBoard}
-					hydrationNonce={0}
-					canPersistWorkspaceState={false}
+					board={board}
+					workspaceBaseBoard={board}
 					persistWorkspaceState={persistWorkspaceState}
-					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					loadWorkspaceState={vi.fn()}
+					{...callbacks}
 				/>,
 			);
 		});
 		await act(async () => {
-			root.render(
-				<Harness
-					board={persistedBoard}
-					hydrationNonce={1}
-					canPersistWorkspaceState={true}
-					persistWorkspaceState={persistWorkspaceState}
-					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
-				/>,
-			);
+			await vi.runAllTimersAsync();
 		});
+
+		expect(persistWorkspaceState).not.toHaveBeenCalled();
+	});
+
+	it("merges a local title edit with a concurrent lifecycle move and retries", async () => {
+		const baseBoard = createBoard("Original title");
+		const editedBoard = createBoard("Edited title", "in_progress", 2);
+		const lifecycleBoard = createBoard("Original title", "review", 3);
+		const mergedBoard = createBoard("Edited title", "review", 3);
+		const savedState = createWorkspaceState(mergedBoard, 3);
+		const persistWorkspaceState = vi
+			.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>()
+			.mockRejectedValueOnce(new WorkspaceStateConflictError(2))
+			.mockResolvedValueOnce(savedState);
+		const loadWorkspaceState = vi
+			.fn<UseWorkspacePersistenceParams["loadWorkspaceState"]>()
+			.mockResolvedValue(createWorkspaceState(lifecycleBoard, 2));
+		const callbacks = createCallbacks();
+
 		await act(async () => {
 			root.render(
 				<Harness
 					board={editedBoard}
-					hydrationNonce={1}
-					canPersistWorkspaceState={true}
+					workspaceBaseBoard={baseBoard}
 					persistWorkspaceState={persistWorkspaceState}
 					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					{...callbacks}
 				/>,
 			);
 		});
@@ -171,69 +171,64 @@ describe("useWorkspacePersistence", () => {
 		expect(persistWorkspaceState).toHaveBeenLastCalledWith({
 			workspaceId: WORKSPACE_ID,
 			payload: {
-				board: editedBoard,
+				board: mergedBoard,
 				sessions: {},
 				expectedRevision: 2,
 			},
 		});
-		expect(refetchWorkspaceState).not.toHaveBeenCalled();
-		expect(onWorkspaceStateConflict).not.toHaveBeenCalled();
-		expect(onWorkspaceRevisionChange).toHaveBeenCalledWith(3);
+		expect(callbacks.resolveWorkspaceStateConflict).not.toHaveBeenCalled();
+		expect(callbacks.onWorkspaceStateConflict).not.toHaveBeenCalled();
+		expect(callbacks.onWorkspaceStateSaved).toHaveBeenCalledWith(savedState, mergedBoard);
 	});
 
-	it("reloads and reports a genuine concurrent board edit", async () => {
-		const persistedBoard = createBoard("Original title");
-		const editedBoard = createBoard("My edit");
-		const concurrentBoard = createBoard("Concurrent edit");
+	it("passes the complete server response back to sync after a successful save", async () => {
+		const baseBoard = createBoard("Original title");
+		const editedBoard = createBoard("Edited title", "in_progress", 2);
+		const reconciledBoard = createBoard("Edited title", "review", 3);
+		const savedState = createWorkspaceState(reconciledBoard, 2);
+		const persistWorkspaceState = vi
+			.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>()
+			.mockResolvedValue(savedState);
+		const callbacks = createCallbacks();
+
+		await act(async () => {
+			root.render(
+				<Harness
+					board={editedBoard}
+					workspaceBaseBoard={baseBoard}
+					persistWorkspaceState={persistWorkspaceState}
+					loadWorkspaceState={vi.fn()}
+					{...callbacks}
+				/>,
+			);
+		});
+		await act(async () => {
+			await vi.runAllTimersAsync();
+		});
+
+		expect(callbacks.onWorkspaceStateSaved).toHaveBeenCalledWith(savedState, editedBoard);
+	});
+
+	it("reloads and reports a genuine concurrent edit to the same field", async () => {
+		const baseBoard = createBoard("Original title");
+		const editedBoard = createBoard("My edit", "in_progress", 2);
+		const concurrentBoard = createBoard("Concurrent edit", "in_progress", 3);
 		const persistWorkspaceState = vi
 			.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>()
 			.mockRejectedValue(new WorkspaceStateConflictError(2));
 		const loadWorkspaceState = vi
 			.fn<UseWorkspacePersistenceParams["loadWorkspaceState"]>()
 			.mockResolvedValue(createWorkspaceState(concurrentBoard, 2));
-		const refetchWorkspaceState = vi.fn<UseWorkspacePersistenceParams["refetchWorkspaceState"]>();
-		const onWorkspaceRevisionChange = vi.fn<UseWorkspacePersistenceParams["onWorkspaceRevisionChange"]>();
-		const onWorkspaceStateConflict = vi.fn<NonNullable<UseWorkspacePersistenceParams["onWorkspaceStateConflict"]>>();
+		const callbacks = createCallbacks();
 
 		await act(async () => {
 			root.render(
 				<Harness
-					board={persistedBoard}
-					hydrationNonce={0}
-					canPersistWorkspaceState={false}
-					persistWorkspaceState={persistWorkspaceState}
-					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
-				/>,
-			);
-		});
-		await act(async () => {
-			root.render(
-				<Harness
-					board={persistedBoard}
-					hydrationNonce={1}
-					canPersistWorkspaceState={true}
-					persistWorkspaceState={persistWorkspaceState}
-					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
-				/>,
-			);
-		});
-		await act(async () => {
-			root.render(
-				<Harness
 					board={editedBoard}
-					hydrationNonce={1}
-					canPersistWorkspaceState={true}
+					workspaceBaseBoard={baseBoard}
 					persistWorkspaceState={persistWorkspaceState}
 					loadWorkspaceState={loadWorkspaceState}
-					refetchWorkspaceState={refetchWorkspaceState}
-					onWorkspaceRevisionChange={onWorkspaceRevisionChange}
-					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					{...callbacks}
 				/>,
 			);
 		});
@@ -242,8 +237,8 @@ describe("useWorkspacePersistence", () => {
 		});
 
 		expect(persistWorkspaceState).toHaveBeenCalledTimes(1);
-		expect(refetchWorkspaceState).toHaveBeenCalledOnce();
-		expect(onWorkspaceStateConflict).toHaveBeenCalledWith({
+		expect(callbacks.resolveWorkspaceStateConflict).toHaveBeenCalledOnce();
+		expect(callbacks.onWorkspaceStateConflict).toHaveBeenCalledWith({
 			workspaceId: WORKSPACE_ID,
 			currentRevision: 2,
 		});

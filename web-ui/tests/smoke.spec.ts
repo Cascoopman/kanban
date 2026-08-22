@@ -1,8 +1,78 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+
+import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../src/runtime/types";
+import type { BoardCard, BoardColumnId, BoardData } from "../src/types";
+
+const ONBOARDING_DIALOG_SHOWN_KEY = "kanban.onboarding.dialog.shown";
+const WORKSPACE_CONFLICT_MESSAGE = "Workspace changed elsewhere. Synced latest state. Retry your last edit if needed.";
+
+test.beforeEach(async ({ page }) => {
+	await page.addInitScript((key) => window.localStorage.setItem(key, "true"), ONBOARDING_DIALOG_SHOWN_KEY);
+});
 
 async function createTask(page: Page) {
 	await page.getByRole("button", { name: /New task/ }).click();
 	await page.getByRole("menuitem").first().click();
+}
+
+function unwrapTrpcPayload<T>(value: unknown): T {
+	const envelope = Array.isArray(value) ? value[0] : value;
+	if (!envelope || typeof envelope !== "object" || !("result" in envelope)) {
+		throw new Error("Unexpected tRPC response envelope.");
+	}
+	const result = (envelope as { result?: { data?: unknown } }).result;
+	const data = result?.data;
+	if (data && typeof data === "object" && "json" in data) {
+		return (data as { json: T }).json;
+	}
+	return data as T;
+}
+
+async function requestTrpc<T>({
+	request,
+	procedure,
+	type,
+	workspaceId,
+	payload,
+}: {
+	request: APIRequestContext;
+	procedure: string;
+	type: "query" | "mutation";
+	workspaceId?: string;
+	payload?: unknown;
+}): Promise<T> {
+	const headers = workspaceId ? { "x-kanban-workspace-id": workspaceId } : undefined;
+	const response =
+		type === "query"
+			? await request.get(`/api/trpc/${procedure}`, { headers })
+			: await request.post(`/api/trpc/${procedure}`, { headers, data: payload });
+	if (!response.ok()) {
+		throw new Error(`${procedure} failed with HTTP ${response.status()}: ${await response.text()}`);
+	}
+	return unwrapTrpcPayload<T>(await response.json());
+}
+
+function placeTask(board: BoardData, columnId: BoardColumnId, card: BoardCard): BoardData {
+	return {
+		...board,
+		columns: board.columns.map((column) => ({
+			...column,
+			cards: [
+				...column.cards.filter((candidate) => candidate.id !== card.id),
+				...(column.id === columnId ? [card] : []),
+			],
+		})),
+	};
+}
+
+function findTask(board: BoardData, taskId: string): { columnId: BoardColumnId; card: BoardCard } | null {
+	for (const column of board.columns) {
+		const card = column.cards.find((candidate) => candidate.id === taskId);
+		if (card) {
+			return { columnId: column.id, card };
+		}
+	}
+	return null;
 }
 
 test("renders kanban top bar and columns", async ({ page }) => {
@@ -11,8 +81,9 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByText("All projects", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Manage projects" })).toBeVisible();
 	await expect(page.getByText("In Progress", { exact: true })).toBeVisible();
-	await expect(page.getByText("Review", { exact: true })).toBeVisible();
-	await expect(page.getByText("Trash", { exact: true })).toBeVisible();
+	await expect(page.getByText("In Review / Blocked", { exact: true })).toBeVisible();
+	await expect(page.getByText("On Hold", { exact: true })).toBeVisible();
+	await expect(page.getByText("Done", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
 });
 
@@ -21,7 +92,7 @@ test("creating a task opens its live agent terminal directly", async ({ page }) 
 	await createTask(page);
 	await expect(page).toHaveURL(/\?task=/);
 	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
-	await expect(page.getByText("New task", { exact: true }).first()).toBeVisible();
+	await expect(page.getByRole("navigation", { name: "Task breadcrumb" }).getByText("New task", { exact: true })).toBeVisible();
 });
 
 test("creating a task does not open a prompt dialog", async ({ page }) => {
@@ -33,6 +104,129 @@ test("creating a task does not open a prompt dialog", async ({ page }) => {
 
 test("settings button opens runtime settings dialog", async ({ page }) => {
 	await page.goto("/");
-	await page.getByTestId("open-settings-button").click();
+	await page.getByRole("button", { name: "Settings" }).click();
 	await expect(page.getByRole("dialog").getByText("Settings", { exact: true })).toBeVisible();
+});
+
+test("merges a local card move with a concurrent server lifecycle move", async ({ page, request }) => {
+	const projects = await requestTrpc<RuntimeProjectsResponse>({
+		request,
+		procedure: "projects.list",
+		type: "query",
+	});
+	const workspaceId = projects.currentProjectId ?? projects.projects[0]?.id;
+	if (!workspaceId) {
+		throw new Error("Expected the isolated runtime to expose its current workspace.");
+	}
+	const initialState = await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.getState",
+		type: "query",
+		workspaceId,
+	});
+	const testRunId = Date.now();
+	const localTask: BoardCard = {
+		id: `e2e-local-${testRunId}`,
+		title: "Locally moved task",
+		startInPlanMode: false,
+		baseRef: "main",
+		createdAt: testRunId,
+		updatedAt: testRunId,
+	};
+	const lifecycleTask: BoardCard = {
+		id: `e2e-lifecycle-${testRunId}`,
+		title: "Agent lifecycle task",
+		startInPlanMode: false,
+		baseRef: "main",
+		createdAt: testRunId,
+		updatedAt: testRunId,
+	};
+	const seededBoard = placeTask(
+		placeTask(initialState.board, "review", localTask),
+		"in_progress",
+		lifecycleTask,
+	);
+	const seededState = await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.saveState",
+		type: "mutation",
+		workspaceId,
+		payload: {
+			board: seededBoard,
+			sessions: initialState.sessions,
+			expectedRevision: initialState.revision,
+		},
+	});
+
+	let releaseFirstBrowserSave: (() => void) | null = null;
+	const firstBrowserSaveReleased = new Promise<void>((resolve) => {
+		releaseFirstBrowserSave = resolve;
+	});
+	let markFirstBrowserSaveIntercepted: (() => void) | null = null;
+	const firstBrowserSaveIntercepted = new Promise<void>((resolve) => {
+		markFirstBrowserSaveIntercepted = resolve;
+	});
+	let browserSaveCount = 0;
+	await page.route("**/api/trpc/workspace.saveState**", async (route) => {
+		browserSaveCount += 1;
+		if (browserSaveCount === 1) {
+			markFirstBrowserSaveIntercepted?.();
+			await firstBrowserSaveReleased;
+		}
+		await route.continue();
+	});
+
+	try {
+		await page.goto("/");
+		const localCard = page.locator(`[data-task-id="${localTask.id}"]`);
+		await expect(localCard).toContainText(localTask.title);
+		await localCard.focus();
+		await page.keyboard.press("Space");
+		await page.keyboard.press("ArrowRight");
+		await page.keyboard.press("Space");
+		await expect(page.locator(`[data-task-id="${localTask.id}"][data-column-id="on_hold"]`)).toBeVisible();
+		await firstBrowserSaveIntercepted;
+
+		const remoteLifecycleTask = { ...lifecycleTask, updatedAt: lifecycleTask.updatedAt + 1_000 };
+		await requestTrpc<RuntimeWorkspaceStateResponse>({
+			request,
+			procedure: "workspace.saveState",
+			type: "mutation",
+			workspaceId,
+			payload: {
+				board: placeTask(seededState.board, "review", remoteLifecycleTask),
+				sessions: seededState.sessions,
+				expectedRevision: seededState.revision,
+			},
+		});
+
+		releaseFirstBrowserSave?.();
+		await expect(page.locator(`[data-task-id="${localTask.id}"][data-column-id="on_hold"]`)).toContainText(
+			localTask.title,
+		);
+		await expect(page.locator(`[data-task-id="${lifecycleTask.id}"][data-column-id="review"]`)).toContainText(
+			lifecycleTask.title,
+		);
+
+		await expect.poll(async () => browserSaveCount).toBe(2);
+		await expect
+			.poll(async () => {
+				const state = await requestTrpc<RuntimeWorkspaceStateResponse>({
+					request,
+					procedure: "workspace.getState",
+					type: "query",
+					workspaceId,
+				});
+				const persistedLocalTask = findTask(state.board, localTask.id);
+				const persistedLifecycleTask = findTask(state.board, lifecycleTask.id);
+				return {
+					localColumnId: persistedLocalTask?.columnId ?? null,
+					lifecycleColumnId: persistedLifecycleTask?.columnId ?? null,
+				};
+			})
+			.toEqual({ localColumnId: "on_hold", lifecycleColumnId: "review" });
+		await expect(page.getByText(WORKSPACE_CONFLICT_MESSAGE, { exact: true })).toHaveCount(0);
+	} finally {
+		releaseFirstBrowserSave?.();
+	}
 });

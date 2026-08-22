@@ -1,12 +1,16 @@
 import type { IncomingMessage } from "node:http";
 import { PassThrough } from "node:stream";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getKanbanRuntimeOrigin, getKanbanRuntimePort } from "../../../src/core/runtime-endpoint";
 import { evaluateCors, evaluateHost, getDevServerOrigins, handleSocketUpgrade } from "../../../src/server/middleware";
 
 const RUNTIME_PORT = getKanbanRuntimePort();
 const ALLOWED_ORIGIN = getKanbanRuntimeOrigin();
 const ALLOWED_HOSTS = new Set([`localhost:${RUNTIME_PORT}`, `127.0.0.1:${RUNTIME_PORT}`]);
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 function makeFakeRequest(headers: Partial<IncomingMessage["headers"]>, method = "GET"): IncomingMessage {
 	return { method, headers } as IncomingMessage;
@@ -68,6 +72,32 @@ describe("evaluateCors", () => {
 			allowedOrigin: ALLOWED_ORIGIN,
 		});
 		expect(decision).toEqual({ kind: "reject", origin: "http://127.0.0.1:9999" });
+	});
+
+	it("allows the configured Vite origin in development", () => {
+		vi.stubEnv("NODE_ENV", "development");
+		vi.stubEnv("KANBAN_WEB_UI_PORT", "41973");
+
+		const decision = evaluateCors({
+			method: "GET",
+			originHeader: "http://127.0.0.1:41973",
+			allowedOrigin: ALLOWED_ORIGIN,
+		});
+
+		expect(decision).toEqual({ kind: "allow", origin: "http://127.0.0.1:41973" });
+	});
+
+	it("does not keep trusting the default Vite port when a custom port is configured", () => {
+		vi.stubEnv("NODE_ENV", "development");
+		vi.stubEnv("KANBAN_WEB_UI_PORT", "41973");
+
+		const decision = evaluateCors({
+			method: "GET",
+			originHeader: "http://127.0.0.1:4173",
+			allowedOrigin: ALLOWED_ORIGIN,
+		});
+
+		expect(decision).toEqual({ kind: "reject", origin: "http://127.0.0.1:4173" });
 	});
 
 	it("rejects requests from the same host but a different scheme", () => {
@@ -152,6 +182,21 @@ describe("evaluateHost", () => {
 });
 
 describe("handleSocketUpgrade", () => {
+	it("allows upgrades proxied from the configured Vite port in development", () => {
+		vi.stubEnv("NODE_ENV", "development");
+		vi.stubEnv("KANBAN_WEB_UI_PORT", "41973");
+		const socket = new PassThrough();
+		const request = makeFakeRequest({
+			host: `127.0.0.1:${RUNTIME_PORT}`,
+			origin: "http://127.0.0.1:41973",
+		});
+
+		const result = handleSocketUpgrade(request, socket);
+
+		expect(result).toEqual({ end: false });
+		expect(socket.destroyed).toBe(false);
+	});
+
 	it("passes through upgrades whose Host and Origin are both allowed", () => {
 		const socket = new PassThrough();
 		const request = makeFakeRequest({ host: `127.0.0.1:${RUNTIME_PORT}`, origin: ALLOWED_ORIGIN });
