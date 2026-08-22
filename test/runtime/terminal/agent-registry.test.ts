@@ -24,6 +24,7 @@ function createRuntimeConfigState(overrides: Partial<RuntimeConfigState> = {}): 
 		agentAutonomousModeEnabled: true,
 		readyForReviewNotificationsEnabled: true,
 		shortcuts: [],
+		quickPrompts: [],
 		commitPromptTemplate: "commit",
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",

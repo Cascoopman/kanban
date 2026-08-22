@@ -29,7 +29,8 @@ const INDEX_FILENAME = "index.json";
 const BOARD_FILENAME = "board.json";
 const SESSIONS_FILENAME = "sessions.json";
 const META_FILENAME = "meta.json";
-const INDEX_VERSION = 1;
+const LEGACY_INDEX_VERSION = 1;
+const INDEX_VERSION = 2;
 const WORKSPACE_ID_COLLISION_SUFFIX_LENGTH = 4;
 
 const BOARD_COLUMNS: Array<{ id: RuntimeBoardColumnId; title: string }> = [
@@ -50,7 +51,7 @@ export interface RuntimeWorkspaceIndexEntry {
 }
 
 interface WorkspaceIndexFile {
-	version: number;
+	version: typeof LEGACY_INDEX_VERSION | typeof INDEX_VERSION;
 	entries: Record<string, WorkspaceIndexEntry>;
 	repoPathToId: Record<string, string>;
 }
@@ -72,7 +73,7 @@ const workspaceIndexEntrySchema = z.object({
 
 const workspaceIndexFileSchema = z
 	.object({
-		version: z.literal(INDEX_VERSION),
+		version: z.union([z.literal(LEGACY_INDEX_VERSION), z.literal(INDEX_VERSION)]),
 		entries: z.record(z.string(), workspaceIndexEntrySchema),
 		repoPathToId: z.record(z.string(), z.string().min(1, "Workspace ID cannot be empty.")),
 	})
@@ -356,8 +357,25 @@ async function readWorkspaceIndex(): Promise<WorkspaceIndexFile> {
 }
 
 async function writeWorkspaceIndex(index: WorkspaceIndexFile): Promise<void> {
-	await lockedFileSystem.writeJsonFileAtomic(getWorkspaceIndexPath(), index, {
-		lock: null,
+	await lockedFileSystem.writeJsonFileAtomic(
+		getWorkspaceIndexPath(),
+		{
+			...index,
+			version: INDEX_VERSION,
+		},
+		{
+			lock: null,
+		},
+	);
+}
+
+export async function ensureWorkspaceIndexCompatibility(): Promise<void> {
+	await lockedFileSystem.withLock(getWorkspaceIndexLockRequest(), async () => {
+		const rawIndex = await readJsonFile(getWorkspaceIndexPath());
+		const index = parseWorkspaceIndex(rawIndex);
+		if (rawIndex === null || index.version !== INDEX_VERSION) {
+			await writeWorkspaceIndex(index);
+		}
 	});
 }
 

@@ -281,6 +281,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
 					shortcuts: [],
+					quickPrompts: [],
 					commitPromptTemplate: current.commitPromptTemplateDefault,
 					openPrPromptTemplate: current.openPrPromptTemplateDefault,
 				});
@@ -324,6 +325,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
 					shortcuts: [],
+					quickPrompts: [],
 					commitPromptTemplate: current.commitPromptTemplateDefault,
 					openPrPromptTemplate: current.openPrPromptTemplateDefault,
 				});
@@ -351,6 +353,7 @@ describe.sequential("runtime-config auto agent selection", () => {
 					agentAutonomousModeEnabled: true,
 					readyForReviewNotificationsEnabled: true,
 					shortcuts: [{ label: "Ship", command: "npm run ship", icon: "rocket" }],
+					quickPrompts: [],
 					commitPromptTemplate: current.commitPromptTemplateDefault,
 					openPrPromptTemplate: current.openPrPromptTemplateDefault,
 				});
@@ -418,6 +421,37 @@ describe.sequential("runtime-config auto agent selection", () => {
 
 				const reloaded = await loadRuntimeConfig(tempProject);
 				expect(reloaded.agentAutonomousModeEnabled).toBe(false);
+			});
+		} finally {
+			cleanupProject();
+			cleanupHome();
+		}
+	});
+
+	it("persists global quick prompts independently of project shortcuts", async () => {
+		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-runtime-config-prompts-");
+		const { path: tempProject, cleanup: cleanupProject } = createTempDir("kanban-project-runtime-config-prompts-");
+
+		try {
+			await withTemporaryEnv({ home: tempHome }, async () => {
+				const quickPrompts = [
+					{
+						label: "Ship it",
+						prompt: "Looks good. Open a PR and merge it for me.",
+						context: "review" as const,
+					},
+				];
+				const updated = await updateRuntimeConfig(tempProject, { quickPrompts });
+
+				expect(updated.quickPrompts).toEqual(quickPrompts);
+				const globalPayload = JSON.parse(readFileSync(join(tempHome, ".kanban", "config.json"), "utf8")) as {
+					quickPrompts?: unknown;
+				};
+				expect(globalPayload.quickPrompts).toEqual(quickPrompts);
+				expect(existsSync(join(tempProject, ".kanban", "config.json"))).toBe(false);
+
+				const reloaded = await loadRuntimeConfig(tempProject);
+				expect(reloaded.quickPrompts).toEqual(quickPrompts);
 			});
 		} finally {
 			cleanupProject();

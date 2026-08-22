@@ -14,7 +14,7 @@ import { ResizableBottomPane } from "@/resize/resizable-bottom-pane";
 import { ResizeHandle } from "@/resize/resize-handle";
 import { useCardDetailLayout } from "@/resize/use-card-detail-layout";
 import { useResizeDrag } from "@/resize/use-resize-drag";
-import type { RuntimeTaskSessionSummary } from "@/runtime/types";
+import type { RuntimeQuickPrompt, RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTerminalThemeColors } from "@/terminal/theme-colors";
 import { type BoardCard, type CardSelection, isReviewLikeColumnId } from "@/types";
 import { useWindowEvent } from "@/utils/react-use";
@@ -231,6 +231,9 @@ export function CardDetailView({
 	agentCommitTaskLoadingById,
 	agentOpenPrTaskLoadingById,
 	moveToTrashLoadingById,
+	quickPrompts = [],
+	onSendQuickPrompt,
+	onEditQuickPrompts,
 	onMoveToTrash,
 	isMoveToTrashLoading,
 	gitHistoryPanel,
@@ -272,6 +275,9 @@ export function CardDetailView({
 	agentCommitTaskLoadingById?: Record<string, boolean>;
 	agentOpenPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
+	quickPrompts?: readonly RuntimeQuickPrompt[];
+	onSendQuickPrompt?: (taskId: string, prompt: string) => Promise<void>;
+	onEditQuickPrompts?: () => void;
 	onMoveToTrash: () => void;
 	isMoveToTrashLoading?: boolean;
 	gitHistoryPanel?: ReactNode;
@@ -448,6 +454,11 @@ export function CardDetailView({
 			showMoveToTrash={showMoveToTrashActions}
 			onMoveToTrash={onMoveToTrash}
 			isMoveToTrashLoading={isMoveToTrashLoading}
+			quickPrompts={quickPrompts}
+			onSendQuickPrompt={
+				onSendQuickPrompt ? async (prompt) => await onSendQuickPrompt(selection.card.id, prompt) : undefined
+			}
+			onEditQuickPrompts={onEditQuickPrompts}
 			panelBackgroundColor="var(--color-surface-0)"
 			terminalBackgroundColor={terminalThemeColors.surfacePrimary}
 			cursorColor={terminalThemeColors.textPrimary}

@@ -15,6 +15,7 @@ import {
 	FileText,
 	FolderOpen,
 	GitCommit,
+	MessageSquareText,
 	Palette,
 	Plus,
 	Settings,
@@ -22,6 +23,7 @@ import {
 	X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { QuickPromptSettings } from "@/components/quick-prompt-settings";
 import {
 	getRuntimeShortcutIconComponent,
 	getRuntimeShortcutPickerOption,
@@ -35,6 +37,7 @@ import { Dialog, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { NativeSelect } from "@/components/ui/native-select";
 import { TASK_GIT_BASE_REF_PROMPT_VARIABLE, type TaskGitAction } from "@/git-actions/build-task-git-action-prompt";
 import { previewThemeId, readStoredThemeId, saveThemeId, THEME_GROUPS, THEMES, type ThemeId } from "@/hooks/use-theme";
+import { areRuntimeQuickPromptsEqual } from "@/quick-prompts/quick-prompt-utils";
 import { useLayoutCustomizations } from "@/resize/layout-customizations";
 import { formatAgentInstructionsLoadError } from "@/runtime/agent-instructions-error";
 import { openFileOnHost } from "@/runtime/runtime-config-query";
@@ -43,7 +46,12 @@ import {
 	getSupportedAgentCatalog,
 	resolveSupportedAgentId,
 } from "@/runtime/supported-agents";
-import type { RuntimeAgentId, RuntimeConfigResponse, RuntimeProjectShortcut } from "@/runtime/types";
+import type {
+	RuntimeAgentId,
+	RuntimeConfigResponse,
+	RuntimeProjectShortcut,
+	RuntimeQuickPrompt,
+} from "@/runtime/types";
 import { useAgentInstructions } from "@/runtime/use-agent-instructions";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
@@ -82,11 +90,18 @@ const GIT_PROMPT_VARIANT_OPTIONS: Array<{ value: TaskGitAction; label: string }>
 	{ value: "pr", label: "Make PR" },
 ];
 
-export type RuntimeSettingsSection = "shortcuts";
+export type RuntimeSettingsSection = "quick-prompts" | "shortcuts";
 
 const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["claude", "codex"];
 
-type SettingsNavId = "general" | "git-prompts" | "notifications" | "appearance" | "agents" | "project";
+type SettingsNavId =
+	| "general"
+	| "quick-prompts"
+	| "git-prompts"
+	| "notifications"
+	| "appearance"
+	| "agents"
+	| "project";
 
 const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	id: SettingsNavId;
@@ -94,6 +109,7 @@ const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	icon: React.ReactNode;
 }> = [
 	{ id: "general", label: "General", icon: <SlidersHorizontal size={16} /> },
+	{ id: "quick-prompts", label: "Quick Prompts", icon: <MessageSquareText size={16} /> },
 	{ id: "git-prompts", label: "Git Prompts", icon: <GitCommit size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
@@ -366,6 +382,7 @@ export function RuntimeSettingsDialog({
 	const [draftThemeId, setDraftThemeId] = useState<ThemeId>(readStoredThemeId);
 	const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermission>("unsupported");
 	const [shortcuts, setShortcuts] = useState<RuntimeProjectShortcut[]>([]);
+	const [quickPrompts, setQuickPrompts] = useState<RuntimeQuickPrompt[]>([]);
 	const [commitPromptTemplate, setCommitPromptTemplate] = useState("");
 	const [openPrPromptTemplate, setOpenPrPromptTemplate] = useState("");
 	const [agentInstructionsContent, setAgentInstructionsContent] = useState("");
@@ -374,6 +391,7 @@ export function RuntimeSettingsDialog({
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const [pendingShortcutScrollIndex, setPendingShortcutScrollIndex] = useState<number | null>(null);
 	const copiedVariableResetTimerRef = useRef<number | null>(null);
+	const quickPromptsSectionRef = useRef<HTMLDivElement | null>(null);
 	const shortcutsSectionRef = useRef<HTMLHeadingElement | null>(null);
 	const shortcutRowRefs = useRef<Array<HTMLDivElement | null>>([]);
 	const bodyRef = useRef<HTMLDivElement>(null);
@@ -426,6 +444,7 @@ export function RuntimeSettingsDialog({
 	const initialAgentAutonomousModeEnabled = config?.agentAutonomousModeEnabled ?? true;
 	const initialReadyForReviewNotificationsEnabled = config?.readyForReviewNotificationsEnabled ?? true;
 	const initialShortcuts = config?.shortcuts ?? [];
+	const initialQuickPrompts = config?.quickPrompts ?? [];
 	const initialCommitPromptTemplate = config?.commitPromptTemplate ?? "";
 	const initialOpenPrPromptTemplate = config?.openPrPromptTemplate ?? "";
 	const hasRuntimeConfigChanges = useMemo(() => {
@@ -442,6 +461,9 @@ export function RuntimeSettingsDialog({
 			return true;
 		}
 		if (!areRuntimeProjectShortcutsEqual(shortcuts, initialShortcuts)) {
+			return true;
+		}
+		if (!areRuntimeQuickPromptsEqual(quickPrompts, initialQuickPrompts)) {
 			return true;
 		}
 		if (
@@ -461,11 +483,13 @@ export function RuntimeSettingsDialog({
 		initialAgentAutonomousModeEnabled,
 		initialCommitPromptTemplate,
 		initialOpenPrPromptTemplate,
+		initialQuickPrompts,
 		initialReadyForReviewNotificationsEnabled,
 		initialSelectedAgentId,
 		initialShortcuts,
 		initialThemeId,
 		openPrPromptTemplate,
+		quickPrompts,
 		readyForReviewNotificationsEnabled,
 		selectedAgentId,
 		shortcuts,
@@ -482,6 +506,7 @@ export function RuntimeSettingsDialog({
 		setAgentAutonomousModeEnabled(config?.agentAutonomousModeEnabled ?? true);
 		setReadyForReviewNotificationsEnabled(config?.readyForReviewNotificationsEnabled ?? true);
 		setShortcuts(config?.shortcuts ?? []);
+		setQuickPrompts(config?.quickPrompts ?? []);
 		setCommitPromptTemplate(config?.commitPromptTemplate ?? "");
 		setOpenPrPromptTemplate(config?.openPrPromptTemplate ?? "");
 		setSaveError(null);
@@ -489,6 +514,7 @@ export function RuntimeSettingsDialog({
 		config?.agentAutonomousModeEnabled,
 		config?.commitPromptTemplate,
 		config?.openPrPromptTemplate,
+		config?.quickPrompts,
 		config?.readyForReviewNotificationsEnabled,
 		config?.selectedAgentId,
 		config?.shortcuts,
@@ -521,10 +547,16 @@ export function RuntimeSettingsDialog({
 	useWindowEvent("focus", open ? refreshNotificationPermission : null);
 
 	useEffect(() => {
-		if (!open || initialSection !== "shortcuts") {
+		if (!open || !initialSection) {
 			return;
 		}
 		const timeout = window.setTimeout(() => {
+			if (initialSection === "quick-prompts") {
+				setActiveSection("quick-prompts");
+				quickPromptsSectionRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+				return;
+			}
+			setActiveSection("project");
 			shortcutsSectionRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
 		}, 500);
 		return () => {
@@ -631,6 +663,10 @@ export function RuntimeSettingsDialog({
 			setSaveError("Runtime settings are still loading. Try again in a moment.");
 			return;
 		}
+		if (quickPrompts.some((quickPrompt) => !quickPrompt.label.trim() || !quickPrompt.prompt.trim())) {
+			setSaveError("Each quick prompt needs both a button label and prompt text.");
+			return;
+		}
 		const selectedAgent = displayedAgents.find((agent) => agent.id === selectedAgentId);
 		if (!selectedAgent || selectedAgent.installed !== true) {
 			setSaveError("Selected agent is not installed. Install it first or choose an installed agent.");
@@ -650,6 +686,7 @@ export function RuntimeSettingsDialog({
 				agentAutonomousModeEnabled,
 				readyForReviewNotificationsEnabled,
 				shortcuts,
+				quickPrompts,
 				commitPromptTemplate,
 				openPrPromptTemplate,
 			});
@@ -766,6 +803,20 @@ export function RuntimeSettingsDialog({
 							Allows agents to use tools without stopping for permission. Use at your own risk.
 						</p>
 					</div>
+
+					{/* ---- Quick Prompts ---- */}
+					<div ref={quickPromptsSectionRef} data-settings-section="quick-prompts" />
+					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
+						<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
+							<MessageSquareText size={16} className="text-text-secondary" />
+							Quick Prompts
+						</h2>
+					</div>
+					<QuickPromptSettings
+						quickPrompts={quickPrompts}
+						onChange={setQuickPrompts}
+						disabled={controlsDisabled}
+					/>
 
 					{/* ---- Git Prompts ---- */}
 					<div data-settings-section="git-prompts" />

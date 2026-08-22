@@ -4,7 +4,7 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { getRuntimeAgentCatalogEntry, isRuntimeAgentLaunchSupported } from "../core/agent-catalog";
-import type { RuntimeAgentId, RuntimeProjectShortcut } from "../core/api-contract";
+import type { RuntimeAgentId, RuntimeProjectShortcut, RuntimeQuickPrompt } from "../core/api-contract";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 import { detectInstalledCommands } from "../terminal/agent-registry";
 import { areRuntimeProjectShortcutsEqual } from "./shortcut-utils";
@@ -16,6 +16,7 @@ interface RuntimeGlobalConfigFileShape {
 	readyForReviewNotificationsEnabled?: boolean;
 	commitPromptTemplate?: string;
 	openPrPromptTemplate?: string;
+	quickPrompts?: RuntimeQuickPrompt[];
 }
 
 interface RuntimeProjectConfigFileShape {
@@ -30,6 +31,7 @@ export interface RuntimeConfigState {
 	agentAutonomousModeEnabled: boolean;
 	readyForReviewNotificationsEnabled: boolean;
 	shortcuts: RuntimeProjectShortcut[];
+	quickPrompts: RuntimeQuickPrompt[];
 	commitPromptTemplate: string;
 	openPrPromptTemplate: string;
 	commitPromptTemplateDefault: string;
@@ -42,6 +44,7 @@ export interface RuntimeConfigUpdateInput {
 	agentAutonomousModeEnabled?: boolean;
 	readyForReviewNotificationsEnabled?: boolean;
 	shortcuts?: RuntimeProjectShortcut[];
+	quickPrompts?: RuntimeQuickPrompt[];
 	commitPromptTemplate?: string;
 	openPrPromptTemplate?: string;
 }
@@ -158,6 +161,52 @@ function normalizeShortcuts(shortcuts: RuntimeProjectShortcut[] | null | undefin
 	return normalized;
 }
 
+function normalizeQuickPrompt(quickPrompt: RuntimeQuickPrompt): RuntimeQuickPrompt | null {
+	if (!quickPrompt || typeof quickPrompt !== "object") {
+		return null;
+	}
+
+	const label = typeof quickPrompt.label === "string" ? quickPrompt.label.trim() : "";
+	const prompt = typeof quickPrompt.prompt === "string" ? quickPrompt.prompt.trim() : "";
+	const context =
+		quickPrompt.context === "in_progress" || quickPrompt.context === "review" ? quickPrompt.context : "any";
+
+	if (!label || !prompt) {
+		return null;
+	}
+
+	return { label, prompt, context };
+}
+
+function normalizeQuickPrompts(quickPrompts: RuntimeQuickPrompt[] | null | undefined): RuntimeQuickPrompt[] {
+	if (!Array.isArray(quickPrompts)) {
+		return [];
+	}
+	const normalized: RuntimeQuickPrompt[] = [];
+	for (const quickPrompt of quickPrompts) {
+		const parsed = normalizeQuickPrompt(quickPrompt);
+		if (parsed) {
+			normalized.push(parsed);
+		}
+	}
+	return normalized;
+}
+
+function areQuickPromptsEqual(left: RuntimeQuickPrompt[], right: RuntimeQuickPrompt[]): boolean {
+	if (left.length !== right.length) {
+		return false;
+	}
+	return left.every((item, index) => {
+		const comparison = right[index];
+		return (
+			comparison !== undefined &&
+			item.label === comparison.label &&
+			item.prompt === comparison.prompt &&
+			item.context === comparison.context
+		);
+	});
+}
+
 function normalizePromptTemplate(value: unknown, fallback: string): string {
 	if (typeof value !== "string") {
 		return fallback;
@@ -272,6 +321,7 @@ function toRuntimeConfigState({
 			DEFAULT_READY_FOR_REVIEW_NOTIFICATIONS_ENABLED,
 		),
 		shortcuts: normalizeShortcuts(projectConfig?.shortcuts),
+		quickPrompts: normalizeQuickPrompts(globalConfig?.quickPrompts),
 		commitPromptTemplate: normalizePromptTemplate(globalConfig?.commitPromptTemplate, DEFAULT_COMMIT_PROMPT_TEMPLATE),
 		openPrPromptTemplate: normalizePromptTemplate(
 			globalConfig?.openPrPromptTemplate,
@@ -300,6 +350,7 @@ async function writeRuntimeGlobalConfigFile(
 		readyForReviewNotificationsEnabled?: boolean;
 		commitPromptTemplate?: string;
 		openPrPromptTemplate?: string;
+		quickPrompts?: RuntimeQuickPrompt[];
 	},
 ): Promise<void> {
 	const existing = await readRuntimeConfigFile<RuntimeGlobalConfigFileShape>(configPath);
@@ -328,6 +379,7 @@ async function writeRuntimeGlobalConfigFile(
 		config.openPrPromptTemplate === undefined
 			? DEFAULT_OPEN_PR_PROMPT_TEMPLATE
 			: normalizePromptTemplate(config.openPrPromptTemplate, DEFAULT_OPEN_PR_PROMPT_TEMPLATE);
+	const quickPrompts = normalizeQuickPrompts(config.quickPrompts);
 
 	const payload: RuntimeGlobalConfigFileShape = {};
 	if (selectedAgentId !== undefined) {
@@ -361,6 +413,9 @@ async function writeRuntimeGlobalConfigFile(
 	}
 	if (hasOwnKey(existing, "openPrPromptTemplate") || openPrPromptTemplate !== DEFAULT_OPEN_PR_PROMPT_TEMPLATE) {
 		payload.openPrPromptTemplate = openPrPromptTemplate;
+	}
+	if (hasOwnKey(existing, "quickPrompts") || quickPrompts.length > 0) {
+		payload.quickPrompts = quickPrompts;
 	}
 
 	await lockedFileSystem.writeJsonFileAtomic(configPath, payload, {
@@ -442,6 +497,7 @@ function createRuntimeConfigStateFromValues(input: {
 	agentAutonomousModeEnabled: boolean;
 	readyForReviewNotificationsEnabled: boolean;
 	shortcuts: RuntimeProjectShortcut[];
+	quickPrompts: RuntimeQuickPrompt[];
 	commitPromptTemplate: string;
 	openPrPromptTemplate: string;
 }): RuntimeConfigState {
@@ -459,6 +515,7 @@ function createRuntimeConfigStateFromValues(input: {
 			DEFAULT_READY_FOR_REVIEW_NOTIFICATIONS_ENABLED,
 		),
 		shortcuts: normalizeShortcuts(input.shortcuts),
+		quickPrompts: normalizeQuickPrompts(input.quickPrompts),
 		commitPromptTemplate: normalizePromptTemplate(input.commitPromptTemplate, DEFAULT_COMMIT_PROMPT_TEMPLATE),
 		openPrPromptTemplate: normalizePromptTemplate(input.openPrPromptTemplate, DEFAULT_OPEN_PR_PROMPT_TEMPLATE),
 		commitPromptTemplateDefault: DEFAULT_COMMIT_PROMPT_TEMPLATE,
@@ -475,6 +532,7 @@ export function toGlobalRuntimeConfigState(current: RuntimeConfigState): Runtime
 		agentAutonomousModeEnabled: current.agentAutonomousModeEnabled,
 		readyForReviewNotificationsEnabled: current.readyForReviewNotificationsEnabled,
 		shortcuts: [],
+		quickPrompts: current.quickPrompts,
 		commitPromptTemplate: current.commitPromptTemplate,
 		openPrPromptTemplate: current.openPrPromptTemplate,
 	});
@@ -510,6 +568,7 @@ export async function saveRuntimeConfig(
 		agentAutonomousModeEnabled: boolean;
 		readyForReviewNotificationsEnabled: boolean;
 		shortcuts: RuntimeProjectShortcut[];
+		quickPrompts: RuntimeQuickPrompt[];
 		commitPromptTemplate: string;
 		openPrPromptTemplate: string;
 	},
@@ -523,6 +582,7 @@ export async function saveRuntimeConfig(
 			readyForReviewNotificationsEnabled: config.readyForReviewNotificationsEnabled,
 			commitPromptTemplate: config.commitPromptTemplate,
 			openPrPromptTemplate: config.openPrPromptTemplate,
+			quickPrompts: config.quickPrompts,
 		});
 		await writeRuntimeProjectConfigFile(projectConfigPath, { shortcuts: config.shortcuts });
 		return createRuntimeConfigStateFromValues({
@@ -533,6 +593,7 @@ export async function saveRuntimeConfig(
 			agentAutonomousModeEnabled: config.agentAutonomousModeEnabled,
 			readyForReviewNotificationsEnabled: config.readyForReviewNotificationsEnabled,
 			shortcuts: config.shortcuts,
+			quickPrompts: config.quickPrompts,
 			commitPromptTemplate: config.commitPromptTemplate,
 			openPrPromptTemplate: config.openPrPromptTemplate,
 		});
@@ -554,6 +615,7 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			readyForReviewNotificationsEnabled:
 				updates.readyForReviewNotificationsEnabled ?? current.readyForReviewNotificationsEnabled,
 			shortcuts: projectConfigPath ? (updates.shortcuts ?? current.shortcuts) : current.shortcuts,
+			quickPrompts: updates.quickPrompts ?? current.quickPrompts,
 			commitPromptTemplate: updates.commitPromptTemplate ?? current.commitPromptTemplate,
 			openPrPromptTemplate: updates.openPrPromptTemplate ?? current.openPrPromptTemplate,
 		};
@@ -565,6 +627,7 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			nextConfig.readyForReviewNotificationsEnabled !== current.readyForReviewNotificationsEnabled ||
 			nextConfig.commitPromptTemplate !== current.commitPromptTemplate ||
 			nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate ||
+			!areQuickPromptsEqual(nextConfig.quickPrompts, current.quickPrompts) ||
 			!areRuntimeProjectShortcutsEqual(nextConfig.shortcuts, current.shortcuts);
 
 		if (!hasChanges) {
@@ -578,6 +641,7 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 			commitPromptTemplate: nextConfig.commitPromptTemplate,
 			openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+			quickPrompts: nextConfig.quickPrompts,
 		});
 		await writeRuntimeProjectConfigFile(projectConfigPath, {
 			shortcuts: nextConfig.shortcuts,
@@ -590,6 +654,7 @@ export async function updateRuntimeConfig(cwd: string, updates: RuntimeConfigUpd
 			agentAutonomousModeEnabled: nextConfig.agentAutonomousModeEnabled,
 			readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 			shortcuts: nextConfig.shortcuts,
+			quickPrompts: nextConfig.quickPrompts,
 			commitPromptTemplate: nextConfig.commitPromptTemplate,
 			openPrPromptTemplate: nextConfig.openPrPromptTemplate,
 		});
@@ -619,6 +684,7 @@ export async function updateGlobalRuntimeConfig(
 				readyForReviewNotificationsEnabled:
 					updates.readyForReviewNotificationsEnabled ?? current.readyForReviewNotificationsEnabled,
 				shortcuts: current.shortcuts,
+				quickPrompts: updates.quickPrompts ?? current.quickPrompts,
 				commitPromptTemplate: updates.commitPromptTemplate ?? current.commitPromptTemplate,
 				openPrPromptTemplate: updates.openPrPromptTemplate ?? current.openPrPromptTemplate,
 			};
@@ -629,7 +695,8 @@ export async function updateGlobalRuntimeConfig(
 				nextConfig.agentAutonomousModeEnabled !== current.agentAutonomousModeEnabled ||
 				nextConfig.readyForReviewNotificationsEnabled !== current.readyForReviewNotificationsEnabled ||
 				nextConfig.commitPromptTemplate !== current.commitPromptTemplate ||
-				nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate;
+				nextConfig.openPrPromptTemplate !== current.openPrPromptTemplate ||
+				!areQuickPromptsEqual(nextConfig.quickPrompts, current.quickPrompts);
 
 			if (!hasChanges) {
 				return current;
@@ -642,6 +709,7 @@ export async function updateGlobalRuntimeConfig(
 				readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 				commitPromptTemplate: nextConfig.commitPromptTemplate,
 				openPrPromptTemplate: nextConfig.openPrPromptTemplate,
+				quickPrompts: nextConfig.quickPrompts,
 			});
 
 			return createRuntimeConfigStateFromValues({
@@ -652,6 +720,7 @@ export async function updateGlobalRuntimeConfig(
 				agentAutonomousModeEnabled: nextConfig.agentAutonomousModeEnabled,
 				readyForReviewNotificationsEnabled: nextConfig.readyForReviewNotificationsEnabled,
 				shortcuts: nextConfig.shortcuts,
+				quickPrompts: nextConfig.quickPrompts,
 				commitPromptTemplate: nextConfig.commitPromptTemplate,
 				openPrPromptTemplate: nextConfig.openPrPromptTemplate,
 			});

@@ -486,6 +486,16 @@ export const runtimeProjectShortcutSchema = z.object({
 });
 export type RuntimeProjectShortcut = z.infer<typeof runtimeProjectShortcutSchema>;
 
+export const runtimeQuickPromptContextSchema = z.enum(["any", "in_progress", "review"]);
+export type RuntimeQuickPromptContext = z.infer<typeof runtimeQuickPromptContextSchema>;
+
+export const runtimeQuickPromptSchema = z.object({
+	label: z.string(),
+	prompt: z.string(),
+	context: runtimeQuickPromptContextSchema,
+});
+export type RuntimeQuickPrompt = z.infer<typeof runtimeQuickPromptSchema>;
+
 export const runtimeCommandRunRequestSchema = z.object({
 	command: z.string(),
 });
@@ -566,6 +576,7 @@ export const runtimeConfigResponseSchema = z.object({
 	detectedCommands: z.array(z.string()),
 	agents: z.array(runtimeAgentDefinitionSchema),
 	shortcuts: z.array(runtimeProjectShortcutSchema),
+	quickPrompts: z.array(runtimeQuickPromptSchema),
 	commitPromptTemplate: z.string(),
 	openPrPromptTemplate: z.string(),
 	commitPromptTemplateDefault: z.string(),
@@ -578,6 +589,7 @@ export const runtimeConfigSaveRequestSchema = z.object({
 	selectedShortcutLabel: z.string().nullable().optional(),
 	agentAutonomousModeEnabled: z.boolean().optional(),
 	shortcuts: z.array(runtimeProjectShortcutSchema).optional(),
+	quickPrompts: z.array(runtimeQuickPromptSchema).optional(),
 	readyForReviewNotificationsEnabled: z.boolean().optional(),
 	commitPromptTemplate: z.string().optional(),
 	openPrPromptTemplate: z.string().optional(),

@@ -94,6 +94,7 @@ function createRuntimeConfig(selectedAgentId: RuntimeConfigResponse["selectedAge
 			},
 		],
 		shortcuts: [],
+		quickPrompts: [],
 		commitPromptTemplate: "commit",
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",

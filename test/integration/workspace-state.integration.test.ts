@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -8,6 +8,7 @@ import type { RuntimeBoardData, RuntimeTaskSessionSummary } from "../../src/core
 import { moveTaskToColumn } from "../../src/core/task-board-mutations";
 import type { WorkspaceStateConflictError } from "../../src/state/workspace-state";
 import {
+	ensureWorkspaceIndexCompatibility,
 	getWorkspacesRootPath,
 	listWorkspaceIndexEntries,
 	loadWorkspaceContext,
@@ -96,6 +97,65 @@ function initGitRepository(path: string): void {
 }
 
 describe.sequential("workspace-state integration", () => {
+	it("atomically upgrades a legacy workspace index without changing its entries", async () => {
+		await withTemporaryHome(async () => {
+			const indexPath = join(getWorkspacesRootPath(), "index.json");
+			const legacyIndex = {
+				version: 1,
+				entries: {
+					"workspace-a": {
+						workspaceId: "workspace-a",
+						repoPath: "/tmp/workspace-a",
+					},
+				},
+				repoPathToId: {
+					"/tmp/workspace-a": "workspace-a",
+				},
+			};
+			mkdirSync(getWorkspacesRootPath(), { recursive: true });
+			writeFileSync(indexPath, JSON.stringify(legacyIndex, null, 2), "utf8");
+
+			await ensureWorkspaceIndexCompatibility();
+
+			const migratedIndex = JSON.parse(readFileSync(indexPath, "utf8")) as Record<string, unknown>;
+			expect(migratedIndex).toEqual({
+				...legacyIndex,
+				version: 2,
+			});
+		});
+	});
+
+	it("creates the current workspace index fence when no index exists", async () => {
+		await withTemporaryHome(async () => {
+			await ensureWorkspaceIndexCompatibility();
+
+			const indexPath = join(getWorkspacesRootPath(), "index.json");
+			const index = JSON.parse(readFileSync(indexPath, "utf8")) as Record<string, unknown>;
+			expect(index).toEqual({
+				version: 2,
+				entries: {},
+				repoPathToId: {},
+			});
+		});
+	});
+
+	it("fails loudly without rewriting an unsupported future workspace index", async () => {
+		await withTemporaryHome(async () => {
+			const indexPath = join(getWorkspacesRootPath(), "index.json");
+			const futureIndex = {
+				version: 3,
+				entries: {},
+				repoPathToId: {},
+			};
+			mkdirSync(getWorkspacesRootPath(), { recursive: true });
+			writeFileSync(indexPath, JSON.stringify(futureIndex, null, 2), "utf8");
+
+			await expect(ensureWorkspaceIndexCompatibility()).rejects.toThrow("index.json");
+			await expect(ensureWorkspaceIndexCompatibility()).rejects.toThrow("version");
+			expect(JSON.parse(readFileSync(indexPath, "utf8"))).toEqual(futureIndex);
+		});
+	});
+
 	it("atomically reconciles session lifecycle state with its board column", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspace-session-reconcile-");
@@ -314,7 +374,7 @@ describe.sequential("workspace-state integration", () => {
 		});
 	});
 
-	it("migrates legacy backlog cards into in progress", async () => {
+	it("migrates legacy board data without retaining removed task fields", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-legacy-board-");
 			try {
@@ -335,7 +395,15 @@ describe.sequential("workspace-state integration", () => {
 									{
 										id: "legacy-task",
 										title: "Legacy task",
+										prompt: "Legacy prompt that must not remain persisted.",
 										startInPlanMode: false,
+										images: [
+											{
+												id: "legacy-image",
+												data: "data:image/png;base64,AA==",
+												mimeType: "image/png",
+											},
+										],
 										baseRef: "main",
 										createdAt: 1,
 										updatedAt: 1,
@@ -356,6 +424,8 @@ describe.sequential("workspace-state integration", () => {
 					"trash",
 				]);
 				expect(state.board.columns[0]?.cards[0]?.id).toBe("legacy-task");
+				expect(state.board.columns[0]?.cards[0]).not.toHaveProperty("prompt");
+				expect(state.board.columns[0]?.cards[0]).not.toHaveProperty("images");
 				expect(state.board).not.toHaveProperty("dependencies");
 			} finally {
 				cleanup();

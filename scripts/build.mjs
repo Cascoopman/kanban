@@ -3,9 +3,10 @@ import * as esbuild from "esbuild";
 /**
  * Runtime externals. `node-pty` is a native addon with a compiled binding
  * and a spawn-helper binary that must live on disk, so it can't be bundled.
- * Everything else esbuild can inline.
+ * `jsonc-parser` exposes a UMD CommonJS entry whose relative runtime requires
+ * are not safe inside our single-file ESM bundle.
  */
-const external = ["node-pty"];
+const external = ["node-pty", "jsonc-parser"];
 
 /** Bake OTEL telemetry env vars into the bundle at build time. */
 const define = {
