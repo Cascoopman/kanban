@@ -722,16 +722,8 @@ export default function App(): ReactElement {
 										Board
 									</button>
 									<ChevronRight size={14} className="shrink-0 text-text-tertiary" />
-									{selectedCard.card.projectName ? (
-										<>
-											<span className="max-w-40 truncate text-xs text-text-secondary">
-												{selectedCard.card.projectName}
-											</span>
-											<ChevronRight size={14} className="shrink-0 text-text-tertiary" />
-										</>
-									) : null}
-									<span className="min-w-0 flex-1 break-words text-xs font-medium leading-4 text-text-primary">
-										{selectedCard.card.title}
+									<span aria-current="page" className="text-xs font-medium text-text-primary">
+										Deep mode
 									</span>
 								</nav>
 								<CardDetailView

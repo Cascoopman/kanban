@@ -68,6 +68,7 @@ Kanban task sessions
 - Treat the task title as agent-owned metadata. If it is generic, unclear, or no longer reflects the work, update it early with `kanban task update --title "<concise outcome-oriented title>"`; inside a task session the CLI infers the task and workspace automatically.
 - When the user must act within a few minutes, immediately run `kanban task notify --title "<urgent item>" --subtitle "<deadline>" --message "<concrete action>"`. It sends both a Notification Center entry and a modal alert that remains visible under Focus modes. Also report the issue in the conversation, and do not use notifications for routine progress or completion updates.
 - Keep the title concise and useful on the board. Do not change the prompt, base ref, agent, or workflow mode unless the user requests it or the task requires it.
+- After a substantial user-facing change or fix, launch the repository's fully isolated development preview and include its inspectable URL in the final response. For this repository, use `npm run dev:isolated -- --agent codex` (or `claude`) so preview state cannot affect production data. Keep the preview running for the user unless they ask to stop it; if a preview cannot be launched, state the concrete blocker instead of silently ending with static checks only.
 
 web-ui Stack
 - Kanban web-ui uses Tailwind CSS v4 for styling, Radix UI for accessible headless primitives, and Lucide React for icons.
