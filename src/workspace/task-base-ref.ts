@@ -1,4 +1,40 @@
+import { resolve } from "node:path";
+
 import { runGit } from "./git-utils";
+
+const activeTaskBaseRefRefreshes = new Map<string, Promise<Awaited<ReturnType<typeof runGit>>>>();
+let taskBaseRefRefreshQueue: Promise<void> = Promise.resolve();
+
+function enqueueTaskBaseRefRefresh(repoPath: string): Promise<Awaited<ReturnType<typeof runGit>>> {
+	const refresh = taskBaseRefRefreshQueue.then(async () => await runGit(repoPath, ["fetch", "--all", "--prune"]));
+	taskBaseRefRefreshQueue = refresh.then(
+		() => undefined,
+		() => undefined,
+	);
+	return refresh;
+}
+
+export async function refreshTaskBaseRefs(repoPath: string): Promise<Awaited<ReturnType<typeof runGit>>> {
+	const cacheKey = resolve(repoPath);
+	const existingRefresh = activeTaskBaseRefRefreshes.get(cacheKey);
+	if (existingRefresh) {
+		return await existingRefresh;
+	}
+
+	// Indexed workspaces subscribe together at startup. Serializing their first
+	// fetch prevents multiple repositories on the same SSH host from racing to
+	// establish the shared ControlMaster connection and showing duplicate key
+	// authentication prompts.
+	const refresh = enqueueTaskBaseRefRefresh(cacheKey);
+	activeTaskBaseRefRefreshes.set(cacheKey, refresh);
+	try {
+		return await refresh;
+	} finally {
+		if (activeTaskBaseRefRefreshes.get(cacheKey) === refresh) {
+			activeTaskBaseRefRefreshes.delete(cacheKey);
+		}
+	}
+}
 
 function isMissingInitialCommitError(message: string): boolean {
 	const normalizedMessage = message.trim().toLowerCase();
@@ -23,7 +59,7 @@ function getBaseRefResolutionErrorMessage(baseRef: string, errorMessage: string)
 }
 
 export async function resolveLatestTaskBaseCommit(repoPath: string, baseRef: string): Promise<string> {
-	const fetchResult = await runGit(repoPath, ["fetch", "--all", "--prune"]);
+	const fetchResult = await refreshTaskBaseRefs(repoPath);
 	if (!fetchResult.ok) {
 		throw new Error(
 			`Could not fetch the latest remote refs before creating the task worktree. ${fetchResult.error ?? fetchResult.output}`,
