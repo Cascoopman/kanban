@@ -21,6 +21,10 @@ const codexSessionResolverMocks = vi.hoisted(() => ({
 	resolveCodexSessionIdForCwd: vi.fn(),
 }));
 
+const claudeSessionResolverMocks = vi.hoisted(() => ({
+	resolveClaudeSessionIdForCwd: vi.fn(),
+}));
+
 const turnCheckpointMocks = vi.hoisted(() => ({
 	captureTaskTurnCheckpoint: vi.fn(),
 }));
@@ -45,6 +49,10 @@ vi.mock("../../../src/workspace/task-worktree.js", () => ({
 
 vi.mock("../../../src/terminal/codex-session-resolver.js", () => ({
 	resolveCodexSessionIdForCwd: codexSessionResolverMocks.resolveCodexSessionIdForCwd,
+}));
+
+vi.mock("../../../src/terminal/claude-session-resolver.js", () => ({
+	resolveClaudeSessionIdForCwd: claudeSessionResolverMocks.resolveClaudeSessionIdForCwd,
 }));
 
 vi.mock("../../../src/workspace/turn-checkpoints.js", () => ({
@@ -121,6 +129,7 @@ describe("createRuntimeApi terminal task sessions", () => {
 		taskWorktreeMocks.getTaskWorkspacePathInfo.mockReset();
 		taskWorktreeMocks.resolveTaskCwd.mockReset();
 		codexSessionResolverMocks.resolveCodexSessionIdForCwd.mockReset();
+		claudeSessionResolverMocks.resolveClaudeSessionIdForCwd.mockReset();
 		turnCheckpointMocks.captureTaskTurnCheckpoint.mockReset();
 		browserMocks.openInBrowser.mockReset();
 
@@ -132,6 +141,7 @@ describe("createRuntimeApi terminal task sessions", () => {
 			args: [],
 		});
 		codexSessionResolverMocks.resolveCodexSessionIdForCwd.mockResolvedValue(null);
+		claudeSessionResolverMocks.resolveClaudeSessionIdForCwd.mockResolvedValue(null);
 		turnCheckpointMocks.captureTaskTurnCheckpoint.mockResolvedValue({
 			turn: 1,
 			ref: "refs/kanban/checkpoints/task-1/turn/1",
@@ -270,6 +280,73 @@ describe("createRuntimeApi terminal task sessions", () => {
 
 		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
 			expect.objectContaining({ codexForkSessionId: "source-session-id" }),
+		);
+	});
+
+	it("inherits the running source agent when a branched task has no override", async () => {
+		taskWorktreeMocks.resolveTaskCwd.mockResolvedValue("/tmp/target-worktree");
+		taskWorktreeMocks.getTaskWorkspacePathInfo.mockResolvedValue({ path: "/tmp/source-worktree" });
+		codexSessionResolverMocks.resolveCodexSessionIdForCwd
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("source-session-id");
+		agentRegistryMocks.resolveAgentCommand.mockReturnValue({
+			agentId: "codex",
+			label: "Codex",
+			command: "codex",
+			binary: "codex",
+			args: [],
+		});
+		const terminalManager = {
+			getSummary: vi.fn((taskId: string) =>
+				taskId === "task-1" ? createSummary({ taskId, agentId: "codex" }) : null,
+			),
+			startTaskSession: vi.fn(async () => createSummary({ taskId: "task-2", agentId: "codex" })),
+			applyTurnCheckpoint: vi.fn(),
+		};
+		const api = createTestRuntimeApi({
+			getScopedTerminalManager: vi.fn(async () => terminalManager as never),
+		});
+
+		await api.startTaskSession(workspaceScope, {
+			taskId: "task-2",
+			baseRef: "main",
+			prompt: "Branch this work",
+			branchedFromTaskId: "task-1",
+		});
+
+		expect(agentRegistryMocks.resolveAgentCommand).toHaveBeenCalledWith(
+			expect.objectContaining({ selectedAgentId: "codex" }),
+		);
+		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
+			expect.objectContaining({ agentId: "codex", codexForkSessionId: "source-session-id" }),
+		);
+	});
+
+	it("forks the source Claude session for a branched task", async () => {
+		taskWorktreeMocks.resolveTaskCwd.mockResolvedValue("/tmp/target-worktree");
+		taskWorktreeMocks.getTaskWorkspacePathInfo.mockResolvedValue({ path: "/tmp/source-worktree" });
+		claudeSessionResolverMocks.resolveClaudeSessionIdForCwd
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce("source-session-id");
+		const terminalManager = {
+			getSummary: vi.fn(() => null),
+			startTaskSession: vi.fn(async () => createSummary({ agentId: "claude" })),
+			applyTurnCheckpoint: vi.fn(),
+		};
+		const api = createTestRuntimeApi({
+			getScopedTerminalManager: vi.fn(async () => terminalManager as never),
+		});
+
+		await api.startTaskSession(workspaceScope, {
+			taskId: "task-2",
+			baseRef: "main",
+			prompt: "Branch this work",
+			agentId: "claude",
+			branchedFromTaskId: "task-1",
+		});
+
+		expect(terminalManager.startTaskSession).toHaveBeenCalledWith(
+			expect.objectContaining({ claudeForkSessionId: "source-session-id" }),
 		);
 	});
 

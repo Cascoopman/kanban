@@ -18,6 +18,11 @@ const KANBAN_MANAGED_EXCLUDE_BLOCK_END = "# kanban-managed-symlinked-ignored-pat
 const KANBAN_TRASHED_TASK_PATCHES_DIR_NAME = "trashed-task-patches";
 const KANBAN_TASK_WORKTREE_SETUP_LOCKFILE_NAME = "kanban-task-worktree-setup.lock";
 const TASK_PATCH_FILE_SUFFIX = ".patch";
+// Keep branch capture below the Git subprocess output buffer and bound the
+// in-memory patch assembled before the target worktree is created.
+const BRANCH_TASK_PATCH_MAX_BYTES = 8 * 1024 * 1024;
+const PARTIAL_BRANCH_PATCH_WARNING =
+	"Only part of the source task's working-copy changes could be copied safely. The new task includes all committed changes and the working-copy changes captured before the transfer limit was reached.";
 
 const SYMLINK_PATH_SEGMENT_BLACKLIST = new Set([
 	".git",
@@ -167,10 +172,29 @@ async function listUntrackedPaths(worktreePath: string): Promise<string[]> {
 	const output = await getGitStdout(["ls-files", "--others", "--exclude-standard", "-z"], worktreePath, {
 		trimStdout: false,
 	});
-	return output
-		.split("\0")
-		.map((path) => path.trim())
-		.filter((path) => path.length > 0);
+	return output.split("\0").filter((path) => path.length > 0);
+}
+
+async function listTrackedChangedPaths(worktreePath: string): Promise<string[]> {
+	const output = await getGitStdout(["diff", "--name-only", "--no-renames", "-z", "HEAD", "--"], worktreePath, {
+		trimStdout: false,
+	});
+	return output.split("\0").filter((path) => path.length > 0);
+}
+
+async function writeTaskPatch(options: { taskId: string; headCommit: string; patchChunks: string[] }): Promise<void> {
+	await deleteTaskPatchFiles(options.taskId);
+	if (options.patchChunks.length === 0) {
+		return;
+	}
+
+	const patchesRootPath = getTrashedTaskPatchesRootPath();
+	await mkdir(patchesRootPath, { recursive: true });
+	const patchPath = join(
+		patchesRootPath,
+		`${normalizeTaskIdForWorktreePath(options.taskId)}.${options.headCommit}${TASK_PATCH_FILE_SUFFIX}`,
+	);
+	await lockedFileSystem.writeTextFileAtomic(patchPath, options.patchChunks.join(""));
 }
 
 async function captureTaskPatch(options: { repoPath: string; taskId: string; worktreePath: string }): Promise<void> {
@@ -198,18 +222,55 @@ async function captureTaskPatch(options: { repoPath: string; taskId: string; wor
 		}
 	}
 
-	await deleteTaskPatchFiles(options.taskId);
-	if (patchChunks.length === 0) {
-		return;
+	await writeTaskPatch({
+		taskId: options.taskId,
+		headCommit,
+		patchChunks,
+	});
+}
+
+async function captureBranchTaskPatch(options: { taskId: string; worktreePath: string }): Promise<string | undefined> {
+	const headCommit = await getGitStdout(["rev-parse", "--verify", "HEAD"], options.worktreePath);
+	const patchChunks: string[] = [];
+	let patchBytes = 0;
+	let partial = false;
+
+	const changedPaths = [
+		...(await listTrackedChangedPaths(options.worktreePath)).map((relativePath) => ({
+			args: ["diff", "--binary", "--no-renames", "HEAD", "--", relativePath],
+			acceptedExitCodes: new Set([0]),
+		})),
+		...(await listUntrackedPaths(options.worktreePath)).map((relativePath) => ({
+			args: ["diff", "--binary", "--no-index", "--", "/dev/null", relativePath],
+			acceptedExitCodes: new Set([0, 1]),
+		})),
+	];
+
+	for (const changedPath of changedPaths) {
+		const result = await runGit(options.worktreePath, changedPath.args, { trimStdout: false });
+		if (!result.ok && !changedPath.acceptedExitCodes.has(result.exitCode)) {
+			partial = true;
+			break;
+		}
+
+		const patchChunk = result.stdout.trim().length > 0 ? ensureTrailingNewline(result.stdout) : "";
+		const nextPatchBytes = patchBytes + Buffer.byteLength(patchChunk, "utf8");
+		if (nextPatchBytes > BRANCH_TASK_PATCH_MAX_BYTES) {
+			partial = true;
+			break;
+		}
+		if (patchChunk) {
+			patchChunks.push(patchChunk);
+			patchBytes = nextPatchBytes;
+		}
 	}
 
-	const patchesRootPath = getTrashedTaskPatchesRootPath();
-	await mkdir(patchesRootPath, { recursive: true });
-	const patchPath = join(
-		patchesRootPath,
-		`${normalizeTaskIdForWorktreePath(options.taskId)}.${headCommit}${TASK_PATCH_FILE_SUFFIX}`,
-	);
-	await lockedFileSystem.writeTextFileAtomic(patchPath, patchChunks.join(""));
+	await writeTaskPatch({
+		taskId: options.taskId,
+		headCommit,
+		patchChunks,
+	});
+	return partial ? PARTIAL_BRANCH_PATCH_WARNING : undefined;
 }
 
 async function applyTaskPatch(patchPath: string, worktreePath: string): Promise<void> {
@@ -550,11 +611,16 @@ export async function branchTaskWorktree(options: {
 				: ensured;
 		}
 
-		await captureTaskPatch({
-			repoPath: context.repoPath,
-			taskId: targetTaskId,
-			worktreePath: sourceWorktreePath,
-		});
+		let captureWarning: string | undefined;
+		try {
+			captureWarning = await captureBranchTaskPatch({
+				taskId: targetTaskId,
+				worktreePath: sourceWorktreePath,
+			});
+		} catch {
+			await deleteTaskPatchFiles(targetTaskId).catch(() => {});
+			captureWarning = PARTIAL_BRANCH_PATCH_WARNING;
+		}
 		const ensured = await ensureTaskWorktreeIfDoesntExist({
 			cwd: options.cwd,
 			taskId: targetTaskId,
@@ -562,8 +628,12 @@ export async function branchTaskWorktree(options: {
 		});
 		if (!ensured.ok) {
 			await deleteTaskPatchFiles(targetTaskId);
+			return ensured;
 		}
-		return ensured;
+		return {
+			...ensured,
+			warning: [ensured.warning, captureWarning].filter(Boolean).join(" ") || undefined,
+		};
 	} catch (error) {
 		await deleteTaskPatchFiles(targetTaskId).catch(() => {});
 		return {

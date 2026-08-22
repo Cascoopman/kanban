@@ -230,6 +230,40 @@ describe("prepareAgentLaunch", () => {
 		expect(resumeLaunch.args).not.toContain("--last");
 	});
 
+	it("forks and resumes explicit Claude sessions", async () => {
+		setupTempHome();
+		const forkLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-fork",
+			agentId: "claude",
+			binary: "claude",
+			args: ["--continue", "--resume", "wrong-session-id", "--fork-session"],
+			cwd: "/tmp/fork",
+			prompt: "Explore the alternative",
+			claudeForkSessionId: "source-session-id",
+		});
+		expect(forkLaunch.args.slice(-4)).toEqual([
+			"--resume",
+			"source-session-id",
+			"--fork-session",
+			"Explore the alternative",
+		]);
+		expect(forkLaunch.args).not.toContain("--continue");
+		expect(forkLaunch.args).not.toContain("wrong-session-id");
+
+		const resumeLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-resume",
+			agentId: "claude",
+			binary: "claude",
+			args: ["--continue"],
+			cwd: "/tmp/resume",
+			prompt: "Continue",
+			claudeResumeSessionId: "target-session-id",
+		});
+		expect(resumeLaunch.args.slice(-3)).toEqual(["--resume", "target-session-id", "Continue"]);
+		expect(resumeLaunch.args).not.toContain("--continue");
+		expect(resumeLaunch.args).not.toContain("--fork-session");
+	});
+
 	it("applies autonomous mode flags for Claude and Codex", async () => {
 		setupTempHome();
 		const claudeLaunch = await prepareAgentLaunch({

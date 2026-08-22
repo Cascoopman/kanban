@@ -88,6 +88,8 @@ export interface StartTaskSessionRequest {
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
 	resumeExistingSession?: Extract<RuntimeTaskSessionState, "running" | "awaiting_review">;
+	claudeResumeSessionId?: string;
+	claudeForkSessionId?: string;
 	codexResumeSessionId?: string;
 	codexForkSessionId?: string;
 	cols?: number;
@@ -347,6 +349,8 @@ export class TerminalSessionManager implements TerminalSessionService {
 			startInPlanMode: request.startInPlanMode,
 			resumeFromTrash: request.resumeFromTrash,
 			resumeExistingSession: request.resumeExistingSession !== undefined,
+			claudeResumeSessionId: request.claudeResumeSessionId,
+			claudeForkSessionId: request.claudeForkSessionId,
 			codexResumeSessionId: request.codexResumeSessionId,
 			codexForkSessionId: request.codexForkSessionId,
 			env: request.env,
