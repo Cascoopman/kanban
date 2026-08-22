@@ -1,7 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFile, realpath, rm } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
@@ -19,10 +18,13 @@ import {
 	runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
+
+export { getRuntimeHomePath } from "../core/runtime-home";
+
+import { getRuntimeHomePath } from "../core/runtime-home";
 import { getTaskColumnId, moveTaskToColumn } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 
-const RUNTIME_HOME_DIR = ".kanban";
 const RUNTIME_WORKTREES_DIR = "worktrees";
 const WORKSPACES_DIR = "workspaces";
 const INDEX_FILENAME = "index.json";
@@ -183,10 +185,6 @@ function createEmptyWorkspaceIndex(): WorkspaceIndexFile {
 		entries: {},
 		repoPathToId: {},
 	};
-}
-
-export function getRuntimeHomePath(): string {
-	return join(homedir(), RUNTIME_HOME_DIR);
 }
 
 export function getTaskWorktreesHomePath(): string {

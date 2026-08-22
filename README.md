@@ -28,7 +28,7 @@ kanban
 Run this from the root of any git repo. Kanban detects Claude Code or OpenAI Codex and launches a local webserver in your browser. No account or setup is required.
 
 ### 2. Create tasks
-Create a task with the new-task shortcut or board controls and describe the outcome you want. Kanban chooses the current branch and default agent, derives the initial title, and immediately opens the agent terminal for follow-up prompts and commands.
+Create a task with the new-task shortcut or board controls. Kanban immediately creates a placeholder task on the current branch, opens the configured agent's live terminal, and focuses it so your first prompt or native slash command is typed directly into Codex or Claude.
 
 ### 3. Work in parallel
 Every task gets its own worktree so agents can work in parallel without merge conflicts. Under the hood, Kanban also symlinks gitignored files like `node_modules` so you don't have to worry about slow `npm install`s for each copy of your project.
@@ -43,6 +43,18 @@ Click a card to work with the agent and its VS Code workspace side by side. Use 
 
 ### 5. Ship it
 Review and ship changes with VS Code's Git tools or a quick prompt tailored to your workflow. Move the card to Done when the work is complete; clearing Done removes its worktree, while the saved session can still be restored later.
+
+### Isolated development preview
+
+When developing Kanban itself, use the isolated preview instead of starting another runtime against your production data:
+
+```bash
+npm run dev:isolated -- --agent codex
+# or
+npm run dev:isolated -- --agent claude
+```
+
+The command starts the runtime and Vite on fresh random localhost ports, opens a browser directly on the test board without first-run onboarding, and clearly labels the UI as an isolated preview. Each launch gets a separate browser origin as well as a temporary runtime home and disposable Git repository, so it does not read or write production `~/.kanban` state, production task worktrees, project-level Kanban settings, browser storage, or service workers. Stop it with `Ctrl+C`; temporary data is removed automatically. Add `--no-open` to print the URL without opening it, or `--keep-data` to preserve the temporary directory for debugging.
 
 ---
 

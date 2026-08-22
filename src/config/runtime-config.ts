@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { getRuntimeAgentCatalogEntry, isRuntimeAgentLaunchSupported } from "../core/agent-catalog";
 import type { RuntimeAgentId, RuntimeProjectShortcut, RuntimeQuickPrompt } from "../core/api-contract";
+import { getRuntimeHomePath } from "../core/runtime-home";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 import { detectInstalledCommands } from "../terminal/agent-registry";
 import { areRuntimeProjectShortcutsEqual } from "./shortcut-utils";
@@ -49,7 +50,6 @@ export interface RuntimeConfigUpdateInput {
 	openPrPromptTemplate?: string;
 }
 
-const RUNTIME_HOME_DIR = ".kanban";
 const CONFIG_FILENAME = "config.json";
 const PROJECT_CONFIG_DIR = ".kanban";
 const PROJECT_CONFIG_FILENAME = "config.json";
@@ -110,10 +110,6 @@ export function pickBestInstalledAgentIdFromDetected(detectedCommands: readonly 
 		}
 	}
 	return null;
-}
-
-function getRuntimeHomePath(): string {
-	return join(homedir(), RUNTIME_HOME_DIR);
 }
 
 function normalizeAgentId(agentId: RuntimeAgentId | string | null | undefined): RuntimeAgentId {

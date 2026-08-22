@@ -163,7 +163,16 @@ async function ensureTextFile(filePath: string, content: string): Promise<void> 
 	await lockedFileSystem.writeTextFileAtomic(filePath, content);
 }
 
-function withPrompt(args: string[], prompt: string): PreparedAgentLaunch {
+function withTerminalPrompt(args: string[], prompt: string): PreparedAgentLaunch {
+	const trimmed = prompt.trim();
+	return {
+		args,
+		env: {},
+		deferredStartupInput: trimmed ? toBracketedPasteSubmission(trimmed) : undefined,
+	};
+}
+
+function withPromptArgument(args: string[], prompt: string): PreparedAgentLaunch {
 	const trimmed = prompt.trim();
 	if (trimmed) {
 		args.push(trimmed);
@@ -204,6 +213,16 @@ async function writeClaudeAgentInstructions(taskId: string, content: string): Pr
 	const path = join(getHookAgentDirectory("claude"), "instructions", `${encodeURIComponent(taskId)}.md`);
 	await ensureTextFile(path, content);
 	return path;
+}
+
+function isResumingOrForkingAgentSession(input: AgentAdapterLaunchInput): boolean {
+	return Boolean(
+		input.claudeResumeSessionId ||
+			input.claudeForkSessionId ||
+			input.codexResumeSessionId ||
+			input.codexForkSessionId ||
+			shouldResumeAgentSession(input),
+	);
 }
 
 function toBracketedPasteSubmission(command: string): string {
@@ -328,7 +347,9 @@ const claudeAdapter: AgentSessionAdapter = {
 			Object.assign(env, createHookRuntimeEnv(hooks));
 		}
 
-		const launch = withPrompt(args, input.prompt);
+		const launch = isResumingOrForkingAgentSession(input)
+			? withPromptArgument(args, input.prompt)
+			: withTerminalPrompt(args, input.prompt);
 		return {
 			...launch,
 			env: {
@@ -401,7 +422,11 @@ const codexAdapter: AgentSessionAdapter = {
 		if (input.startInPlanMode) {
 			deferredStartupInput = toBracketedPasteSubmission(trimmed ? `/plan ${trimmed}` : "/plan");
 		} else if (trimmed) {
-			codexArgs.push(trimmed);
+			if (isResumingOrForkingAgentSession(input)) {
+				codexArgs.push(trimmed);
+			} else {
+				deferredStartupInput = toBracketedPasteSubmission(trimmed);
+			}
 		}
 
 		return {

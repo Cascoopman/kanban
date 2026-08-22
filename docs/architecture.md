@@ -75,7 +75,7 @@ Task details and the home sidebar both render terminal-backed agent sessions. Sw
 
 Only `claude` and `codex` are valid runtime agent IDs. Persisted configuration or board data containing a retired agent ID is normalized to a supported default or treated as having no task override so older workspaces remain readable.
 
-Kanban stores its global state under `~/.kanban`, task worktrees under `~/.kanban/worktrees`, and project configuration under `<project>/.kanban/config.json`.
+Kanban stores its global state under `~/.kanban`, task worktrees under `~/.kanban/worktrees`, and project configuration under `<project>/.kanban/config.json`. `KANBAN_RUNTIME_HOME` overrides the global state root for isolated runtimes. The `npm run dev:isolated` launcher combines that override with a disposable Git project and separate ports so previews cannot mutate production Kanban data or project settings.
 
 ## Design Rules
 

@@ -16,7 +16,6 @@ import { ProjectBoardToolbar } from "@/components/project-board-toolbar";
 import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components/runtime-settings-dialog";
 import { StartupOnboardingDialog } from "@/components/startup-onboarding-dialog";
 import { TaskBranchDialog } from "@/components/task-branch-dialog";
-import { TaskCreateDialog } from "@/components/task-create-dialog";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { createInitialBoardData } from "@/data/board-data";
@@ -74,12 +73,10 @@ export default function App(): ReactElement {
 	const [pendingCreateProjectId, setPendingCreateProjectId] = useState<string | null>(null);
 	const [pendingUnifiedBoardMove, setPendingUnifiedBoardMove] = useState<ProjectBoardMove | null>(null);
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
-	const taskEditorResetRef = useRef<() => void>(() => {});
 	const lastStreamErrorRef = useRef<string | null>(null);
 	const knownProjectIdsRef = useRef<Set<string>>(new Set());
 	const handleProjectSwitchStart = useCallback(() => {
 		setCanPersistWorkspaceState(false);
-		taskEditorResetRef.current();
 	}, []);
 	const {
 		currentProjectId,
@@ -262,63 +259,13 @@ export default function App(): ReactElement {
 		workspacePath,
 	});
 
-	const { createTaskBranchOptions, defaultTaskBranchRef } = useTaskBranchOptions({ workspaceGit });
-	const {
-		isInlineTaskCreateOpen,
-		newTaskPrompt,
-		setNewTaskPrompt,
-		newTaskImages,
-		setNewTaskImages,
-		newTaskBranchRef,
-		handleOpenCreateTask,
-		handleCancelCreateTask,
-		handleSaveTaskTitle,
-		handleCreateTask,
-		resetTaskEditorState,
-	} = useTaskEditor({
+	const { defaultTaskBranchRef } = useTaskBranchOptions({ workspaceGit });
+	const { handleSaveTaskTitle, handleCreateTask } = useTaskEditor({
 		board,
 		setBoard,
-		currentProjectId,
-		createTaskBranchOptions,
 		defaultTaskBranchRef,
 		selectedAgentId: runtimeProjectConfig?.selectedAgentId ?? null,
 	});
-	const handleCreateTaskForProject = useCallback(
-		(projectId: string) => {
-			if (projectId === currentProjectId && !isProjectSwitching && !isAwaitingWorkspaceSnapshot) {
-				handleOpenCreateTask();
-				return;
-			}
-			setPendingCreateProjectId(projectId);
-			handleSelectProject(projectId);
-		},
-		[currentProjectId, handleOpenCreateTask, handleSelectProject, isAwaitingWorkspaceSnapshot, isProjectSwitching],
-	);
-
-	useEffect(() => {
-		if (
-			!pendingCreateProjectId ||
-			pendingCreateProjectId !== currentProjectId ||
-			isProjectSwitching ||
-			isAwaitingWorkspaceSnapshot ||
-			isWorkspaceMetadataPending
-		) {
-			return;
-		}
-		setPendingCreateProjectId(null);
-		handleOpenCreateTask();
-	}, [
-		currentProjectId,
-		handleOpenCreateTask,
-		isAwaitingWorkspaceSnapshot,
-		isProjectSwitching,
-		isWorkspaceMetadataPending,
-		pendingCreateProjectId,
-	]);
-
-	useEffect(() => {
-		taskEditorResetRef.current = resetTaskEditorState;
-	}, [resetTaskEditorState]);
 
 	useEffect(() => {
 		if (!isProjectSwitching) {
@@ -326,13 +273,6 @@ export default function App(): ReactElement {
 		}
 		resetWorkspaceSyncState();
 	}, [isProjectSwitching, resetWorkspaceSyncState]);
-
-	useEffect(() => {
-		if (!isProjectSwitching) {
-			return;
-		}
-		resetTaskEditorState();
-	}, [isProjectSwitching, resetTaskEditorState]);
 
 	const agentCommand = runtimeProjectConfig?.effectiveCommand ?? null;
 	const {
@@ -433,10 +373,9 @@ export default function App(): ReactElement {
 	}, [isRuntimeDisconnected, streamError]);
 
 	useEffect(() => {
-		resetTaskEditorState();
 		setIsClearTrashDialogOpen(false);
 		resetProjectNavigationState();
-	}, [currentProjectId, resetProjectNavigationState, resetTaskEditorState]);
+	}, [currentProjectId, resetProjectNavigationState]);
 
 	useEffect(() => {
 		if (selectedCard) {
@@ -573,6 +512,44 @@ export default function App(): ReactElement {
 		handleStartTask,
 		setSelectedTaskId,
 	});
+	const handleCreateTaskForProject = useCallback(
+		(projectId: string) => {
+			if (projectId === currentProjectId && !isProjectSwitching && !isAwaitingWorkspaceSnapshot) {
+				handleCreateStartAndOpenTask();
+				return;
+			}
+			setPendingCreateProjectId(projectId);
+			handleSelectProject(projectId);
+		},
+		[
+			currentProjectId,
+			handleCreateStartAndOpenTask,
+			handleSelectProject,
+			isAwaitingWorkspaceSnapshot,
+			isProjectSwitching,
+		],
+	);
+
+	useEffect(() => {
+		if (
+			!pendingCreateProjectId ||
+			pendingCreateProjectId !== currentProjectId ||
+			isProjectSwitching ||
+			isAwaitingWorkspaceSnapshot ||
+			isWorkspaceMetadataPending
+		) {
+			return;
+		}
+		setPendingCreateProjectId(null);
+		handleCreateStartAndOpenTask();
+	}, [
+		currentProjectId,
+		handleCreateStartAndOpenTask,
+		isAwaitingWorkspaceSnapshot,
+		isProjectSwitching,
+		isWorkspaceMetadataPending,
+		pendingCreateProjectId,
+	]);
 	const taskBranching = useTaskBranching({
 		board,
 		setBoard,
@@ -589,7 +566,7 @@ export default function App(): ReactElement {
 		handleToggleHomeTerminal,
 		handleToggleExpandDetailTerminal,
 		handleToggleExpandHomeTerminal: handleToggleExpandHomeTerminal,
-		handleOpenCreateTask,
+		handleOpenCreateTask: handleCreateStartAndOpenTask,
 		handleOpenSettings,
 	});
 
@@ -607,15 +584,6 @@ export default function App(): ReactElement {
 			null
 		);
 	}, [selectedCard]);
-
-	const handleCreateDialogOpenChange = useCallback(
-		(open: boolean) => {
-			if (!open) {
-				handleCancelCreateTask();
-			}
-		},
-		[handleCancelCreateTask],
-	);
 
 	if (isRuntimeDisconnected) {
 		return <RuntimeDisconnectedFallback />;
@@ -762,7 +730,7 @@ export default function App(): ReactElement {
 									onSessionSummary={upsertSession}
 									onCardSelect={handleAllProjectsCardSelect}
 									onTaskDragEnd={handleAllProjectsBoardDragEnd}
-									onCreateTask={handleOpenCreateTask}
+									onCreateTask={handleCreateStartAndOpenTask}
 									onBranchTask={taskBranching.handleOpenBranchTask}
 									onSaveTaskTitle={handleSaveTaskTitle}
 									moveToTrashLoadingById={moveToTrashLoadingById}
@@ -807,17 +775,6 @@ export default function App(): ReactElement {
 						refreshRuntimeProjectConfig();
 						refreshSettingsRuntimeProjectConfig();
 					}}
-				/>
-				<TaskCreateDialog
-					open={isInlineTaskCreateOpen}
-					onOpenChange={handleCreateDialogOpenChange}
-					prompt={newTaskPrompt}
-					onPromptChange={setNewTaskPrompt}
-					images={newTaskImages}
-					onImagesChange={setNewTaskImages}
-					onCreateStartAndOpen={handleCreateStartAndOpenTask}
-					workspaceId={currentProjectId}
-					canStart={Boolean(newTaskBranchRef)}
 				/>
 				<TaskBranchDialog
 					open={taskBranching.sourceTask !== null}

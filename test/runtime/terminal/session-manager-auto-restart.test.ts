@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const prepareAgentLaunchMock = vi.hoisted(() => vi.fn());
 const ptySessionSpawnMock = vi.hoisted(() => vi.fn());
@@ -13,6 +13,7 @@ vi.mock("../../../src/terminal/pty-session.js", () => ({
 	},
 }));
 
+import { getTaskWorktreesHomePath } from "../../../src/state/workspace-state";
 import { TerminalSessionManager } from "../../../src/terminal/session-manager";
 
 interface MockSpawnRequest {
@@ -47,6 +48,10 @@ describe("TerminalSessionManager auto-restart", () => {
 			args: [...input.args],
 			env: {},
 		}));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("restarts an attached agent session after it exits", async () => {
@@ -190,6 +195,89 @@ describe("TerminalSessionManager auto-restart", () => {
 		session.triggerData("› ");
 		expect(session.write).toHaveBeenCalledWith(deferredStartupInput);
 		expect(session.write).toHaveBeenCalledTimes(1);
+	});
+
+	it("sends deferred Claude startup input when its interactive prompt appears", async () => {
+		const deferredStartupInput = "\u001b[200~/review Validate rollout\u001b[201~\r";
+		prepareAgentLaunchMock.mockResolvedValue({
+			binary: "claude",
+			args: [],
+			env: {},
+			deferredStartupInput,
+		});
+
+		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
+		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {
+			const session = createMockPtySession(111, request);
+			spawnedSessions.push(session);
+			return session;
+		});
+
+		const manager = new TerminalSessionManager();
+		await manager.startTaskSession({
+			taskId: "task-1",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp/task-1",
+			prompt: "/review Validate rollout",
+		});
+
+		const session = spawnedSessions[0];
+		expect(session).toBeDefined();
+		if (!session) {
+			return;
+		}
+
+		session.triggerData("Claude Code v2.1.215\n");
+		expect(session.write).not.toHaveBeenCalledWith(deferredStartupInput);
+
+		session.triggerData("❯ ");
+		expect(session.write).toHaveBeenCalledWith(deferredStartupInput);
+		expect(session.write).toHaveBeenCalledTimes(1);
+	});
+
+	it("waits until after Claude workspace trust before sending deferred input", async () => {
+		vi.useFakeTimers();
+		const deferredStartupInput = "\u001b[200~Implement the feature\u001b[201~\r";
+		prepareAgentLaunchMock.mockResolvedValue({
+			binary: "claude",
+			args: [],
+			env: {},
+			deferredStartupInput,
+		});
+
+		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
+		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {
+			const session = createMockPtySession(111, request);
+			spawnedSessions.push(session);
+			return session;
+		});
+
+		const manager = new TerminalSessionManager();
+		await manager.startTaskSession({
+			taskId: "task-1",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: `${getTaskWorktreesHomePath()}/task-1/project`,
+			prompt: "Implement the feature",
+		});
+
+		const session = spawnedSessions[0];
+		expect(session).toBeDefined();
+		if (!session) {
+			return;
+		}
+
+		session.triggerData("Quick safety check: do you trust this folder?\n❯ 1. Yes, I trust this folder\n");
+		expect(session.write).not.toHaveBeenCalledWith(deferredStartupInput);
+
+		await vi.advanceTimersByTimeAsync(100);
+		expect(session.write).toHaveBeenCalledWith("\r");
+
+		session.triggerData("Claude Code v2.1.215\n❯ ");
+		expect(session.write).toHaveBeenCalledWith(deferredStartupInput);
 	});
 
 	it("sends deferred Codex startup input when the startup UI header appears", async () => {

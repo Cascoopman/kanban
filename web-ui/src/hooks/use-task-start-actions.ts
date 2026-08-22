@@ -43,10 +43,7 @@ export function useTaskStartActions({
 		if (selection?.column.id !== "in_progress") {
 			return;
 		}
-		handleStartTask(pendingTaskStartAfterCreate.taskId, {
-			initialPrompt: pendingTaskStartAfterCreate.prompt,
-			images: pendingTaskStartAfterCreate.images,
-		});
+		handleStartTask(pendingTaskStartAfterCreate.taskId);
 		setPendingTaskStartAfterCreate(null);
 	}, [board, handleStartTask, pendingTaskStartAfterCreate]);
 

@@ -31,6 +31,7 @@ function ProjectMenuContent({ children }: { children: React.ReactNode }): React.
 
 const menuItemClassName =
 	"flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-text-secondary outline-none hover:bg-surface-3 hover:text-text-primary data-[highlighted]:bg-surface-3 data-[highlighted]:text-text-primary";
+const isIsolatedPreview = import.meta.env.VITE_KANBAN_ISOLATED_PREVIEW === "1";
 
 export function ProjectBoardToolbar({
 	projects,
@@ -82,6 +83,11 @@ export function ProjectBoardToolbar({
 						<div className="text-[11px] text-text-tertiary">{visibleTaskCount} visible tickets</div>
 					</div>
 				</div>
+				{isIsolatedPreview ? (
+					<span className="shrink-0 rounded-full border border-status-orange/60 bg-status-orange/15 px-2 py-1 text-[11px] font-semibold text-status-orange">
+						Isolated preview
+					</span>
+				) : null}
 				<button
 					type="button"
 					onClick={() => onVisibleProjectIdsChange(new Set(sortedProjects.map((project) => project.id)))}

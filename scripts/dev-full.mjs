@@ -10,9 +10,10 @@ import { spawn, spawnSync } from "node:child_process";
 import { buildAgentRuntimeEnv } from "./agent-runtime-env.mjs";
 
 const isWindows = process.platform === "win32";
+const repoRoot = process.cwd();
 
 async function ensureDependenciesInstalled() {
-	const lockIndicator = join(process.cwd(), "node_modules", ".package-lock.json");
+	const lockIndicator = join(repoRoot, "node_modules", ".package-lock.json");
 	try {
 		await access(lockIndicator);
 		return;
@@ -72,13 +73,20 @@ function waitForPort(port, timeout = 15000) {
 	});
 }
 
-const runtimePort = await findPort(3484);
-const webUiPort = await findPort(4173, new Set([runtimePort]));
+const runtimePortStart = Number.parseInt(process.env.KANBAN_RUNTIME_PORT_START || "3484", 10);
+const webUiPortStart = Number.parseInt(process.env.KANBAN_WEB_UI_PORT_START || "4173", 10);
+const runtimePort = await findPort(Number.isFinite(runtimePortStart) ? runtimePortStart : 3484);
+const webUiPort = await findPort(Number.isFinite(webUiPortStart) ? webUiPortStart : 4173, new Set([runtimePort]));
 const requestedDevFullArgs = process.argv.slice(2);
 const withShutdownCleanupFlag = "--with-shutdown-cleanup";
-const requestedRuntimeArgs = requestedDevFullArgs.filter((arg) => arg !== withShutdownCleanupFlag);
+const noOpenFlag = "--no-open";
+const requestedRuntimeArgs = requestedDevFullArgs.filter(
+	(arg) => arg !== withShutdownCleanupFlag && arg !== noOpenFlag,
+);
+const shouldOpenBrowser = !requestedDevFullArgs.includes(noOpenFlag);
 const hasExplicitSkipCleanupArg = requestedRuntimeArgs.some((arg) => arg === "--skip-shutdown-cleanup");
 const shouldDefaultSkipShutdownCleanup = !requestedDevFullArgs.includes(withShutdownCleanupFlag);
+const runtimeCwd = process.env.KANBAN_DEV_PROJECT_PATH?.trim() || repoRoot;
 const runtimeCliArgs = [
 	"--port",
 	String(runtimePort),
@@ -89,16 +97,23 @@ const runtimeCliArgs = [
 
 console.log(`\n  Runtime port: ${runtimePort}`);
 console.log(`  Web UI:       http://127.0.0.1:${webUiPort}\n`);
+if (runtimeCwd !== repoRoot) {
+	console.log(`  Project:      ${runtimeCwd}`);
+}
+if (process.env.KANBAN_RUNTIME_HOME?.trim()) {
+	console.log(`  Runtime home: ${process.env.KANBAN_RUNTIME_HOME.trim()}\n`);
+}
 
 const env = {
-	...buildAgentRuntimeEnv(process.env, [join(process.cwd(), "node_modules", ".bin")]),
+	...buildAgentRuntimeEnv(process.env, [join(repoRoot, "node_modules", ".bin")]),
 	NODE_ENV: "development",
 	KANBAN_RUNTIME_PORT: String(runtimePort),
 	KANBAN_WEB_UI_PORT: String(webUiPort),
 };
 
-const tsxBin = isWindows ? "node_modules/.bin/tsx.cmd" : "node_modules/.bin/tsx";
-const runtime = spawn(tsxBin, ["watch", "src/cli.ts", ...runtimeCliArgs], {
+const tsxBin = join(repoRoot, "node_modules", ".bin", isWindows ? "tsx.cmd" : "tsx");
+const runtime = spawn(tsxBin, ["watch", join(repoRoot, "src", "cli.ts"), ...runtimeCliArgs], {
+	cwd: runtimeCwd,
 	env,
 	stdio: "inherit",
 });
@@ -128,6 +143,7 @@ try {
 }
 
 vite = spawn("npm", ["run", "web:dev"], {
+	cwd: repoRoot,
 	env,
 	stdio: "inherit",
 	shell: isWindows,
@@ -137,5 +153,7 @@ vite.on("exit", () => cleanup(1));
 
 // Auto-open browser after a short delay for Vite to start
 setTimeout(() => {
-	open(`http://127.0.0.1:${webUiPort}`);
+	if (shouldOpenBrowser) {
+		open(`http://127.0.0.1:${webUiPort}`);
+	}
 }, 2000);

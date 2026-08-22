@@ -1,10 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
-async function createTask(page: Page, title: string) {
+async function createTask(page: Page) {
 	await page.getByRole("button", { name: /New task/ }).click();
 	await page.getByRole("menuitem").first().click();
-	await page.getByPlaceholder("What are you working on?").fill(title);
-	await page.getByRole("button", { name: /Create and open terminal/ }).click();
 }
 
 test("renders kanban top bar and columns", async ({ page }) => {
@@ -18,23 +16,19 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
 });
 
-test("creating a task opens it without a description editor", async ({ page }) => {
+test("creating a task opens its live agent terminal directly", async ({ page }) => {
 	await page.goto("/");
-	const taskTitle = `smoke-${Date.now()}`;
-	await createTask(page, taskTitle);
-	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle }).first()).toBeVisible();
-	await expect(page.getByPlaceholder("Describe the task")).toHaveCount(0);
+	await createTask(page);
+	await expect(page).toHaveURL(/\?task=/);
+	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
+	await expect(page.getByText("New task", { exact: true }).first()).toBeVisible();
 });
 
-test("escape key closes the create task dialog", async ({ page }) => {
+test("creating a task does not open a prompt dialog", async ({ page }) => {
 	await page.goto("/");
-	const taskTitle = `escape-${Date.now()}`;
-	await page.getByRole("button", { name: /New task/ }).click();
-	await page.getByRole("menuitem").first().click();
-	await page.getByPlaceholder("What are you working on?").fill(taskTitle);
-	await page.keyboard.press("Escape");
-	await expect(page.getByPlaceholder("What are you working on?")).toHaveCount(0);
-	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle })).toHaveCount(0);
+	await createTask(page);
+	await expect(page.getByRole("dialog", { name: "Start a task" })).toHaveCount(0);
+	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
 });
 
 test("settings button opens runtime settings dialog", async ({ page }) => {

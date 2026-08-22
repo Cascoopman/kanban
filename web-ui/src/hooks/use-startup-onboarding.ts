@@ -5,6 +5,8 @@ import type { RuntimeAgentId, RuntimeConfigResponse } from "@/runtime/types";
 import { LocalStorageKey } from "@/storage/local-storage-store";
 import { useBooleanLocalStorageValue } from "@/utils/react-use";
 
+const isIsolatedPreview = import.meta.env.VITE_KANBAN_ISOLATED_PREVIEW === "1";
+
 interface UseStartupOnboardingOptions {
 	currentProjectId: string | null;
 	runtimeProjectConfig: RuntimeConfigResponse | null;
@@ -52,6 +54,10 @@ export function useStartupOnboarding(options: UseStartupOnboardingOptions): UseS
 		}
 		if (isStartupOnboardingDialogForcedOpen) {
 			setIsStartupOnboardingDialogOpen(true);
+			return;
+		}
+		if (isIsolatedPreview) {
+			setIsStartupOnboardingDialogOpen(false);
 			return;
 		}
 		if (didDismissStartupOnboardingForSession) {
