@@ -528,7 +528,7 @@ function ProjectRow({
 		},
 		{
 			id: "review",
-			title: "Review",
+			title: "In Review / Blocked",
 			shortLabel: "R",
 			toneClassName: "bg-accent-2/20 text-accent-2",
 			count: project.taskCounts.review,

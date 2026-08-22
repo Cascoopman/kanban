@@ -112,7 +112,7 @@ describe("CardDetailView VS Code visibility", () => {
 					onSessionSummary={() => {}}
 					onCardSelect={() => {}}
 					onTaskDragEnd={() => {}}
-					onMoveToTrash={() => {}}
+					onMoveCardToTrash={() => {}}
 					bottomTerminalOpen={false}
 					onToggleBottomTerminal={() => {}}
 					bottomTerminalTaskId={null}

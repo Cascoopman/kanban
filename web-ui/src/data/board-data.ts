@@ -1,11 +1,16 @@
 import type { BoardColumn, BoardColumnId, BoardData } from "@/types";
 
-const columnOrder: Array<{ id: BoardColumnId; title: string }> = [
-	{ id: "in_progress", title: "In Progress" },
-	{ id: "review", title: "Review" },
-	{ id: "on_hold", title: "On Hold" },
-	{ id: "trash", title: "Done" },
-];
+export const BOARD_COLUMN_TITLES: Record<BoardColumnId, string> = {
+	in_progress: "In Progress",
+	review: "In Review / Blocked",
+	on_hold: "On Hold",
+	trash: "Done",
+};
+
+const columnOrder = (Object.entries(BOARD_COLUMN_TITLES) as Array<[BoardColumnId, string]>).map(([id, title]) => ({
+	id,
+	title,
+}));
 
 function createEmptyColumn(id: BoardColumnId, title: string): BoardColumn {
 	return {

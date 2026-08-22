@@ -44,6 +44,7 @@ describe("buildUnifiedProjectBoard", () => {
 		);
 
 		expect(result.board.columns.map((column) => column.id)).toEqual(["in_progress", "review", "on_hold", "trash"]);
+		expect(result.board.columns.find((column) => column.id === "review")?.title).toBe("In Review / Blocked");
 		expect(result.board.columns[0]?.cards.map((card) => card.id)).toEqual(["task-a", "task-b"]);
 	});
 });

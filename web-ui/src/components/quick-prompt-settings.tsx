@@ -7,9 +7,9 @@ const QUICK_PROMPT_CONTEXT_OPTIONS: ReadonlyArray<{
 	value: RuntimeQuickPromptContext;
 	label: string;
 }> = [
-	{ value: "any", label: "In Progress & Review" },
+	{ value: "any", label: "In Progress & In Review / Blocked" },
 	{ value: "in_progress", label: "In Progress only" },
-	{ value: "review", label: "Review only" },
+	{ value: "review", label: "In Review / Blocked only" },
 ];
 
 function getNextQuickPromptLabel(quickPrompts: readonly RuntimeQuickPrompt[]): string {

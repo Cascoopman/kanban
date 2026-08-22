@@ -2,7 +2,7 @@
 // Keep this file focused on wiring top-level hooks and surfaces together, and
 // push runtime-specific orchestration down into hooks and service modules.
 import type { DropResult } from "@hello-pangea/dnd";
-import { ArrowLeft, FolderOpen, Settings } from "lucide-react";
+import { ChevronRight, FolderOpen, Settings } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -118,17 +118,14 @@ export default function App(): ReactElement {
 	const settingsWorkspaceId = activeProjectConfigWorkspaceId;
 	const { config: settingsRuntimeProjectConfig, refresh: refreshSettingsRuntimeProjectConfig } =
 		useRuntimeProjectConfig(settingsWorkspaceId);
-	const {
-		isStartupOnboardingDialogOpen,
-		handleCloseStartupOnboardingDialog,
-		handleSelectOnboardingAgent,
-	} = useStartupOnboarding({
-		currentProjectId,
-		runtimeProjectConfig,
-		isRuntimeProjectConfigLoading,
-		refreshRuntimeProjectConfig,
-		refreshSettingsRuntimeProjectConfig,
-	});
+	const { isStartupOnboardingDialogOpen, handleCloseStartupOnboardingDialog, handleSelectOnboardingAgent } =
+		useStartupOnboarding({
+			currentProjectId,
+			runtimeProjectConfig,
+			isRuntimeProjectConfigLoading,
+			refreshRuntimeProjectConfig,
+			refreshSettingsRuntimeProjectConfig,
+		});
 	const { markConnectionReady: markTerminalConnectionReady } = useTerminalConnectionReady();
 	const readyForReviewNotificationsEnabled = runtimeProjectConfig?.readyForReviewNotificationsEnabled ?? true;
 	const {
@@ -465,8 +462,7 @@ export default function App(): ReactElement {
 	const {
 		handleDragEnd,
 		handleStartTask,
-		handleMoveToTrash,
-		handleMoveReviewCardToTrash,
+		handleMoveCardToTrash,
 		handleRestoreTaskFromTrash,
 		handleConfirmClearTrash,
 		moveToTrashLoadingById,
@@ -475,7 +471,6 @@ export default function App(): ReactElement {
 		board,
 		setBoard,
 		setSessions,
-		selectedCard,
 		selectedTaskId,
 		currentProjectId,
 		setSelectedTaskId,
@@ -733,15 +728,31 @@ export default function App(): ReactElement {
 							)}
 						</div>
 						{selectedCard && detailSession ? (
-							<div className="absolute inset-0 flex min-h-0 min-w-0">
-								<Button
-									variant="default"
-									size="sm"
-									icon={<ArrowLeft size={16} />}
-									onClick={handleBack}
-									aria-label="Back to board"
-									className="absolute top-1 left-1 z-30 h-7 w-7 p-0 shadow-lg"
-								/>
+							<div className="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-surface-0">
+								<nav
+									aria-label="Task breadcrumb"
+									className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-surface-1 px-3"
+								>
+									<button
+										type="button"
+										onClick={handleBack}
+										className="rounded-md px-2 py-1 text-xs font-medium text-text-secondary hover:bg-surface-3 hover:text-text-primary focus-visible:outline-2 focus-visible:outline-accent"
+									>
+										Board
+									</button>
+									<ChevronRight size={14} className="shrink-0 text-text-tertiary" />
+									{selectedCard.card.projectName ? (
+										<>
+											<span className="max-w-40 truncate text-xs text-text-secondary">
+												{selectedCard.card.projectName}
+											</span>
+											<ChevronRight size={14} className="shrink-0 text-text-tertiary" />
+										</>
+									) : null}
+									<span className="min-w-0 truncate text-xs font-medium text-text-primary">
+										{selectedCard.card.title}
+									</span>
+								</nav>
 								<CardDetailView
 									selection={selectedCard}
 									workspaceId={selectedProjectId}
@@ -755,13 +766,11 @@ export default function App(): ReactElement {
 									onBranchTask={taskBranching.handleOpenBranchTask}
 									onSaveTaskTitle={handleSaveTaskTitle}
 									moveToTrashLoadingById={moveToTrashLoadingById}
-									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
+									onMoveCardToTrash={handleMoveCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
 									quickPrompts={quickPrompts}
 									onSendQuickPrompt={handleSendQuickPrompt}
 									onEditQuickPrompts={() => handleOpenSettings("quick-prompts")}
-									onMoveToTrash={handleMoveToTrash}
-									isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
 									bottomTerminalOpen={isDetailTerminalOpen}
 									onToggleBottomTerminal={handleToggleDetailTerminal}
 									isBottomTerminalLoading={isDetailTerminalStarting}

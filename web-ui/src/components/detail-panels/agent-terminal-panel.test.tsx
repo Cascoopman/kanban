@@ -30,8 +30,9 @@ describe("AgentTerminalPanel task actions", () => {
 		container.remove();
 	});
 
-	it("places the shell action beside the done action without fixed git actions", async () => {
+	it("places the shell action beside the VS Code action", async () => {
 		const onToggleShell = vi.fn();
+		const onToggleCode = vi.fn();
 		await act(async () => {
 			root.render(
 				<TooltipProvider>
@@ -40,9 +41,8 @@ describe("AgentTerminalPanel task actions", () => {
 						workspaceId="project-1"
 						summary={null}
 						showSessionToolbar={false}
-						showMoveToTrash
-						onMoveToTrash={() => {}}
 						onToggleShell={onToggleShell}
+						onToggleCode={onToggleCode}
 					/>
 				</TooltipProvider>,
 			);
@@ -54,8 +54,36 @@ describe("AgentTerminalPanel task actions", () => {
 		expect(shellButton).toBeInstanceOf(HTMLButtonElement);
 		act(() => shellButton?.click());
 		expect(onToggleShell).toHaveBeenCalledOnce();
-		expect(container.textContent).toContain("Move Card To Done");
+		const codeButton = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent?.trim() === "Open VS Code",
+		);
+		expect(codeButton).toBeInstanceOf(HTMLButtonElement);
+		act(() => codeButton?.click());
+		expect(onToggleCode).toHaveBeenCalledOnce();
+		expect(container.textContent).not.toContain("Move Card To Done");
 		expect(container.textContent).not.toContain("Commit");
 		expect(container.textContent).not.toContain("Open PR");
+	});
+
+	it("uses Hide Shell and Hide VS Code labels for open panels", async () => {
+		await act(async () => {
+			root.render(
+				<TooltipProvider>
+					<AgentTerminalPanel
+						taskId="task-1"
+						workspaceId="project-1"
+						summary={null}
+						showSessionToolbar={false}
+						onToggleShell={() => {}}
+						isShellOpen
+						onToggleCode={() => {}}
+						isCodeOpen
+					/>
+				</TooltipProvider>,
+			);
+		});
+
+		expect(container.textContent).toContain("Hide Shell");
+		expect(container.textContent).toContain("Hide VS Code");
 	});
 });

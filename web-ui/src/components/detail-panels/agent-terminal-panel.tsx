@@ -1,6 +1,6 @@
 import "@xterm/xterm/css/xterm.css";
 
-import { Command, Maximize2, MessageSquare, Minimize2, Terminal, X } from "lucide-react";
+import { Code2, Command, Maximize2, MessageSquare, Minimize2, Terminal, X } from "lucide-react";
 import type { MutableRefObject, ReactElement } from "react";
 import { useMemo } from "react";
 
@@ -31,12 +31,11 @@ export interface AgentTerminalPanelProps {
 	quickPrompts?: readonly RuntimeQuickPrompt[];
 	onSendQuickPrompt?: (prompt: string) => Promise<void>;
 	onEditQuickPrompts?: () => void;
-	onMoveToTrash?: () => void;
-	isMoveToTrashLoading?: boolean;
-	showMoveToTrash?: boolean;
 	onToggleShell?: () => void;
 	isShellOpen?: boolean;
 	isShellLoading?: boolean;
+	onToggleCode?: () => void;
+	isCodeOpen?: boolean;
 	showSessionToolbar?: boolean;
 	onClose?: () => void;
 	autoFocus?: boolean;
@@ -105,12 +104,11 @@ function AgentTerminalPanelLayout({
 	quickPrompts = [],
 	onSendQuickPrompt,
 	onEditQuickPrompts,
-	onMoveToTrash,
-	isMoveToTrashLoading = false,
-	showMoveToTrash,
 	onToggleShell,
 	isShellOpen = false,
 	isShellLoading = false,
+	onToggleCode,
+	isCodeOpen = false,
 	showSessionToolbar = true,
 	onClose,
 	autoFocus: _autoFocus = false,
@@ -279,7 +277,7 @@ function AgentTerminalPanelLayout({
 					onEdit={onEditQuickPrompts}
 				/>
 			) : null}
-			{onToggleShell || (showMoveToTrash && onMoveToTrash) ? (
+			{onToggleShell || onToggleCode ? (
 				<div className="flex gap-2 px-3 py-2">
 					{onToggleShell ? (
 						<Button
@@ -290,18 +288,18 @@ function AgentTerminalPanelLayout({
 							onClick={onToggleShell}
 							className="flex-1"
 						>
-							{isShellOpen ? "Close Shell" : "Open Shell"}
+							{isShellOpen ? "Hide Shell" : "Open Shell"}
 						</Button>
 					) : null}
-					{showMoveToTrash && onMoveToTrash ? (
+					{onToggleCode ? (
 						<Button
-							variant="danger"
+							variant="default"
 							size="sm"
-							disabled={isMoveToTrashLoading}
-							onClick={onMoveToTrash}
+							icon={<Code2 size={14} />}
+							onClick={onToggleCode}
 							className="flex-1"
 						>
-							{isMoveToTrashLoading ? <Spinner size={14} /> : "Move Card To Done"}
+							{isCodeOpen ? "Hide VS Code" : "Open VS Code"}
 						</Button>
 					) : null}
 				</div>

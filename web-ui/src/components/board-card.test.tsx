@@ -108,7 +108,9 @@ describe("BoardCard", () => {
 
 	it("shows a loading state on the review done button while moving to done", async () => {
 		await act(async () => {
-			root.render(<BoardCard card={createCard()} index={0} columnId="review" isMoveToTrashLoading />);
+			root.render(
+				<BoardCard card={createCard()} index={0} columnId="review" onMoveToTrash={() => {}} isMoveToTrashLoading />,
+			);
 		});
 
 		const trashButton = container.querySelector('button[aria-label="Move task to done"]');
@@ -142,6 +144,44 @@ describe("BoardCard", () => {
 			(branchButton as HTMLButtonElement | null)?.click();
 		});
 		expect(onBranch).toHaveBeenCalledWith(card);
+	});
+
+	it("does not show an animated status spinner for running tasks", async () => {
+		await act(async () => {
+			root.render(
+				<BoardCard
+					card={createCard()}
+					index={0}
+					columnId="in_progress"
+					sessionSummary={createSummary("running")}
+				/>,
+			);
+		});
+
+		expect(container.querySelector("svg.animate-spin")).toBeNull();
+	});
+
+	it("shows the red done action beside the branch action when provided", async () => {
+		const onMoveToTrash = vi.fn();
+		await act(async () => {
+			root.render(
+				<TooltipProvider>
+					<BoardCard
+						card={createCard()}
+						index={0}
+						columnId="in_progress"
+						onBranch={() => {}}
+						onMoveToTrash={onMoveToTrash}
+					/>
+				</TooltipProvider>,
+			);
+		});
+
+		const doneButton = container.querySelector<HTMLButtonElement>('button[aria-label="Move task to done"]');
+		expect(doneButton).toBeInstanceOf(HTMLButtonElement);
+		expect(doneButton?.className).toContain("text-status-red");
+		act(() => doneButton?.click());
+		expect(onMoveToTrash).toHaveBeenCalledWith("task-1");
 	});
 
 	it("does not render the stored prompt as a card description", async () => {

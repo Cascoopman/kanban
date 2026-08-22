@@ -189,7 +189,7 @@ function MobileDetailTabBar({
 		{ id: "code", label: "VS Code", icon: <Code2 size={14} /> },
 	];
 	return (
-		<div className="flex min-h-9 items-center border-b border-border pl-10">
+		<div className="flex min-h-9 items-center border-b border-border">
 			{tabs.map((tab) => (
 				<button
 					key={tab.id}
@@ -222,14 +222,12 @@ export function CardDetailView({
 	onBranchTask,
 	onClearTrash,
 	onSaveTaskTitle,
-	onMoveReviewCardToTrash,
+	onMoveCardToTrash,
 	onRestoreTaskFromTrash,
 	moveToTrashLoadingById,
 	quickPrompts = [],
 	onSendQuickPrompt,
 	onEditQuickPrompts,
-	onMoveToTrash,
-	isMoveToTrashLoading,
 	bottomTerminalOpen,
 	onToggleBottomTerminal,
 	isBottomTerminalLoading,
@@ -259,14 +257,12 @@ export function CardDetailView({
 	onBranchTask?: (task: BoardCard) => void;
 	onClearTrash?: () => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
-	onMoveReviewCardToTrash?: (taskId: string) => void;
+	onMoveCardToTrash?: (taskId: string) => void;
 	onRestoreTaskFromTrash?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	quickPrompts?: readonly RuntimeQuickPrompt[];
 	onSendQuickPrompt?: (taskId: string, prompt: string) => Promise<void>;
 	onEditQuickPrompts?: () => void;
-	onMoveToTrash: () => void;
-	isMoveToTrashLoading?: boolean;
 	bottomTerminalOpen: boolean;
 	onToggleBottomTerminal: () => void;
 	isBottomTerminalLoading?: boolean;
@@ -331,8 +327,6 @@ export function CardDetailView({
 		startAgentPanelResize,
 	);
 	const terminalThemeColors = useTerminalThemeColors();
-	const showMoveToTrashActions =
-		canMutateTasks && (selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id));
 	const isTaskTerminalEnabled = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
 	const taskCardsPanelPercent = `${(taskCardsPanelRatio * 100).toFixed(1)}%`;
 	const detailContentPanelPercent = `${((1 - taskCardsPanelRatio) * 100).toFixed(1)}%`;
@@ -418,6 +412,17 @@ export function CardDetailView({
 		() => setCodePanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false, isMounted: true }),
 		[selection.card.id],
 	);
+	const handleToggleCode = useCallback(() => {
+		if (isMobile) {
+			setMobileTab(mobileTab === "code" ? "chat" : "code");
+			return;
+		}
+		if (isCodeCollapsed) {
+			expandCode();
+			return;
+		}
+		collapseCode();
+	}, [collapseCode, expandCode, isCodeCollapsed, isMobile, mobileTab, setMobileTab]);
 	const showBottomTerminal = bottomTerminalOpen && !!bottomTerminalTaskId;
 	const vscodePanel = (
 		<VscodeInlinePanel taskId={selection.card.id} baseRef={selection.card.baseRef} workspaceId={workspaceId} />
@@ -431,12 +436,11 @@ export function CardDetailView({
 			onSummary={onSessionSummary}
 			showSessionToolbar={false}
 			autoFocus
-			showMoveToTrash={showMoveToTrashActions}
-			onMoveToTrash={onMoveToTrash}
-			isMoveToTrashLoading={isMoveToTrashLoading}
 			onToggleShell={onToggleBottomTerminal}
 			isShellOpen={bottomTerminalOpen}
 			isShellLoading={isBottomTerminalLoading}
+			onToggleCode={handleToggleCode}
+			isCodeOpen={isMobile ? mobileTab === "code" : !isCodeCollapsed}
 			quickPrompts={quickPrompts}
 			onSendQuickPrompt={
 				onSendQuickPrompt ? async (prompt) => await onSendQuickPrompt(selection.card.id, prompt) : undefined
@@ -511,7 +515,7 @@ export function CardDetailView({
 							onBranchTask={canMutateTasks ? onBranchTask : undefined}
 							onClearTrash={canMutateTasks ? onClearTrash : undefined}
 							onSaveTaskTitle={canMutateTasks ? onSaveTaskTitle : undefined}
-							onMoveToTrashTask={canMutateTasks ? onMoveReviewCardToTrash : undefined}
+							onMoveToTrashTask={canMutateTasks ? onMoveCardToTrash : undefined}
 							onRestoreFromTrashTask={canMutateTasks ? onRestoreTaskFromTrash : undefined}
 							moveToTrashLoadingById={moveToTrashLoadingById}
 							panelWidth="100%"
