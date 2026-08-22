@@ -14,6 +14,9 @@ if (nodeSentryDsn) {
 		dsn: nodeSentryDsn,
 		environment: nodeSentryEnvironment,
 		release: `kanban@${appVersion}`,
+		// Sentry's ESM hook still uses Node's deprecated module.register() API.
+		// Kanban reports exceptions explicitly, so automatic ESM instrumentation is unnecessary.
+		registerEsmLoaderHooks: false,
 		sendDefaultPii: false,
 		initialScope: {
 			tags: {
