@@ -8,6 +8,7 @@ import type {
 	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import { runtimeAgentIdSchema } from "../core/api-contract";
+import { sendMacOsNotification } from "../core/macos-notification";
 import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin, getRuntimeFetch } from "../core/runtime-endpoint";
 import {
 	addTaskToColumn,
@@ -872,16 +873,33 @@ function parseOptionalBooleanOption(value: unknown, flagName: string): boolean |
 	throw new Error(`Invalid boolean value for ${flagName}: "${value}". Use true or false.`);
 }
 
-async function runTaskCommand(handler: () => Promise<JsonRecord>): Promise<void> {
+async function runTaskCommand(
+	handler: () => Promise<JsonRecord>,
+	options: { includeRuntimeOrigin?: boolean } = {},
+): Promise<void> {
 	try {
 		printJson(await handler());
 	} catch (error) {
+		const runtimeContext = options.includeRuntimeOrigin === false ? "" : ` at ${getKanbanRuntimeOrigin()}`;
 		printJson({
 			ok: false,
-			error: `Task command failed at ${getKanbanRuntimeOrigin()}: ${toErrorMessage(error)}`,
+			error: `Task command failed${runtimeContext}: ${toErrorMessage(error)}`,
 		});
 		process.exitCode = 1;
 	}
+}
+
+function sendUrgentTaskNotification(input: {
+	message: string;
+	title?: string;
+	subtitle?: string;
+	sound?: string;
+	modal?: boolean;
+}): JsonRecord {
+	return {
+		ok: true,
+		notification: sendMacOsNotification(input),
+	};
 }
 
 export function registerTaskCommand(program: Command): void {
@@ -1002,6 +1020,30 @@ export function registerTaskCommand(program: Command): void {
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
 							agentId: parseAgentId(options.agentId),
 						}),
+				);
+			},
+		);
+
+	task
+		.command("notify")
+		.description("Send an urgent macOS Notification Center alert to the user.")
+		.requiredOption("--message <text>", "Notification body with the concrete action and deadline.")
+		.option("--title <text>", 'Notification title. Defaults to "Urgent Kanban alert".')
+		.option("--subtitle <text>", 'Notification subtitle. Defaults to "Action needed".')
+		.option("--sound <name>", 'macOS alert sound. Defaults to "Basso"; use "none" to mute.')
+		.option("--no-modal", "Do not show the Focus-resistant modal alert.")
+		.action(
+			async (options: { message: string; title?: string; subtitle?: string; sound?: string; modal: boolean }) => {
+				await runTaskCommand(
+					async () =>
+						sendUrgentTaskNotification({
+							message: options.message,
+							title: options.title,
+							subtitle: options.subtitle,
+							sound: options.sound,
+							modal: options.modal,
+						}),
+					{ includeRuntimeOrigin: false },
 				);
 			},
 		);

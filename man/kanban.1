@@ -8,7 +8,7 @@ kanban \- local orchestration board for coding agents
 .RI [ command ]
 .br
 .B kanban task
-.RI " " list|current|create|update|start
+.RI " " list|current|create|update|notify|start
 .RI " " [ options ]
 .br
 .B kanban hooks
@@ -62,6 +62,14 @@ Subcommands:
 .RI [ --project-path " " path ]
 .RI [ --base-ref " " branch ]
 .RI [ --start-in-plan-mode " " true|false ]
+.br
+.B notify
+.B --message
+.RI " " text
+.RI [ --title " " text ]
+.RI [ --subtitle " " text ]
+.RI [ --sound " " name|none ]
+.RI [ --no-modal ]
 .br
 .B start
 .B --task-id
@@ -122,6 +130,9 @@ Show the task associated with the current agent session:
 .TP
 Rename the current agent task:
 .B kanban task update --title "Implement prompt-first task creation"
+.TP
+Alert the user about an urgent deadline:
+.B kanban task notify --title "Reservation expires soon" --subtitle "Pay within 5 minutes" --message "Complete payment now to keep the reservation"
 .TP
 Create a task manually:
 .B kanban task create --title "Implement API pagination"
