@@ -260,7 +260,7 @@ export default function App(): ReactElement {
 	});
 
 	const { defaultTaskBranchRef } = useTaskBranchOptions({ workspaceGit });
-	const { handleSaveTaskTitle, handleCreateTask } = useTaskEditor({
+	const { handleCreateTask } = useTaskEditor({
 		board,
 		setBoard,
 		defaultTaskBranchRef,
@@ -699,7 +699,7 @@ export default function App(): ReactElement {
 							<div className="absolute inset-0 flex min-h-0 min-w-0 flex-col bg-surface-0">
 								<nav
 									aria-label="Task breadcrumb"
-									className="flex h-10 shrink-0 items-center gap-1 border-b border-border bg-surface-1 px-3"
+									className="flex min-h-10 shrink-0 items-center gap-1 border-b border-border bg-surface-1 px-3 py-2"
 								>
 									<button
 										type="button"
@@ -717,7 +717,7 @@ export default function App(): ReactElement {
 											<ChevronRight size={14} className="shrink-0 text-text-tertiary" />
 										</>
 									) : null}
-									<span className="min-w-0 truncate text-xs font-medium text-text-primary">
+									<span className="min-w-0 flex-1 break-words text-xs font-medium leading-4 text-text-primary">
 										{selectedCard.card.title}
 									</span>
 								</nav>
@@ -732,7 +732,6 @@ export default function App(): ReactElement {
 									onTaskDragEnd={handleAllProjectsBoardDragEnd}
 									onCreateTask={handleCreateStartAndOpenTask}
 									onBranchTask={taskBranching.handleOpenBranchTask}
-									onSaveTaskTitle={handleSaveTaskTitle}
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveCardToTrash={handleMoveCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}

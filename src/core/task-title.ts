@@ -1,7 +1,18 @@
-export const DEFAULT_TASK_TITLE_MAX_CHARS = 80;
+export const DEFAULT_TASK_TITLE_MAX_CHARS = 100;
 
-function normalizeTaskTitleWhitespace(value: string): string {
+export function normalizeTaskTitleWhitespace(value: string): string {
 	return value.replaceAll(/\s+/g, " ").trim();
+}
+
+export function validateTaskTitle(value: string, maxChars = DEFAULT_TASK_TITLE_MAX_CHARS): string {
+	const normalizedTitle = normalizeTaskTitleWhitespace(value);
+	if (!normalizedTitle) {
+		throw new Error("Task title is required.");
+	}
+	if (normalizedTitle.length > maxChars) {
+		throw new Error(`Task title must be ${maxChars} characters or fewer.`);
+	}
+	return normalizedTitle;
 }
 
 function truncateTaskTitle(value: string, maxChars: number): string {
@@ -11,7 +22,7 @@ function truncateTaskTitle(value: string, maxChars: number): string {
 	if (value.length <= maxChars) {
 		return value;
 	}
-	return `${value.slice(0, maxChars).trimEnd()}…`;
+	return `${value.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
 export function deriveTaskTitleFromPrompt(prompt: string, maxChars = DEFAULT_TASK_TITLE_MAX_CHARS): string {

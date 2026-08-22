@@ -1,3 +1,4 @@
+import { DEFAULT_TASK_TITLE_MAX_CHARS } from "@runtime-task-title";
 import { describe, expect, it } from "vitest";
 
 import { createInitialBoardData } from "@/data/board-data";
@@ -59,5 +60,16 @@ describe("board state", () => {
 		expect(renamed.updated).toBe(true);
 		expect(findCardSelection(reviewed.board, created.task.id)?.card.title).toBe("Renamed");
 		expect(cleared.clearedTaskIds).toEqual([created.task.id]);
+	});
+
+	it("rejects inline title updates beyond the shared title limit", () => {
+		const created = addTaskToColumnWithResult(createInitialBoardData(), "in_progress", {
+			title: "Task",
+			baseRef: "main",
+		});
+
+		expect(() =>
+			updateTaskTitle(created.board, created.task.id, "x".repeat(DEFAULT_TASK_TITLE_MAX_CHARS + 1)),
+		).toThrow(`Task title must be ${DEFAULT_TASK_TITLE_MAX_CHARS} characters or fewer.`);
 	});
 });

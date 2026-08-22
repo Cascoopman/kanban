@@ -221,7 +221,6 @@ export function CardDetailView({
 	onCreateTask,
 	onBranchTask,
 	onClearTrash,
-	onSaveTaskTitle,
 	onMoveCardToTrash,
 	onRestoreTaskFromTrash,
 	moveToTrashLoadingById,
@@ -256,7 +255,6 @@ export function CardDetailView({
 	onCreateTask?: () => void;
 	onBranchTask?: (task: BoardCard) => void;
 	onClearTrash?: () => void;
-	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onMoveCardToTrash?: (taskId: string) => void;
 	onRestoreTaskFromTrash?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
@@ -514,7 +512,6 @@ export function CardDetailView({
 							onCreateTask={canMutateTasks ? onCreateTask : undefined}
 							onBranchTask={canMutateTasks ? onBranchTask : undefined}
 							onClearTrash={canMutateTasks ? onClearTrash : undefined}
-							onSaveTaskTitle={canMutateTasks ? onSaveTaskTitle : undefined}
 							onMoveToTrashTask={canMutateTasks ? onMoveCardToTrash : undefined}
 							onRestoreFromTrashTask={canMutateTasks ? onRestoreTaskFromTrash : undefined}
 							moveToTrashLoadingById={moveToTrashLoadingById}

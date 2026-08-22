@@ -193,6 +193,54 @@ describe("BoardCard", () => {
 		expect(container.textContent).not.toContain("Outdated implementation instructions");
 	});
 
+	it("wraps the full title when requested by the deep view", async () => {
+		const title = "A long task title that should wrap in the deep view sidebar";
+		await act(async () => {
+			root.render(<BoardCard card={createCard({ title })} index={0} columnId="in_progress" wrapTitle />);
+		});
+
+		const titleElement = Array.from(container.querySelectorAll("p")).find((element) => element.textContent === title);
+		expect(titleElement?.className).toContain("whitespace-normal");
+		expect(titleElement?.className).toContain("break-words");
+		expect(titleElement?.className).not.toContain("kb-line-clamp-1");
+	});
+
+	it("uses right-aligned footer actions in the deep view and has no title edit control", async () => {
+		const onBranch = vi.fn();
+		const onMoveToTrash = vi.fn();
+		const card = createCard();
+		await act(async () => {
+			root.render(
+				<TooltipProvider>
+					<BoardCard
+						card={card}
+						index={0}
+						columnId="in_progress"
+						onBranch={onBranch}
+						onMoveToTrash={onMoveToTrash}
+						wrapTitle
+					/>
+				</TooltipProvider>,
+			);
+		});
+
+		expect(container.querySelector('button[aria-label="Edit task title"]')).toBeNull();
+		const branchButton = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "Branch",
+		);
+		const doneButton = Array.from(container.querySelectorAll("button")).find(
+			(button) => button.textContent === "Done",
+		);
+		expect(branchButton).toBeInstanceOf(HTMLButtonElement);
+		expect(doneButton).toBeInstanceOf(HTMLButtonElement);
+		expect(branchButton?.parentElement?.className).toContain("justify-end");
+
+		await act(async () => branchButton?.click());
+		await act(async () => doneButton?.click());
+		expect(onBranch).toHaveBeenCalledWith(card);
+		expect(onMoveToTrash).toHaveBeenCalledWith(card.id);
+	});
+
 	it("reconstructs and shows trashed worktree path when workspace metadata is not tracked", async () => {
 		await act(async () => {
 			root.render(

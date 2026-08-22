@@ -9,6 +9,7 @@ import {
 	trashTask,
 	updateTask,
 } from "../../src/core/task-board-mutations";
+import { DEFAULT_TASK_TITLE_MAX_CHARS } from "../../src/core/task-title";
 
 function createBoard(): RuntimeBoardData {
 	return {
@@ -63,5 +64,21 @@ describe("task board mutations", () => {
 		expect(updated.task).toMatchObject({ title: "Updated", baseRef: "develop", startInPlanMode: true });
 		expect(deleted.deletedTaskIds).toEqual(["a"]);
 		expect(getTaskColumnId(deleted.board, "a")).toBeNull();
+	});
+
+	it("rejects titles longer than the shared title limit", () => {
+		const overlongTitle = "x".repeat(DEFAULT_TASK_TITLE_MAX_CHARS + 1);
+
+		expect(() =>
+			addTaskToColumn(createBoard(), "in_progress", { title: overlongTitle, baseRef: "main" }, () => "a"),
+		).toThrow(`Task title must be ${DEFAULT_TASK_TITLE_MAX_CHARS} characters or fewer.`);
+
+		const created = addTaskToColumn(createBoard(), "in_progress", { title: "Task", baseRef: "main" }, () => "a");
+		expect(() =>
+			updateTask(created.board, "a", {
+				title: overlongTitle,
+				baseRef: "main",
+			}),
+		).toThrow(`Task title must be ${DEFAULT_TASK_TITLE_MAX_CHARS} characters or fewer.`);
 	});
 });

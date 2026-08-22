@@ -1,6 +1,7 @@
 import type { DropResult } from "@hello-pangea/dnd";
 import { createShortTaskId } from "@runtime-task-id";
 import * as runtimeTaskState from "@runtime-task-state";
+import { validateTaskTitle } from "@runtime-task-title";
 
 import { createInitialBoardData } from "@/data/board-data";
 import { isSupportedAgentId } from "@/runtime/supported-agents";
@@ -300,10 +301,7 @@ export function moveTaskToColumn(
 }
 
 export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): { board: BoardData; updated: boolean } {
-	const title = draft.title.trim();
-	if (!title) {
-		return { board, updated: false };
-	}
+	const title = validateTaskTitle(draft.title);
 	const baseRef = draft.baseRef.trim();
 	if (!baseRef) {
 		return { board, updated: false };

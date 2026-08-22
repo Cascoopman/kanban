@@ -1,5 +1,6 @@
 import type { RuntimeAgentId, RuntimeBoardCard, RuntimeBoardColumnId, RuntimeBoardData } from "./api-contract";
 import { createUniqueTaskId } from "./task-id";
+import { validateTaskTitle } from "./task-title";
 
 export interface RuntimeCreateTaskInput {
 	taskId?: string;
@@ -86,10 +87,7 @@ export function addTaskToColumn(
 	randomUuid: () => string,
 	now: number = Date.now(),
 ): RuntimeCreateTaskResult {
-	const title = input.title.trim();
-	if (!title) {
-		throw new Error("Task title is required.");
-	}
+	const title = validateTaskTitle(input.title);
 	const baseRef = input.baseRef.trim();
 	if (!baseRef) {
 		throw new Error("Task baseRef is required.");
@@ -302,14 +300,7 @@ export function updateTask(
 		};
 	}
 
-	const title = input.title.trim();
-	if (!title) {
-		return {
-			board,
-			task: null,
-			updated: false,
-		};
-	}
+	const title = validateTaskTitle(input.title);
 
 	const baseRef = input.baseRef.trim();
 	if (!baseRef) {

@@ -1,9 +1,9 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
-import { AlertCircle, AlertTriangle, Bot, Copy, Layers3, Pencil, RotateCcw, Trash2 } from "lucide-react";
-import type { KeyboardEvent, MouseEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, AlertTriangle, Bot, Copy, Layers3, RotateCcw, Trash2 } from "lucide-react";
+import type { MouseEvent } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
@@ -199,11 +199,11 @@ export function BoardCard({
 	onBranch,
 	onMoveToTrash,
 	onRestoreFromTrash,
-	onSaveTitle,
 	isMoveToTrashLoading = false,
 	workspacePath,
 	isDragDisabled = false,
 	hideActions = false,
+	wrapTitle = false,
 }: {
 	card: BoardCardModel;
 	index: number;
@@ -214,17 +214,13 @@ export function BoardCard({
 	onBranch?: (task: BoardCardModel) => void;
 	onMoveToTrash?: (taskId: string) => void;
 	onRestoreFromTrash?: (taskId: string) => void;
-	onSaveTitle?: (taskId: string, title: string) => void;
 	isMoveToTrashLoading?: boolean;
 	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideActions?: boolean;
+	wrapTitle?: boolean;
 }): React.ReactElement {
 	const [isHovered, setIsHovered] = useState(false);
-	const [isEditingTitle, setIsEditingTitle] = useState(false);
-	const [draftTitle, setDraftTitle] = useState(card.title);
-	const titleInputRef = useRef<HTMLInputElement | null>(null);
-	const titleEditCancelledRef = useRef(false);
 	const reviewWorkspaceSnapshot = useTaskWorkspaceSnapshotValue(card.id);
 	const isTrashCard = columnId === "trash";
 	const isCardInteractive = !isTrashCard;
@@ -241,61 +237,9 @@ export function BoardCard({
 	const sessionActivity = rawSessionActivity ?? lastSessionActivityRef.current;
 	const displayTitle = card.title;
 
-	useEffect(() => {
-		setDraftTitle(card.title);
-		setIsEditingTitle(false);
-	}, [card.id, card.title]);
-
-	useEffect(() => {
-		if (!isEditingTitle) {
-			return;
-		}
-		window.requestAnimationFrame(() => {
-			titleInputRef.current?.focus();
-			titleInputRef.current?.select();
-		});
-	}, [isEditingTitle]);
-
 	const stopEvent = (event: MouseEvent<HTMLElement>) => {
 		event.preventDefault();
 		event.stopPropagation();
-	};
-
-	const submitTitle = () => {
-		if (titleEditCancelledRef.current) {
-			titleEditCancelledRef.current = false;
-			return;
-		}
-		setIsEditingTitle(false);
-		if (!onSaveTitle) {
-			return;
-		}
-		const trimmed = draftTitle.trim();
-		if (!trimmed) {
-			setDraftTitle(card.title);
-			return;
-		}
-		if (trimmed === card.title) {
-			return;
-		}
-		onSaveTitle(card.id, trimmed);
-	};
-
-	const handleTitleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (event.key === "Enter") {
-			event.preventDefault();
-			event.stopPropagation();
-			titleInputRef.current?.blur();
-			return;
-		}
-		if (event.key === "Escape") {
-			event.preventDefault();
-			event.stopPropagation();
-			titleEditCancelledRef.current = true;
-			setDraftTitle(card.title);
-			setIsEditingTitle(false);
-			titleInputRef.current?.blur();
-		}
 	};
 
 	const isCreditLimit = isCardCreditLimitError(sessionSummary);
@@ -323,6 +267,10 @@ export function BoardCard({
 		[card.agentId],
 	);
 	const taskAgentSettingsLabel = agentOverrideLabel;
+	const showDeepViewActions =
+		wrapTitle &&
+		!hideActions &&
+		((Boolean(onBranch) && !isTrashCard) || Boolean(onMoveToTrash) || (isTrashCard && Boolean(onRestoreFromTrash)));
 
 	return (
 		<Draggable draggableId={card.id} index={index} isDragDisabled={isDragDisabled}>
@@ -365,60 +313,18 @@ export function BoardCard({
 								isHovered && isCardInteractive && "bg-surface-3 border-border-bright",
 							)}
 						>
-							<div className="flex items-center gap-2" style={{ minHeight: 24 }}>
-								{statusMarker ? <div className="inline-flex items-center">{statusMarker}</div> : null}
-								<div className="flex-1 min-w-0">
-									{isEditingTitle ? (
-										<input
-											ref={titleInputRef}
-											value={draftTitle}
-											onChange={(event) => setDraftTitle(event.currentTarget.value)}
-											onBlur={submitTitle}
-											onKeyDown={handleTitleKeyDown}
-											onMouseDown={(event) => {
-												event.stopPropagation();
-											}}
-											className="h-7 w-full rounded-md border border-border-focus bg-surface-2 px-2 text-sm font-medium text-text-primary focus:outline-none"
-										/>
-									) : onSaveTitle ? (
-										<div className="flex items-center gap-1 min-w-0">
-											<p
-												className={cn(
-													"kb-line-clamp-1 m-0 min-w-0 font-medium text-sm",
-													isTrashCard && "line-through text-text-tertiary",
-												)}
-											>
-												{displayTitle}
-											</p>
-											<button
-												type="button"
-												aria-label="Edit task title"
-												onMouseDown={stopEvent}
-												onClick={(event) => {
-													stopEvent(event);
-													setDraftTitle(card.title);
-													setIsEditingTitle(true);
-												}}
-												className={cn(
-													"shrink-0 cursor-pointer rounded-sm p-0.5 text-text-tertiary hover:text-text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
-													isHovered ? "opacity-100" : "opacity-0",
-												)}
-											>
-												<Pencil size={12} />
-											</button>
-										</div>
-									) : (
-										<p
-											className={cn(
-												"kb-line-clamp-1 m-0 font-medium text-sm",
-												isTrashCard && "line-through text-text-tertiary",
-											)}
-										>
-											{displayTitle}
-										</p>
+							<div className="flex items-start gap-2" style={{ minHeight: 24 }}>
+								{statusMarker ? <div className="mt-1 inline-flex items-center">{statusMarker}</div> : null}
+								<p
+									className={cn(
+										"m-0 min-w-0 flex-1 font-medium text-sm",
+										wrapTitle ? "break-words whitespace-normal" : "kb-line-clamp-1",
+										isTrashCard && "line-through text-text-tertiary",
 									)}
-								</div>
-								{onBranch && !isTrashCard ? (
+								>
+									{displayTitle}
+								</p>
+								{!wrapTitle && onBranch && !isTrashCard ? (
 									<Tooltip content="Branch task">
 										<Button
 											icon={<Copy size={13} />}
@@ -433,7 +339,7 @@ export function BoardCard({
 										/>
 									</Tooltip>
 								) : null}
-								{!hideActions && onMoveToTrash ? (
+								{!wrapTitle && !hideActions && onMoveToTrash ? (
 									<Button
 										icon={isMoveToTrashLoading ? <Spinner size={13} /> : <Trash2 size={13} />}
 										variant="danger"
@@ -447,7 +353,7 @@ export function BoardCard({
 											onMoveToTrash?.(card.id);
 										}}
 									/>
-								) : !hideActions && columnId === "trash" ? (
+								) : !wrapTitle && !hideActions && columnId === "trash" ? (
 									<Tooltip
 										side="bottom"
 										content={
@@ -546,6 +452,52 @@ export function BoardCard({
 										<span style={{ color: SESSION_ACTIVITY_COLOR.secondary }}>{reviewWorkspacePath}</span>
 									) : null}
 								</p>
+							) : null}
+							{showDeepViewActions ? (
+								<div className="-mx-2.5 -mb-2.5 mt-2 flex items-center justify-end gap-1 border-t border-border bg-surface-1/55 px-2.5 py-1.5">
+									{onBranch && !isTrashCard ? (
+										<Button
+											icon={<Copy size={12} />}
+											variant="ghost"
+											size="sm"
+											onMouseDown={stopEvent}
+											onClick={(event) => {
+												stopEvent(event);
+												onBranch(card);
+											}}
+										>
+											Branch
+										</Button>
+									) : null}
+									{onMoveToTrash ? (
+										<Button
+											icon={isMoveToTrashLoading ? <Spinner size={12} /> : <Trash2 size={12} />}
+											variant="danger"
+											size="sm"
+											disabled={isMoveToTrashLoading}
+											onMouseDown={stopEvent}
+											onClick={(event) => {
+												stopEvent(event);
+												onMoveToTrash(card.id);
+											}}
+										>
+											Done
+										</Button>
+									) : isTrashCard && onRestoreFromTrash ? (
+										<Button
+											icon={<RotateCcw size={12} />}
+											variant="ghost"
+											size="sm"
+											onMouseDown={stopEvent}
+											onClick={(event) => {
+												stopEvent(event);
+												onRestoreFromTrash(card.id);
+											}}
+										>
+											Restore
+										</Button>
+									) : null}
+								</div>
 							) : null}
 						</div>
 					</div>
