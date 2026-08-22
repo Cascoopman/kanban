@@ -1,29 +1,23 @@
 import type { DropResult } from "@hello-pangea/dnd";
-import { Files, GitCompareArrows, MessageSquare } from "lucide-react";
+import { Code2, Maximize2, MessageSquare, Minimize2, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+
 import { AgentTerminalPanel } from "@/components/detail-panels/agent-terminal-panel";
 import { ColumnContextPanel } from "@/components/detail-panels/column-context-panel";
-import { CollapsedDiffToolbar, DiffToolbar } from "@/components/detail-panels/diff-toolbar";
-import { type DiffLineComment, DiffViewerPanel } from "@/components/detail-panels/diff-viewer-panel";
-import { FileTreePanel } from "@/components/detail-panels/file-tree-panel";
+import { VscodeInlinePanel } from "@/components/detail-panels/vscode-inline-panel";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { useIsMobile } from "@/hooks/use-is-mobile";
 import { ResizableBottomPane } from "@/resize/resizable-bottom-pane";
 import { ResizeHandle } from "@/resize/resize-handle";
 import { useCardDetailLayout } from "@/resize/use-card-detail-layout";
 import { useResizeDrag } from "@/resize/use-resize-drag";
-import type { RuntimeTaskSessionSummary, RuntimeWorkspaceChangesMode } from "@/runtime/types";
-import { useRuntimeWorkspaceChanges } from "@/runtime/use-runtime-workspace-changes";
-import { useTaskWorkspaceStateVersionValue } from "@/stores/workspace-metadata-store";
+import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTerminalThemeColors } from "@/terminal/theme-colors";
 import { type BoardCard, type CardSelection, isReviewLikeColumnId } from "@/types";
 import { useWindowEvent } from "@/utils/react-use";
-
-// We still poll the open detail diff because line content can change without changing
-// the overall file or line counts that drive the shared workspace metadata stream.
-const DETAIL_DIFF_POLL_INTERVAL_MS = 1_000;
 
 function isTypingTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) {
@@ -36,13 +30,11 @@ function isEventInsideDialog(target: EventTarget | null): boolean {
 	return target instanceof Element && target.closest("[role='dialog']") !== null;
 }
 
-/** Shared factory for the three horizontal resize-drag handlers in the detail view. */
 function useResizeHandler(
 	containerRef: React.RefObject<HTMLDivElement | null>,
 	ratio: number,
-	setRatio: (r: number) => void,
+	setRatio: (ratio: number) => void,
 	startDrag: ReturnType<typeof useResizeDrag>["startDrag"],
-	invert = false,
 ): (event: ReactMouseEvent<HTMLDivElement>) => void {
 	return useCallback(
 		(event: ReactMouseEvent<HTMLDivElement>) => {
@@ -52,54 +44,10 @@ function useResizeHandler(
 			}
 			const containerWidth = Math.max(container.offsetWidth, 1);
 			const startX = event.clientX;
-			const sign = invert ? -1 : 1;
-			const applyDelta = (pointerX: number) => {
-				setRatio(ratio + sign * ((pointerX - startX) / containerWidth));
-			};
+			const applyDelta = (pointerX: number) => setRatio(ratio + (pointerX - startX) / containerWidth);
 			startDrag(event, { axis: "x", cursor: "ew-resize", onMove: applyDelta, onEnd: applyDelta });
 		},
-		[containerRef, ratio, setRatio, startDrag, invert],
-	);
-}
-
-function SkeletonLine({ width, mb }: { width: string; mb?: boolean }): React.ReactElement {
-	return <div className={cn("kb-skeleton h-[13px] rounded-sm", mb && "mb-[7px]")} style={{ width }} />;
-}
-
-function SkeletonFileRow({ width }: { width: string }): React.ReactElement {
-	return (
-		<div className="mb-0.5 flex items-center gap-2 px-2 py-1.5">
-			<div className="kb-skeleton h-3 w-3 rounded-sm" />
-			<div className="kb-skeleton h-[13px] rounded-sm" style={{ width }} />
-		</div>
-	);
-}
-
-function WorkspaceChangesLoadingPanel({ panelFlex }: { panelFlex: string }): React.ReactElement {
-	return (
-		<div className="flex min-h-0 min-w-0 bg-surface-0" style={{ flex: "1.6 1 0" }}>
-			<div className="flex flex-1 flex-col border-r border-divider">
-				<div className="px-2.5 pt-2.5 pb-1.5">
-					<div className="mb-2.5 flex items-center gap-2">
-						<div className="kb-skeleton h-3.5 rounded-sm" style={{ width: "62%" }} />
-						<div className="kb-skeleton h-4 w-[42px] rounded-full" />
-					</div>
-					<SkeletonLine width="92%" mb />
-					<SkeletonLine width="84%" mb />
-					<SkeletonLine width="95%" mb />
-					<SkeletonLine width="79%" mb />
-					<SkeletonLine width="88%" mb />
-					<SkeletonLine width="76%" />
-				</div>
-				<div className="flex-1" />
-			</div>
-			<div className="flex flex-col px-2 py-2.5" style={{ flex: panelFlex }}>
-				<SkeletonFileRow width="61%" />
-				<SkeletonFileRow width="70%" />
-				<SkeletonFileRow width="53%" />
-				<div className="flex-1" />
-			</div>
-		</div>
+		[containerRef, ratio, setRatio, startDrag],
 	);
 }
 
@@ -169,26 +117,63 @@ function BottomTerminalSection({
 	);
 }
 
-function WorkspaceChangesEmptyPanel({ title }: { title: string }): React.ReactElement {
+function VscodeToolbar({
+	isExpanded,
+	onToggleExpand,
+	onCollapse,
+	hideExpand,
+}: {
+	isExpanded: boolean;
+	onToggleExpand: () => void;
+	onCollapse?: () => void;
+	hideExpand?: boolean;
+}): React.ReactElement {
 	return (
-		<div className="flex min-h-0 min-w-0 bg-surface-0" style={{ flex: "1.6 1 0" }}>
-			<div className="kb-empty-state-center flex-1">
-				<div className="flex flex-col items-center justify-center gap-3 py-12 text-text-tertiary">
-					<GitCompareArrows size={40} />
-					<h3 className="font-semibold text-text-secondary">{title}</h3>
-				</div>
+		<div className="flex h-8 shrink-0 items-center gap-2 border-b border-divider bg-surface-1 px-2">
+			{isExpanded ? (
+				<Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onToggleExpand} className="h-6" />
+			) : null}
+			<Code2 size={14} className="text-accent" />
+			<span className="text-xs font-medium text-text-primary">VS Code</span>
+			<div className="ml-auto flex items-center gap-1">
+				{onCollapse ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={<PanelRightClose size={14} />}
+						onClick={onCollapse}
+						className="h-6"
+						aria-label="Collapse VS Code"
+					/>
+				) : null}
+				{!hideExpand ? (
+					<Button
+						variant="ghost"
+						size="sm"
+						icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+						onClick={onToggleExpand}
+						className="h-6"
+						aria-label={isExpanded ? "Exit expanded VS Code view" : "Expand VS Code view"}
+					/>
+				) : null}
 			</div>
 		</div>
 	);
 }
 
-type MobileTab = "chat" | "diff" | "files";
+type MobileTab = "chat" | "code";
 
-const MOBILE_TABS: { id: MobileTab; label: string; icon: React.ReactElement }[] = [
-	{ id: "chat", label: "Chat", icon: <MessageSquare size={14} /> },
-	{ id: "diff", label: "Diff", icon: <GitCompareArrows size={14} /> },
-	{ id: "files", label: "Files", icon: <Files size={14} /> },
-];
+const VSCODE_PRELOAD_FALLBACK_MS = 5_000;
+
+function scheduleIdleWork(callback: () => void): () => void {
+	if (typeof window.requestIdleCallback === "function") {
+		const idleCallbackId = window.requestIdleCallback(callback, { timeout: VSCODE_PRELOAD_FALLBACK_MS });
+		return () => window.cancelIdleCallback(idleCallbackId);
+	}
+
+	const timeoutId = window.setTimeout(callback, 0);
+	return () => window.clearTimeout(timeoutId);
+}
 
 function MobileDetailTabBar({
 	activeTab,
@@ -197,9 +182,12 @@ function MobileDetailTabBar({
 	activeTab: MobileTab;
 	onTabChange: (tab: MobileTab) => void;
 }): React.ReactElement {
-	const tabs = MOBILE_TABS;
+	const tabs: { id: MobileTab; label: string; icon: React.ReactElement }[] = [
+		{ id: "chat", label: "Chat", icon: <MessageSquare size={14} /> },
+		{ id: "code", label: "VS Code", icon: <Code2 size={14} /> },
+	];
 	return (
-		<div className="flex items-center border-b border-border" style={{ minHeight: 36 }}>
+		<div className="flex min-h-9 items-center border-b border-border">
 			{tabs.map((tab) => (
 				<button
 					key={tab.id}
@@ -212,7 +200,7 @@ function MobileDetailTabBar({
 				>
 					{tab.icon}
 					{tab.label}
-					{activeTab === tab.id ? <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-accent" /> : null}
+					{activeTab === tab.id ? <span className="absolute right-0 bottom-0 left-0 h-0.5 bg-accent" /> : null}
 				</button>
 			))}
 		</div>
@@ -243,8 +231,6 @@ export function CardDetailView({
 	agentCommitTaskLoadingById,
 	agentOpenPrTaskLoadingById,
 	moveToTrashLoadingById,
-	onAddReviewComments,
-	onSendReviewComments,
 	onMoveToTrash,
 	isMoveToTrashLoading,
 	gitHistoryPanel,
@@ -262,7 +248,6 @@ export function CardDetailView({
 	onBottomTerminalSendAgentCommand,
 	isBottomTerminalExpanded,
 	onBottomTerminalToggleExpand,
-	isDocumentVisible = true,
 }: {
 	selection: CardSelection;
 	currentProjectId: string | null;
@@ -287,8 +272,6 @@ export function CardDetailView({
 	agentCommitTaskLoadingById?: Record<string, boolean>;
 	agentOpenPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
-	onAddReviewComments?: (taskId: string, text: string) => void;
-	onSendReviewComments?: (taskId: string, text: string) => void;
 	onMoveToTrash: () => void;
 	isMoveToTrashLoading?: boolean;
 	gitHistoryPanel?: ReactNode;
@@ -306,7 +289,6 @@ export function CardDetailView({
 	onBottomTerminalSendAgentCommand?: () => void;
 	isBottomTerminalExpanded?: boolean;
 	onBottomTerminalToggleExpand?: () => void;
-	isDocumentVisible?: boolean;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
 	const [mobileTabState, setMobileTabState] = useState<{ taskId: string; tab: MobileTab }>(() => ({
@@ -314,220 +296,142 @@ export function CardDetailView({
 		tab: "chat",
 	}));
 	const mobileTab = mobileTabState.taskId === selection.card.id ? mobileTabState.tab : "chat";
-	const setMobileTab = useCallback(
-		(tab: MobileTab) => {
-			setMobileTabState({ taskId: selection.card.id, tab });
-		},
-		[selection.card.id],
-	);
-	const terminalThemeColors = useTerminalThemeColors();
-	const [selectedPath, setSelectedPath] = useState<string | null>(null);
-	const [diffComments, setDiffComments] = useState<Map<string, DiffLineComment>>(new Map());
-	const [diffMode, setDiffMode] = useState<RuntimeWorkspaceChangesMode>("working_copy");
-	const [diffPanelState, setDiffPanelState] = useState<{
-		taskId: string;
-		isCollapsed: boolean;
-		isExpanded: boolean;
-	}>(() => ({
+	const [codePanelState, setCodePanelState] = useState({
 		taskId: selection.card.id,
 		isCollapsed: true,
 		isExpanded: false,
-	}));
-	const isCurrentTaskDiffState = diffPanelState.taskId === selection.card.id;
-	const isDiffCollapsed = !isCurrentTaskDiffState || diffPanelState.isCollapsed;
-	const isDiffExpanded = isCurrentTaskDiffState && diffPanelState.isExpanded;
-	const {
-		taskCardsPanelRatio,
-		setTaskCardsPanelRatio,
-		agentPanelRatio,
-		setAgentPanelRatio,
-		detailDiffFileTreeRatio,
-		setDetailDiffFileTreeRatio,
-	} = useCardDetailLayout({
-		isDiffExpanded,
+		isMounted: false,
 	});
+	const [mainTerminalReadyTaskId, setMainTerminalReadyTaskId] = useState<string | null>(null);
+	const isCurrentTaskCodeState = codePanelState.taskId === selection.card.id;
+	const isCodeCollapsed = !isCurrentTaskCodeState || codePanelState.isCollapsed;
+	const isCodeExpanded = isCurrentTaskCodeState && codePanelState.isExpanded;
+	const isCodeMounted = isCurrentTaskCodeState && codePanelState.isMounted;
+	const mountCodePanel = useCallback(() => {
+		setCodePanelState((current) =>
+			current.taskId === selection.card.id ? { ...current, isMounted: true } : current,
+		);
+	}, [selection.card.id]);
+	const setMobileTab = useCallback(
+		(tab: MobileTab) => {
+			setMobileTabState({ taskId: selection.card.id, tab });
+			if (tab === "code") mountCodePanel();
+		},
+		[mountCodePanel, selection.card.id],
+	);
+	const { taskCardsPanelRatio, setTaskCardsPanelRatio, agentPanelRatio, setAgentPanelRatio } = useCardDetailLayout();
 	const { startDrag: startTaskCardsPanelResize } = useResizeDrag();
 	const { startDrag: startAgentPanelResize } = useResizeDrag();
-	const { startDrag: startDetailDiffResize } = useResizeDrag();
 	const detailLayoutRef = useRef<HTMLDivElement | null>(null);
 	const mainRowRef = useRef<HTMLDivElement | null>(null);
-	const detailDiffRowRef = useRef<HTMLDivElement | null>(null);
-
 	const handleSeparatorMouseDown = useResizeHandler(
 		detailLayoutRef,
 		taskCardsPanelRatio,
 		setTaskCardsPanelRatio,
 		startTaskCardsPanelResize,
 	);
-	const handleAgentDiffSeparatorMouseDown = useResizeHandler(
+	const handleAgentCodeSeparatorMouseDown = useResizeHandler(
 		mainRowRef,
 		agentPanelRatio,
 		setAgentPanelRatio,
 		startAgentPanelResize,
 	);
-	const handleDetailDiffSeparatorMouseDown = useResizeHandler(
-		detailDiffRowRef,
-		detailDiffFileTreeRatio,
-		setDetailDiffFileTreeRatio,
-		startDetailDiffResize,
-		true,
-	);
-	const taskWorkspaceStateVersion = useTaskWorkspaceStateVersionValue(selection.card.id);
-	const lastTurnViewKey =
-		diffMode === "last_turn"
-			? [
-					sessionSummary?.state ?? "none",
-					sessionSummary?.latestTurnCheckpoint?.commit ?? "none",
-					sessionSummary?.previousTurnCheckpoint?.commit ?? "none",
-				].join(":")
-			: null;
-	const isDiffSurfaceVisible = isMobile ? mobileTab !== "chat" : !isDiffCollapsed && !gitHistoryPanel;
-	const shouldLoadWorkspaceChanges = isDiffSurfaceVisible && isDocumentVisible;
-	const { changes: workspaceChanges, isRuntimeAvailable } = useRuntimeWorkspaceChanges(
-		shouldLoadWorkspaceChanges ? selection.card.id : null,
-		currentProjectId,
-		selection.card.baseRef,
-		diffMode,
-		taskWorkspaceStateVersion,
-		shouldLoadWorkspaceChanges && selection.column.id !== "trash" ? DETAIL_DIFF_POLL_INTERVAL_MS : null,
-		lastTurnViewKey,
-		true,
-	);
-	const runtimeFiles = workspaceChanges?.files ?? null;
-	const isWorkspaceChangesPending = isRuntimeAvailable && workspaceChanges === null;
-	const hasNoWorkspaceFileChanges =
-		isRuntimeAvailable && workspaceChanges !== null && runtimeFiles !== null && runtimeFiles.length === 0;
-	const emptyDiffTitle = diffMode === "last_turn" ? "No changes since last turn" : "No working changes";
+	const terminalThemeColors = useTerminalThemeColors();
+	const showMoveToTrashActions = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
+	const isTaskTerminalEnabled = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
 	const taskCardsPanelPercent = `${(taskCardsPanelRatio * 100).toFixed(1)}%`;
 	const detailContentPanelPercent = `${((1 - taskCardsPanelRatio) * 100).toFixed(1)}%`;
 	const agentPanelPercent = `${(agentPanelRatio * 100).toFixed(1)}%`;
-	const diffPanelPercent = `${((1 - agentPanelRatio) * 100).toFixed(1)}%`;
-	const detailDiffFileTreePanelPercent = `${(detailDiffFileTreeRatio * 100).toFixed(1)}%`;
-	const detailDiffContentPanelPercent = `${((1 - detailDiffFileTreeRatio) * 100).toFixed(1)}%`;
-	const detailDiffFileTreePanelFlex = `0 0 ${detailDiffFileTreePanelPercent}`;
-	const showMoveToTrashActions = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
-	const isTaskTerminalEnabled = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
-	const availablePaths = useMemo(() => {
-		if (!runtimeFiles || runtimeFiles.length === 0) {
-			return [];
-		}
-		return runtimeFiles.map((file) => file.path);
-	}, [runtimeFiles]);
+	const codePanelPercent = `${((1 - agentPanelRatio) * 100).toFixed(1)}%`;
 
 	const handleSelectAdjacentCard = useCallback(
 		(step: number) => {
 			const cards = selection.column.cards;
 			const currentIndex = cards.findIndex((card) => card.id === selection.card.id);
-			if (currentIndex === -1) {
-				return;
-			}
-			const nextIndex = (currentIndex + step + cards.length) % cards.length;
-			const nextCard = cards[nextIndex];
-			if (nextCard) {
-				onCardSelect(nextCard.id);
-			}
+			const nextCard = currentIndex === -1 ? undefined : cards[(currentIndex + step + cards.length) % cards.length];
+			if (nextCard) onCardSelect(nextCard.id);
 		},
 		[onCardSelect, selection.card.id, selection.column.cards],
 	);
 
-	useHotkeys(
-		"up,left",
-		() => {
-			handleSelectAdjacentCard(-1);
-		},
-		{
-			ignoreEventWhen: (event) => isTypingTarget(event.target),
-			preventDefault: true,
-		},
-		[handleSelectAdjacentCard],
-	);
-
+	useHotkeys("up,left", () => handleSelectAdjacentCard(-1), {
+		ignoreEventWhen: (event) => isTypingTarget(event.target),
+		preventDefault: true,
+	});
+	useHotkeys("down,right", () => handleSelectAdjacentCard(1), {
+		ignoreEventWhen: (event) => isTypingTarget(event.target),
+		preventDefault: true,
+	});
 	useWindowEvent(
 		"keydown",
 		useCallback(
 			(event: KeyboardEvent) => {
-				if (event.key !== "Escape" || event.defaultPrevented || isEventInsideDialog(event.target)) {
-					return;
-				}
+				if (event.key !== "Escape" || event.defaultPrevented || isEventInsideDialog(event.target)) return;
 				if (gitHistoryPanel && onCloseGitHistory) {
 					event.preventDefault();
 					onCloseGitHistory();
 					return;
 				}
-				if (isTypingTarget(event.target)) {
-					return;
-				}
-				if (isDiffExpanded) {
+				if (!isTypingTarget(event.target) && isCodeExpanded) {
 					event.preventDefault();
-					setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
+					setCodePanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false, isMounted: true });
 				}
 			},
-			[gitHistoryPanel, isDiffExpanded, onCloseGitHistory, selection.card.id],
+			[gitHistoryPanel, isCodeExpanded, onCloseGitHistory, selection.card.id],
 		),
 	);
 
-	useHotkeys(
-		"down,right",
-		() => {
-			handleSelectAdjacentCard(1);
-		},
-		{
-			ignoreEventWhen: (event) => isTypingTarget(event.target),
-			preventDefault: true,
-		},
-		[handleSelectAdjacentCard],
-	);
-
 	useEffect(() => {
-		if (selectedPath && availablePaths.includes(selectedPath)) {
-			return;
-		}
-		setSelectedPath(availablePaths[0] ?? null);
-	}, [availablePaths, selectedPath]);
-
-	useEffect(() => {
-		setDiffComments(new Map());
-		setDiffMode("working_copy");
-		setDiffPanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false });
+		setCodePanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false, isMounted: false });
+		setMainTerminalReadyTaskId(null);
 		setMobileTabState({ taskId: selection.card.id, tab: "chat" });
 	}, [selection.card.id]);
 
-	const handleToggleDiffExpand = useCallback(() => {
-		if (!isDiffExpanded && bottomTerminalOpen) {
-			onBottomTerminalClose();
+	useEffect(() => {
+		if (isCodeMounted) return;
+
+		let cancelIdleWork: (() => void) | undefined;
+		const schedulePreload = () => {
+			cancelIdleWork = scheduleIdleWork(mountCodePanel);
+		};
+
+		if (!isTaskTerminalEnabled || mainTerminalReadyTaskId === selection.card.id) {
+			schedulePreload();
+			return () => cancelIdleWork?.();
 		}
-		setDiffPanelState({
+
+		const fallbackId = window.setTimeout(schedulePreload, VSCODE_PRELOAD_FALLBACK_MS);
+		return () => {
+			window.clearTimeout(fallbackId);
+			cancelIdleWork?.();
+		};
+	}, [isCodeMounted, isTaskTerminalEnabled, mainTerminalReadyTaskId, mountCodePanel, selection.card.id]);
+
+	const handleMainTerminalConnectionReady = useCallback((taskId: string) => {
+		setMainTerminalReadyTaskId(taskId);
+	}, []);
+
+	const toggleCodeExpanded = useCallback(() => {
+		if (!isCodeExpanded && bottomTerminalOpen) onBottomTerminalClose();
+		setCodePanelState({
 			taskId: selection.card.id,
 			isCollapsed: false,
-			isExpanded: !isDiffExpanded,
+			isExpanded: !isCodeExpanded,
+			isMounted: true,
 		});
-	}, [bottomTerminalOpen, isDiffExpanded, onBottomTerminalClose, selection.card.id]);
-
-	const handleCollapseDiff = useCallback(() => {
-		setDiffPanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false });
-	}, [selection.card.id]);
-
-	const handleExpandDiff = useCallback(() => {
-		setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
-	}, [selection.card.id]);
-
-	const handleAddDiffComments = useCallback(
-		(formatted: string) => {
-			onAddReviewComments?.(selection.card.id, formatted);
-		},
-		[onAddReviewComments, selection.card.id],
+	}, [bottomTerminalOpen, isCodeExpanded, onBottomTerminalClose, selection.card.id]);
+	const collapseCode = useCallback(
+		() => setCodePanelState({ taskId: selection.card.id, isCollapsed: true, isExpanded: false, isMounted: true }),
+		[selection.card.id],
 	);
-
-	const handleSendDiffComments = useCallback(
-		(formatted: string) => {
-			onSendReviewComments?.(selection.card.id, formatted);
-			setDiffPanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false });
-		},
-		[onSendReviewComments, selection.card.id],
+	const expandCode = useCallback(
+		() => setCodePanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false, isMounted: true }),
+		[selection.card.id],
 	);
-
 	const showBottomTerminal = bottomTerminalOpen && !!bottomTerminalTaskId;
-
+	const vscodePanel = (
+		<VscodeInlinePanel taskId={selection.card.id} baseRef={selection.card.baseRef} workspaceId={currentProjectId} />
+	);
 	const agentChatPanel = (
 		<AgentTerminalPanel
 			taskId={selection.card.id}
@@ -548,6 +452,7 @@ export function CardDetailView({
 			terminalBackgroundColor={terminalThemeColors.surfacePrimary}
 			cursorColor={terminalThemeColors.textPrimary}
 			taskColumnId={selection.column.id}
+			onConnectionReady={handleMainTerminalConnectionReady}
 		/>
 	);
 
@@ -557,65 +462,22 @@ export function CardDetailView({
 				<MobileDetailTabBar activeTab={mobileTab} onTabChange={setMobileTab} />
 				<div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 					<div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-						{/* Chat panel */}
 						<div
 							className="min-h-0 min-w-0 flex-1 flex-col"
 							style={{ display: mobileTab === "chat" ? "flex" : "none" }}
 						>
 							{agentChatPanel}
 						</div>
-						{/* Diff panel */}
 						<div
 							className="min-h-0 min-w-0 flex-1 flex-col"
-							style={{ display: mobileTab === "diff" ? "flex" : "none" }}
+							style={{ display: mobileTab === "code" ? "flex" : "none" }}
 						>
-							{isRuntimeAvailable ? (
-								<DiffToolbar
-									mode={diffMode}
-									onModeChange={setDiffMode}
-									isExpanded={false}
-									onToggleExpand={handleToggleDiffExpand}
-									hideExpand
-								/>
-							) : null}
-							<div className="flex min-h-0 flex-1">
-								{isWorkspaceChangesPending ? (
-									<WorkspaceChangesLoadingPanel panelFlex="1 1 0" />
-								) : hasNoWorkspaceFileChanges ? (
-									<WorkspaceChangesEmptyPanel title={emptyDiffTitle} />
-								) : (
-									<DiffViewerPanel
-										workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-										selectedPath={selectedPath}
-										onSelectedPathChange={setSelectedPath}
-										viewMode="unified"
-										onAddToTerminal={onAddReviewComments ? handleAddDiffComments : undefined}
-										onSendToTerminal={onSendReviewComments ? handleSendDiffComments : undefined}
-										comments={diffComments}
-										onCommentsChange={setDiffComments}
-									/>
-								)}
-							</div>
-						</div>
-						{/* Files panel */}
-						<div
-							className="min-h-0 min-w-0 flex-1 flex-col"
-							style={{ display: mobileTab === "files" ? "flex" : "none" }}
-						>
-							<FileTreePanel
-								workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-								selectedPath={selectedPath}
-								onSelectPath={(path: string) => {
-									setSelectedPath(path);
-									setMobileTab("diff");
-								}}
-								panelFlex="1 1 0"
-							/>
+							<VscodeToolbar isExpanded={false} onToggleExpand={toggleCodeExpanded} hideExpand />
+							{isCodeMounted ? vscodePanel : null}
 						</div>
 					</div>
-					{/* Terminal panel — bottom overlay */}
 					{showBottomTerminal ? (
-						<div className="absolute bottom-0 left-0 right-0 z-20">
+						<div className="absolute right-0 bottom-0 left-0 z-20">
 							<BottomTerminalSection
 								taskId={bottomTerminalTaskId}
 								workspaceId={currentProjectId}
@@ -642,7 +504,7 @@ export function CardDetailView({
 
 	return (
 		<div ref={detailLayoutRef} className="flex min-h-0 flex-1 overflow-hidden bg-surface-0">
-			{!isDiffExpanded ? (
+			{!isCodeExpanded ? (
 				<>
 					<div className="flex min-h-0 min-w-0" style={{ width: taskCardsPanelPercent }}>
 						<ColumnContextPanel
@@ -675,90 +537,64 @@ export function CardDetailView({
 			) : null}
 			<div
 				className="flex min-h-0 min-w-0 flex-col overflow-hidden"
-				style={{ width: isDiffExpanded ? "100%" : detailContentPanelPercent }}
+				style={{ width: isCodeExpanded ? "100%" : detailContentPanelPercent }}
 			>
 				{gitHistoryPanel ? (
 					<div className="flex min-h-0 flex-1 overflow-hidden">{gitHistoryPanel}</div>
 				) : (
 					<>
-						<div ref={mainRowRef} className="flex min-h-0 flex-1 overflow-hidden">
+						<div ref={mainRowRef} className="relative flex min-h-0 flex-1 overflow-hidden">
 							<div
 								className="min-h-0 min-w-0"
 								style={{
-									display: isDiffExpanded ? "none" : "flex",
-									width: isDiffCollapsed ? "calc(100% - 2rem)" : agentPanelPercent,
+									display: isCodeExpanded ? "none" : "flex",
+									width: isCodeCollapsed ? "calc(100% - 2rem)" : agentPanelPercent,
 								}}
 							>
 								{agentChatPanel}
 							</div>
-							{!isDiffExpanded && !isDiffCollapsed ? (
+							{!isCodeExpanded && !isCodeCollapsed ? (
 								<ResizeHandle
 									orientation="vertical"
-									ariaLabel="Resize agent and diff panels"
-									onMouseDown={handleAgentDiffSeparatorMouseDown}
+									ariaLabel="Resize agent and VS Code panels"
+									onMouseDown={handleAgentCodeSeparatorMouseDown}
 									className="z-10"
 								/>
 							) : null}
-							{isDiffCollapsed && !isDiffExpanded ? (
-								<CollapsedDiffToolbar mode={diffMode} onExpand={handleExpandDiff} />
-							) : (
-								<div
-									className="flex min-h-0 min-w-0 flex-col"
-									style={{ width: isDiffExpanded ? "100%" : diffPanelPercent }}
+							{isCodeCollapsed && !isCodeExpanded ? (
+								<Button
+									variant="ghost"
+									size="sm"
+									icon={<PanelRightOpen size={14} />}
+									onClick={expandCode}
+									className="h-full w-8 shrink-0 flex-col justify-start gap-2 rounded-none border-l border-divider px-0 py-1.5"
+									aria-label="Open VS Code"
 								>
-									{isRuntimeAvailable ? (
-										<DiffToolbar
-											mode={diffMode}
-											onModeChange={setDiffMode}
-											isExpanded={isDiffExpanded}
-											onToggleExpand={handleToggleDiffExpand}
-											onCollapse={handleCollapseDiff}
-										/>
-									) : null}
-									<div className="flex min-h-0 flex-1">
-										{isWorkspaceChangesPending ? (
-											<WorkspaceChangesLoadingPanel panelFlex={detailDiffFileTreePanelFlex} />
-										) : hasNoWorkspaceFileChanges ? (
-											<WorkspaceChangesEmptyPanel title={emptyDiffTitle} />
-										) : (
-											<div ref={detailDiffRowRef} className="flex min-w-0 flex-1">
-												<div
-													className="flex min-h-0 min-w-0"
-													style={{ flex: `0 0 ${detailDiffContentPanelPercent}` }}
-												>
-													<DiffViewerPanel
-														workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-														selectedPath={selectedPath}
-														onSelectedPathChange={setSelectedPath}
-														viewMode={isDiffExpanded ? "split" : "unified"}
-														onAddToTerminal={onAddReviewComments ? handleAddDiffComments : undefined}
-														onSendToTerminal={onSendReviewComments ? handleSendDiffComments : undefined}
-														comments={diffComments}
-														onCommentsChange={setDiffComments}
-													/>
-												</div>
-												<ResizeHandle
-													orientation="vertical"
-													ariaLabel="Resize detail diff panels"
-													onMouseDown={handleDetailDiffSeparatorMouseDown}
-													className="z-10"
-												/>
-												<div
-													className="flex min-h-0 min-w-0"
-													style={{ flex: `0 0 ${detailDiffFileTreePanelPercent}` }}
-												>
-													<FileTreePanel
-														workspaceFiles={isRuntimeAvailable ? runtimeFiles : null}
-														selectedPath={selectedPath}
-														onSelectPath={setSelectedPath}
-														panelFlex="1 1 0"
-													/>
-												</div>
-											</div>
-										)}
-									</div>
+									<span
+										aria-hidden="true"
+										className="rotate-180 text-[11px] font-medium [writing-mode:vertical-rl]"
+									>
+										VS Code
+									</span>
+								</Button>
+							) : null}
+							{isCodeMounted ? (
+								<div
+									aria-hidden={isCodeCollapsed || undefined}
+									className={cn(
+										"flex min-h-0 min-w-0 flex-col",
+										isCodeCollapsed && "pointer-events-none invisible absolute inset-y-0 right-8",
+									)}
+									style={{ width: isCodeExpanded ? "100%" : codePanelPercent }}
+								>
+									<VscodeToolbar
+										isExpanded={isCodeExpanded}
+										onToggleExpand={toggleCodeExpanded}
+										onCollapse={collapseCode}
+									/>
+									{vscodePanel}
 								</div>
-							)}
+							) : null}
 						</div>
 						{bottomTerminalOpen && bottomTerminalTaskId ? (
 							<BottomTerminalSection

@@ -510,6 +510,21 @@ export const runtimeOpenFileResponseSchema = z.object({
 });
 export type RuntimeOpenFileResponse = z.infer<typeof runtimeOpenFileResponseSchema>;
 
+export const runtimeVsCodeWebRequestSchema = z.object({
+	taskId: z.string(),
+	baseRef: z.string(),
+	acceptLicenseTerms: z.boolean().optional(),
+});
+export type RuntimeVsCodeWebRequest = z.infer<typeof runtimeVsCodeWebRequestSchema>;
+
+export const runtimeVsCodeWebResponseSchema = z.object({
+	status: z.enum(["unavailable", "consent_required", "ready", "error"]),
+	url: z.string().nullable(),
+	workspacePath: z.string().nullable(),
+	error: z.string().optional(),
+});
+export type RuntimeVsCodeWebResponse = z.infer<typeof runtimeVsCodeWebResponseSchema>;
+
 export const runtimeAgentInstructionsResponseSchema = z.object({
 	path: z.string(),
 	content: z.string(),

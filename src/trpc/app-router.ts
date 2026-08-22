@@ -47,6 +47,8 @@ import type {
 	RuntimeTaskWorkspaceBranchRequest,
 	RuntimeTaskWorkspaceInfoRequest,
 	RuntimeTaskWorkspaceInfoResponse,
+	RuntimeVsCodeWebRequest,
+	RuntimeVsCodeWebResponse,
 	RuntimeWorkspaceChangesRequest,
 	RuntimeWorkspaceChangesResponse,
 	RuntimeWorkspaceFileSearchRequest,
@@ -102,6 +104,8 @@ import {
 	runtimeTaskWorkspaceBranchRequestSchema,
 	runtimeTaskWorkspaceInfoRequestSchema,
 	runtimeTaskWorkspaceInfoResponseSchema,
+	runtimeVsCodeWebRequestSchema,
+	runtimeVsCodeWebResponseSchema,
 	runtimeWorkspaceChangesRequestSchema,
 	runtimeWorkspaceChangesResponseSchema,
 	runtimeWorkspaceFileSearchRequestSchema,
@@ -156,6 +160,14 @@ export interface RuntimeTrpcContext {
 		) => Promise<RuntimeCommandRunResponse>;
 		resetAllState: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeDebugResetAllStateResponse>;
 		openFile: (input: RuntimeOpenFileRequest) => Promise<RuntimeOpenFileResponse>;
+		getVsCodeWebStatus: (
+			scope: RuntimeTrpcWorkspaceScope,
+			input: RuntimeVsCodeWebRequest,
+		) => Promise<RuntimeVsCodeWebResponse>;
+		startVsCodeWeb: (
+			scope: RuntimeTrpcWorkspaceScope,
+			input: RuntimeVsCodeWebRequest,
+		) => Promise<RuntimeVsCodeWebResponse>;
 	};
 	workspaceApi: {
 		loadGitSummary: (
@@ -349,6 +361,18 @@ export const runtimeAppRouter = t.router({
 			.output(runtimeOpenFileResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.runtimeApi.openFile(input);
+			}),
+		getVsCodeWebStatus: workspaceProcedure
+			.input(runtimeVsCodeWebRequestSchema)
+			.output(runtimeVsCodeWebResponseSchema)
+			.query(async ({ ctx, input }) => {
+				return await ctx.runtimeApi.getVsCodeWebStatus(ctx.workspaceScope, input);
+			}),
+		startVsCodeWeb: workspaceProcedure
+			.input(runtimeVsCodeWebRequestSchema)
+			.output(runtimeVsCodeWebResponseSchema)
+			.mutation(async ({ ctx, input }) => {
+				return await ctx.runtimeApi.startVsCodeWeb(ctx.workspaceScope, input);
 			}),
 	}),
 	workspace: t.router({

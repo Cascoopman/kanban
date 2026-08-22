@@ -15,7 +15,6 @@ import {
 	moveTaskToColumn,
 } from "@/state/board-state";
 import { clearTaskWorkspaceInfo, setTaskWorkspaceInfo } from "@/stores/workspace-metadata-store";
-import type { SendTerminalInputOptions } from "@/terminal/terminal-input";
 import type { BoardCard, BoardColumnId, BoardData } from "@/types";
 import {
 	getBrowserNotificationPermission,
@@ -52,11 +51,6 @@ interface UseBoardInteractionsInput {
 	ensureTaskWorkspace: UseTaskSessionsResult["ensureTaskWorkspace"];
 	startTaskSession: UseTaskSessionsResult["startTaskSession"];
 	fetchTaskWorkspaceInfo: (task: BoardCard) => Promise<RuntimeTaskWorkspaceInfoResponse | null>;
-	sendTaskSessionInput: (
-		taskId: string,
-		input: string,
-		options?: SendTerminalInputOptions,
-	) => Promise<{ ok: boolean; message?: string }>;
 	readyForReviewNotificationsEnabled: boolean;
 }
 
@@ -72,8 +66,6 @@ export interface UseBoardInteractionsResult {
 	handleRestoreTaskFromTrash: (taskId: string) => void;
 	handleOpenClearTrash: () => void;
 	handleConfirmClearTrash: () => void;
-	handleAddReviewComments: (taskId: string, text: string) => Promise<void>;
-	handleSendReviewComments: (taskId: string, text: string) => Promise<void>;
 	moveToTrashLoadingById: Record<string, boolean>;
 	trashTaskCount: number;
 }
@@ -93,7 +85,6 @@ export function useBoardInteractions({
 	ensureTaskWorkspace,
 	startTaskSession,
 	fetchTaskWorkspaceInfo,
-	sendTaskSessionInput,
 	readyForReviewNotificationsEnabled,
 }: UseBoardInteractionsInput): UseBoardInteractionsResult {
 	const notificationPermissionPromptInFlightRef = useRef(false);
@@ -134,49 +125,6 @@ export function useBoardInteractions({
 			return next;
 		});
 	}, []);
-
-	const handleAddReviewComments = useCallback(
-		async (taskId: string, text: string) => {
-			const typed = await sendTaskSessionInput(taskId, text, { appendNewline: false, mode: "paste" });
-			if (!typed.ok) {
-				showAppToast({
-					intent: "danger",
-					icon: "warning-sign",
-					message: typed.message ?? "Could not add review comments to the task session.",
-					timeout: 7000,
-				});
-			}
-		},
-		[sendTaskSessionInput],
-	);
-
-	const handleSendReviewComments = useCallback(
-		async (taskId: string, text: string) => {
-			const typed = await sendTaskSessionInput(taskId, text, { appendNewline: false, mode: "paste" });
-			if (!typed.ok) {
-				showAppToast({
-					intent: "danger",
-					icon: "warning-sign",
-					message: typed.message ?? "Could not send review comments to the task session.",
-					timeout: 7000,
-				});
-				return;
-			}
-			await new Promise<void>((resolve) => {
-				setTimeout(resolve, 200);
-			});
-			const submitted = await sendTaskSessionInput(taskId, "\r", { appendNewline: false });
-			if (!submitted.ok) {
-				showAppToast({
-					intent: "danger",
-					icon: "warning-sign",
-					message: submitted.message ?? "Could not submit review comments to the task session.",
-					timeout: 7000,
-				});
-			}
-		},
-		[sendTaskSessionInput],
-	);
 
 	const trashTaskIds = useMemo(() => {
 		const trashColumn = board.columns.find((column) => column.id === "trash");
@@ -514,8 +462,6 @@ export function useBoardInteractions({
 		handleRestoreTaskFromTrash,
 		handleOpenClearTrash,
 		handleConfirmClearTrash,
-		handleAddReviewComments,
-		handleSendReviewComments,
 		moveToTrashLoadingById,
 		trashTaskCount,
 	};
