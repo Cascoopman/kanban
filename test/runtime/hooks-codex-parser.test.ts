@@ -103,7 +103,29 @@ describe("parseCodexEventLine", () => {
 		});
 	});
 
-	it("ignores descendant session activity and completion", () => {
+	it("moves a cancelled root turn to review", () => {
+		const state = createCodexWatcherState();
+
+		const event = parseCodexEventLine(
+			createCodexLogLine({
+				type: "turn_aborted",
+				turn_id: "turn-cancelled-123",
+				reason: "interrupted",
+			}),
+			state,
+		);
+
+		expect(event).toEqual({
+			event: "to_review",
+			metadata: {
+				source: "codex",
+				hookEventName: "turn_aborted",
+				activityText: "Turn cancelled; waiting for review",
+			},
+		});
+	});
+
+	it("ignores descendant session activity, cancellation, and completion", () => {
 		const state = createCodexWatcherState();
 
 		expect(
@@ -154,6 +176,36 @@ describe("parseCodexEventLine", () => {
 				createCodexLogLine({
 					type: "approval_request",
 					id: "child-approval",
+				}),
+				state,
+			),
+		).toBeNull();
+
+		expect(
+			parseCodexEventLine(
+				createCodexLogLine({
+					type: "turn_aborted",
+					turn_id: "child-turn",
+				}),
+				state,
+			),
+		).toBeNull();
+
+		expect(
+			parseCodexEventLine(
+				createCodexLogLine({
+					type: "session_meta",
+					payload: {
+						id: "second-child-session",
+						source: {
+							subagent: {
+								thread_spawn: {
+									parent_thread_id: "root-session",
+									depth: 1,
+								},
+							},
+						},
+					},
 				}),
 				state,
 			),

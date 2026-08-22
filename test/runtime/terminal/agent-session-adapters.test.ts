@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import type { RuntimeTaskSessionSummary } from "../../../src/core/api-contract";
 import { prepareAgentLaunch } from "../../../src/terminal/agent-session-adapters";
 
 const originalHome = process.env.HOME;
@@ -48,6 +49,23 @@ function getCodexConfigOverrideValues(args: string[], key: string): string[] {
 		}
 	}
 	return values;
+}
+
+function createRunningSummary(): RuntimeTaskSessionSummary {
+	return {
+		taskId: "task-1",
+		state: "running",
+		agentId: "claude",
+		workspacePath: "/tmp",
+		pid: 123,
+		startedAt: 1,
+		updatedAt: 1,
+		lastOutputAt: 1,
+		reviewReason: null,
+		exitCode: null,
+		lastHookAt: null,
+		latestHookActivity: null,
+	};
 }
 
 afterEach(() => {
@@ -133,6 +151,43 @@ describe("prepareAgentLaunch", () => {
 		expect(settings.hooks?.PreToolUse).toBeDefined();
 		expect(settings.hooks?.PostToolUse).toBeDefined();
 		expect(settings.hooks?.PostToolUseFailure).toBeDefined();
+	});
+
+	it("moves Claude sessions to review when the user interrupts a turn", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-1",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+			workspaceId: "workspace-1",
+		});
+		const detectOutputTransition = launch.detectOutputTransition;
+		expect(detectOutputTransition).toBeDefined();
+		if (!detectOutputTransition) {
+			return;
+		}
+
+		const summary = createRunningSummary();
+		expect(detectOutputTransition("\u001b[31mInterrupted\u001b[0m · What should", summary)).toBeNull();
+		expect(detectOutputTransition(" Claude do instead?", summary)).toEqual({ type: "hook.to_review" });
+	});
+
+	it("does not treat generic Claude interruption text as a cancelled turn", async () => {
+		setupTempHome();
+		const launch = await prepareAgentLaunch({
+			taskId: "task-1",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp",
+			prompt: "",
+			workspaceId: "workspace-1",
+		});
+
+		expect(launch.detectOutputTransition?.("[Request interrupted by user]", createRunningSummary())).toBeNull();
 	});
 
 	it("defers Codex plan-mode startup input", async () => {

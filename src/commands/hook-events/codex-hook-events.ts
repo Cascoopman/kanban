@@ -430,6 +430,20 @@ function mapCodexRolloutActivityLine(line: string): { mapped: CodexMappedHookEve
 				},
 			};
 		}
+		if (normalizedType === "turn_aborted") {
+			const turnId = readStringField(payload, "turn_id") ?? "unknown";
+			return {
+				fingerprint: `rollout:turn_aborted:${turnId}`,
+				mapped: {
+					event: "to_review",
+					metadata: {
+						source: "codex",
+						hookEventName: payloadType,
+						activityText: "Turn cancelled; waiting for review",
+					},
+				},
+			};
+		}
 		if (normalizedType === "exec_command_begin" || normalizedType === "exec_command_start") {
 			const callId = readStringField(payload, "call_id") ?? "unknown";
 			const command = extractRolloutCommandFromPayload(payload);
@@ -757,6 +771,17 @@ export function parseCodexEventLine(line: string, state: CodexWatcherState): Cod
 				hookEventName: type,
 				activityText: finalText ? `Final: ${finalText}` : "Waiting for review",
 				finalMessage: finalText || undefined,
+			},
+		};
+	}
+
+	if (normalizedType === "turn_aborted") {
+		return {
+			event: "to_review",
+			metadata: {
+				source: "codex",
+				hookEventName: type,
+				activityText: "Turn cancelled; waiting for review",
 			},
 		};
 	}
