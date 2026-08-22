@@ -69,7 +69,6 @@ function createBoard(): BoardData {
 				],
 			},
 		],
-		dependencies: [],
 	};
 }
 

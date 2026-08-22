@@ -8,7 +8,7 @@ kanban \- local orchestration board for coding agents
 .RI [ command ]
 .br
 .B kanban task
-.RI " " list|current|create|update|link|unlink|start
+.RI " " list|current|create|update|start
 .RI " " [ options ]
 .br
 .B kanban hooks
@@ -44,7 +44,7 @@ Subcommands:
 .br
 .B list
 .RI [ --project-path " " path ]
-.RI [ --column " " backlog|in_progress|review ]
+.RI [ --column " " in_progress|review|on_hold|done ]
 .br
 .B current|whoami
 .RI [ --project-path " " path ]
@@ -62,18 +62,6 @@ Subcommands:
 .RI [ --project-path " " path ]
 .RI [ --base-ref " " branch ]
 .RI [ --start-in-plan-mode " " true|false ]
-.br
-.B link
-.B --task-id
-.RI " " id
-.B --linked-task-id
-.RI " " id
-.RI [ --project-path " " path ]
-.br
-.B unlink
-.B --dependency-id
-.RI " " id
-.RI [ --project-path " " path ]
 .br
 .B start
 .B --task-id

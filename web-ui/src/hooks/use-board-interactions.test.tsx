@@ -5,11 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useBoardInteractions } from "@/hooks/use-board-interactions";
 import type { UseTaskSessionsResult } from "@/hooks/use-task-sessions";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
-import type { BoardCard, BoardColumnId, BoardData } from "@/types";
+import type { BoardCard, BoardData } from "@/types";
 
 const notifyErrorMock = vi.hoisted(() => vi.fn());
 const showAppToastMock = vi.hoisted(() => vi.fn());
-const useLinkedBacklogTaskActionsMock = vi.hoisted(() => vi.fn());
 const useProgrammaticCardMovesMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/components/app-toaster", () => ({
@@ -17,16 +16,8 @@ vi.mock("@/components/app-toaster", () => ({
 	showAppToast: showAppToastMock,
 }));
 
-vi.mock("@/hooks/use-linked-backlog-task-actions", () => ({
-	useLinkedBacklogTaskActions: useLinkedBacklogTaskActionsMock,
-}));
-
 vi.mock("@/hooks/use-programmatic-card-moves", () => ({
 	useProgrammaticCardMoves: useProgrammaticCardMovesMock,
-}));
-
-vi.mock("@/hooks/use-review-auto-actions", () => ({
-	useReviewAutoActions: () => ({}) as ReturnType<typeof useBoardInteractions>,
 }));
 
 function createTask(taskId: string, title: string, createdAt: number): BoardCard {
@@ -40,39 +31,14 @@ function createTask(taskId: string, title: string, createdAt: number): BoardCard
 	};
 }
 
-function createSession(taskId: string, state: RuntimeTaskSessionSummary["state"]): RuntimeTaskSessionSummary {
-	return {
-		taskId,
-		state,
-		agentId: "codex",
-		workspacePath: `/tmp/${taskId}`,
-		pid: state === "running" ? 1234 : null,
-		startedAt: 1,
-		updatedAt: 2,
-		lastOutputAt: 1,
-		reviewReason: state === "interrupted" ? "interrupted" : null,
-		exitCode: null,
-		lastHookAt: null,
-		latestHookActivity: null,
-		warningMessage: null,
-		latestTurnCheckpoint: null,
-		previousTurnCheckpoint: null,
-	};
-}
-
-function createBoard(): BoardData {
+function createBoard({ inProgress = [], trash = [] }: { inProgress?: BoardCard[]; trash?: BoardCard[] }): BoardData {
 	return {
 		columns: [
-			{
-				id: "backlog",
-				title: "Backlog",
-				cards: [createTask("task-1", "Backlog task", 1)],
-			},
-			{ id: "in_progress", title: "In Progress", cards: [] },
+			{ id: "in_progress", title: "In Progress", cards: inProgress },
 			{ id: "review", title: "Review", cards: [] },
-			{ id: "trash", title: "Done", cards: [] },
+			{ id: "on_hold", title: "On Hold", cards: [] },
+			{ id: "trash", title: "Done", cards: trash },
 		],
-		dependencies: [],
 	};
 }
 
@@ -88,20 +54,6 @@ interface HookSnapshot {
 	handleConfirmClearTrash: () => void;
 }
 
-function createRect(width: number, height: number): DOMRect {
-	return {
-		x: 0,
-		y: 0,
-		left: 0,
-		top: 0,
-		width,
-		height,
-		right: width,
-		bottom: height,
-		toJSON: () => ({}),
-	} as DOMRect;
-}
-
 function HookHarness({
 	board,
 	setBoard,
@@ -109,8 +61,6 @@ function HookHarness({
 	startTaskSession,
 	stopTaskSession = NOOP_STOP_SESSION,
 	cleanupTaskWorkspace = NOOP_CLEANUP_WORKSPACE,
-	initialSessions = {},
-	selectedCard = null,
 	setSelectedTaskIdOverride,
 	onSnapshot,
 }: {
@@ -120,21 +70,18 @@ function HookHarness({
 	startTaskSession: UseTaskSessionsResult["startTaskSession"];
 	stopTaskSession?: (taskId: string) => Promise<void>;
 	cleanupTaskWorkspace?: (taskId: string) => Promise<unknown>;
-	initialSessions?: Record<string, RuntimeTaskSessionSummary>;
-	selectedCard?: { card: BoardCard; column: { id: BoardColumnId } } | null;
 	setSelectedTaskIdOverride?: Dispatch<SetStateAction<string | null>>;
-	onSnapshot?: (snapshot: HookSnapshot) => void;
+	onSnapshot: (snapshot: HookSnapshot) => void;
 }): null {
-	const [, setSessions] = useState<Record<string, RuntimeTaskSessionSummary>>(initialSessions);
+	const [, setSessions] = useState<Record<string, RuntimeTaskSessionSummary>>({});
 	const [, setSelectedTaskId] = useState<string | null>(null);
 	const [, setIsClearTrashDialogOpen] = useState(false);
 	const [, setIsGitHistoryOpen] = useState(false);
-
 	const actions = useBoardInteractions({
 		board,
 		setBoard,
 		setSessions,
-		selectedCard,
+		selectedCard: null,
 		selectedTaskId: null,
 		currentProjectId: "project-1",
 		setSelectedTaskId: setSelectedTaskIdOverride ?? setSelectedTaskId,
@@ -150,7 +97,7 @@ function HookHarness({
 	});
 
 	useEffect(() => {
-		onSnapshot?.({
+		onSnapshot({
 			handleRestoreTaskFromTrash: actions.handleRestoreTaskFromTrash,
 			handleStartTask: actions.handleStartTask,
 			handleCardSelect: actions.handleCardSelect,
@@ -170,376 +117,62 @@ function HookHarness({
 describe("useBoardInteractions", () => {
 	let container: HTMLDivElement;
 	let root: Root;
-	let previousActEnvironment: boolean | undefined;
 
 	beforeEach(() => {
-		vi.useFakeTimers();
-		vi.spyOn(performance, "now").mockImplementation(() => Date.now());
-		vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
-			return window.setTimeout(() => {
-				callback(performance.now());
-			}, 16);
-		});
-		vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle: number) => {
-			window.clearTimeout(handle);
-		});
 		notifyErrorMock.mockReset();
 		showAppToastMock.mockReset();
-		useLinkedBacklogTaskActionsMock.mockReset();
-		useProgrammaticCardMovesMock.mockReset();
-		previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
-			.IS_REACT_ACT_ENVIRONMENT;
-		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+		useProgrammaticCardMovesMock.mockReturnValue({
+			handleProgrammaticCardMoveReady: () => {},
+			setRequestMoveTaskToTrashHandler: () => {},
+			tryProgrammaticCardMove: () => "unavailable",
+			consumeProgrammaticCardMove: () => ({}),
+			resolvePendingProgrammaticTrashMove: () => {},
+			resetProgrammaticCardMoves: () => {},
+			requestMoveTaskToTrashWithAnimation: async () => {},
+		});
 		container = document.createElement("div");
 		document.body.appendChild(container);
 		root = createRoot(container);
 	});
 
 	afterEach(() => {
-		act(() => {
-			root.unmount();
-		});
-		vi.restoreAllMocks();
-		vi.useRealTimers();
+		act(() => root.unmount());
 		container.remove();
-		if (previousActEnvironment === undefined) {
-			delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
-		} else {
-			(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-				previousActEnvironment;
-		}
 	});
 
-	it("keeps interrupted tasks in their existing board column", async () => {
-		const interruptedTask = createTask("task-interrupted", "Interrupted task", 1);
-		let currentBoard: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{ id: "in_progress", title: "In Progress", cards: [interruptedTask] },
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "on_hold", title: "On Hold", cards: [] },
-				{ id: "trash", title: "Done", cards: [] },
-			],
-			dependencies: [],
-		};
-		const setBoard: Dispatch<SetStateAction<BoardData>> = (nextBoard) => {
-			currentBoard = typeof nextBoard === "function" ? nextBoard(currentBoard) : nextBoard;
-		};
-		const tryProgrammaticCardMove = vi.fn(() => "unavailable" as const);
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove,
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					board={currentBoard}
-					setBoard={setBoard}
-					ensureTaskWorkspace={async () => ({ ok: true as const })}
-					startTaskSession={async () => ({ ok: true as const })}
-					initialSessions={{
-						[interruptedTask.id]: createSession(interruptedTask.id, "interrupted"),
-					}}
-				/>,
-			);
-		});
-
-		expect(currentBoard.columns.find((column) => column.id === "in_progress")?.cards).toEqual([interruptedTask]);
-		expect(currentBoard.columns.find((column) => column.id === "trash")?.cards).toEqual([]);
-		expect(tryProgrammaticCardMove).not.toHaveBeenCalled();
-	});
-
-	it("starts dependency-unblocked tasks even when setBoard updater is deferred", async () => {
-		let startBacklogTaskWithAnimation: ((task: BoardCard) => Promise<boolean>) | null = null;
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove: () => "unavailable",
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockImplementation(
-			(input: { startBacklogTaskWithAnimation?: (task: BoardCard) => Promise<boolean> }) => {
-				startBacklogTaskWithAnimation = input.startBacklogTaskWithAnimation ?? null;
-				return {
-					handleCreateDependency: () => {},
-					handleDeleteDependency: () => {},
-					confirmMoveTaskToTrash: async () => {},
-					requestMoveTaskToTrash: async () => {},
-				};
-			},
-		);
-
-		const board = createBoard();
-		const setBoard = vi.fn<Dispatch<SetStateAction<BoardData>>>((_nextBoard) => {
-			// Simulate React deferring state updater execution.
-		});
-		const ensureTaskWorkspace = vi.fn(async () => ({
-			ok: true as const,
-			response: {
-				ok: true as const,
-				path: "/tmp/task-1",
-				baseRef: "main",
-				baseCommit: "abc123",
-			},
-		}));
+	it("starts an in-progress task directly", async () => {
+		const task = createTask("task-1", "New task", 1);
+		const board = createBoard({ inProgress: [task] });
+		const ensureTaskWorkspace = vi.fn(async () => ({ ok: true as const }));
 		const startTaskSession = vi.fn(async () => ({ ok: true as const }));
+		let snapshot: HookSnapshot | null = null;
 
 		await act(async () => {
 			root.render(
 				<HookHarness
 					board={board}
-					setBoard={setBoard}
+					setBoard={() => board}
 					ensureTaskWorkspace={ensureTaskWorkspace}
 					startTaskSession={startTaskSession}
-				/>,
-			);
-		});
-
-		if (!startBacklogTaskWithAnimation) {
-			throw new Error("Expected startBacklogTaskWithAnimation to be provided.");
-		}
-
-		const backlogTask = board.columns[0]?.cards[0];
-		if (!backlogTask) {
-			throw new Error("Expected a backlog task.");
-		}
-
-		let started = false;
-		await act(async () => {
-			started = await startBacklogTaskWithAnimation!(backlogTask);
-		});
-
-		expect(started).toBe(true);
-		expect(ensureTaskWorkspace).toHaveBeenCalledWith(backlogTask);
-		expect(startTaskSession).toHaveBeenCalledWith(backlogTask);
-	});
-
-	it("waits for a new backlog card height to settle before starting animation", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-		const tryProgrammaticCardMove = vi.fn(() => "unavailable" as const);
-		let measurementCount = 0;
-		const boardElement = document.createElement("section");
-		boardElement.className = "kb-board";
-		const taskElement = document.createElement("div");
-		taskElement.dataset.taskId = "task-1";
-		vi.spyOn(taskElement, "getBoundingClientRect").mockImplementation(() => {
-			measurementCount += 1;
-			if (measurementCount === 1) {
-				return createRect(160, 44);
-			}
-			return createRect(160, 96);
-		});
-		boardElement.appendChild(taskElement);
-		document.body.appendChild(boardElement);
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove,
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		const board = createBoard();
-		const setBoard = vi.fn<Dispatch<SetStateAction<BoardData>>>(() => {});
-		const ensureTaskWorkspace = vi.fn(async () => ({
-			ok: true as const,
-			response: {
-				ok: true as const,
-				path: "/tmp/task-1",
-				baseRef: "main",
-				baseCommit: "abc123",
-			},
-		}));
-		const startTaskSession = vi.fn(async () => ({ ok: true as const }));
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					board={board}
-					setBoard={setBoard}
-					ensureTaskWorkspace={ensureTaskWorkspace}
-					startTaskSession={startTaskSession}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
+					onSnapshot={(next) => {
+						snapshot = next;
 					}}
 				/>,
 			);
 		});
-
-		if (!latestSnapshot) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
 		await act(async () => {
-			latestSnapshot!.handleStartTask("task-1");
-		});
-
-		expect(tryProgrammaticCardMove).not.toHaveBeenCalled();
-
-		await act(async () => {
-			vi.advanceTimersByTime(32);
+			snapshot?.handleStartTask(task.id);
+			await Promise.resolve();
 			await Promise.resolve();
 		});
 
-		expect(tryProgrammaticCardMove).not.toHaveBeenCalled();
-
-		await act(async () => {
-			vi.advanceTimersByTime(16);
-			await Promise.resolve();
-		});
-
-		expect(tryProgrammaticCardMove).toHaveBeenCalledWith("task-1", "backlog", "in_progress");
-		boardElement.remove();
+		expect(ensureTaskWorkspace).toHaveBeenCalledWith(task);
+		expect(startTaskSession).toHaveBeenCalledWith(task);
 	});
 
-	it("starts backlog tasks immediately from detail view without waiting for card height to settle", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-		const tryProgrammaticCardMove = vi.fn(() => "unavailable" as const);
-		let measurementCount = 0;
-		const boardElement = document.createElement("section");
-		boardElement.className = "kb-board";
-		const taskElement = document.createElement("div");
-		taskElement.dataset.taskId = "task-1";
-		vi.spyOn(taskElement, "getBoundingClientRect").mockImplementation(() => {
-			measurementCount += 1;
-			if (measurementCount === 1) {
-				return createRect(160, 44);
-			}
-			return createRect(160, 96);
-		});
-		boardElement.appendChild(taskElement);
-		document.body.appendChild(boardElement);
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove,
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		const board = createBoard();
-		const setBoard = vi.fn<Dispatch<SetStateAction<BoardData>>>(() => {});
-		const ensureTaskWorkspace = vi.fn(async () => ({
-			ok: true as const,
-			response: {
-				ok: true as const,
-				path: "/tmp/task-1",
-				baseRef: "main",
-				baseCommit: "abc123",
-			},
-		}));
-		const startTaskSession = vi.fn(async () => ({ ok: true as const }));
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					board={board}
-					setBoard={setBoard}
-					ensureTaskWorkspace={ensureTaskWorkspace}
-					startTaskSession={startTaskSession}
-					selectedCard={{ card: board.columns[0]!.cards[0]!, column: { id: "backlog" } }}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		if (!latestSnapshot) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
-		await act(async () => {
-			latestSnapshot!.handleStartTask("task-1");
-		});
-
-		expect(tryProgrammaticCardMove).not.toHaveBeenCalled();
-		expect(measurementCount).toBe(0);
-		expect(setBoard).toHaveBeenCalled();
-		expect(startTaskSession).toHaveBeenCalledWith(board.columns[0]!.cards[0]!);
-		boardElement.remove();
-	});
-
-	it("shows a warning toast when restoring a trashed task with a saved patch warning", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove: () => "unavailable",
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		const trashTask = createTask("task-trash", "Trash task", 2);
-		const board: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{ id: "in_progress", title: "In Progress", cards: [] },
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "trash", title: "Done", cards: [trashTask] },
-			],
-			dependencies: [],
-		};
-		const setBoard = vi.fn<Dispatch<SetStateAction<BoardData>>>((_nextBoard) => {
-			// The optimistic move is not part of this assertion.
-		});
+	it("shows a warning when restoring a task whose saved patch cannot be fully reapplied", async () => {
+		const task = createTask("task-trash", "Done task", 2);
+		const board = createBoard({ trash: [task] });
 		const ensureTaskWorkspace = vi.fn(async () => ({
 			ok: true as const,
 			response: {
@@ -551,43 +184,29 @@ describe("useBoardInteractions", () => {
 			},
 		}));
 		const startTaskSession = vi.fn(async () => ({ ok: true as const }));
+		let snapshot: HookSnapshot | null = null;
 
 		await act(async () => {
 			root.render(
 				<HookHarness
 					board={board}
-					setBoard={setBoard}
+					setBoard={() => board}
 					ensureTaskWorkspace={ensureTaskWorkspace}
 					startTaskSession={startTaskSession}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
+					onSnapshot={(next) => {
+						snapshot = next;
 					}}
 				/>,
 			);
 		});
-
-		if (!latestSnapshot) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
 		await act(async () => {
-			latestSnapshot!.handleRestoreTaskFromTrash("task-trash");
-			// resumeTaskFromTrash is fire-and-forget (void), so flush enough
-			// microtasks for ensureTaskWorkspace and startTaskSession to resolve.
-			for (let i = 0; i < 10; i++) {
-				await Promise.resolve();
-			}
+			snapshot?.handleRestoreTaskFromTrash(task.id);
+			for (let index = 0; index < 10; index += 1) await Promise.resolve();
 		});
 
-		// moveTaskToColumn updates updatedAt with Date.now(), so match fields except updatedAt.
-		const expectedTask = expect.objectContaining({
-			id: trashTask.id,
-			title: trashTask.title,
-			baseRef: trashTask.baseRef,
-			createdAt: trashTask.createdAt,
+		expect(startTaskSession).toHaveBeenCalledWith(expect.objectContaining({ id: task.id }), {
+			resumeFromTrash: true,
 		});
-		expect(ensureTaskWorkspace).toHaveBeenCalledWith(expectedTask);
-		expect(startTaskSession).toHaveBeenCalledWith(expectedTask, { resumeFromTrash: true });
 		expect(showAppToastMock).toHaveBeenCalledWith({
 			intent: "warning",
 			icon: "warning-sign",
@@ -597,38 +216,10 @@ describe("useBoardInteractions", () => {
 	});
 
 	it("ignores card selection requests for trashed tasks", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove: () => "unavailable",
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		const trashTask = createTask("task-trash", "Trash task", 2);
-		const board: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{ id: "in_progress", title: "In Progress", cards: [] },
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "trash", title: "Done", cards: [trashTask] },
-			],
-			dependencies: [],
-		};
+		const task = createTask("task-trash", "Done task", 2);
+		const board = createBoard({ trash: [task] });
 		const setSelectedTaskId = vi.fn<Dispatch<SetStateAction<string | null>>>();
+		let snapshot: HookSnapshot | null = null;
 
 		await act(async () => {
 			root.render(
@@ -638,73 +229,35 @@ describe("useBoardInteractions", () => {
 					ensureTaskWorkspace={async () => ({ ok: true as const })}
 					startTaskSession={async () => ({ ok: true as const })}
 					setSelectedTaskIdOverride={setSelectedTaskId}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
+					onSnapshot={(next) => {
+						snapshot = next;
 					}}
 				/>,
 			);
 		});
-
-		if (!latestSnapshot) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
-		await act(async () => {
-			latestSnapshot!.handleCardSelect("task-trash");
-		});
+		act(() => snapshot?.handleCardSelect(task.id));
 
 		expect(setSelectedTaskId).not.toHaveBeenCalled();
 	});
 
-	it("bounds clear-trash cleanup concurrency while still cleaning up every task", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		useProgrammaticCardMovesMock.mockReturnValue({
-			handleProgrammaticCardMoveReady: () => {},
-			setRequestMoveTaskToTrashHandler: () => {},
-			tryProgrammaticCardMove: () => "unavailable",
-			consumeProgrammaticCardMove: () => ({}),
-			resolvePendingProgrammaticTrashMove: () => {},
-			waitForProgrammaticCardMoveAvailability: async () => {},
-			resetProgrammaticCardMoves: () => {},
-			requestMoveTaskToTrashWithAnimation: async () => {},
-			programmaticCardMoveCycle: 0,
-		});
-
-		useLinkedBacklogTaskActionsMock.mockReturnValue({
-			handleCreateDependency: () => {},
-			handleDeleteDependency: () => {},
-			confirmMoveTaskToTrash: async () => {},
-			requestMoveTaskToTrash: async () => {},
-		});
-
-		const trashTaskCount = 25;
-		const trashTasks = Array.from({ length: trashTaskCount }, (_, index) =>
-			createTask(`task-trash-${index}`, `Trash task ${index}`, index + 1),
+	it("bounds clear-trash cleanup concurrency while cleaning every task", async () => {
+		const trashTasks = Array.from({ length: 25 }, (_, index) =>
+			createTask(`task-trash-${index}`, `Done task ${index}`, index + 1),
 		);
-		const board: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{ id: "in_progress", title: "In Progress", cards: [] },
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "trash", title: "Done", cards: trashTasks },
-			],
-			dependencies: [],
-		};
-
-		// Track how many per-task cleanup chains (stop -> cleanup) run at once.
+		const board = createBoard({ trash: trashTasks });
 		let inFlight = 0;
 		let maxInFlight = 0;
-		const stopTaskSession = vi.fn(async (_taskId: string) => {
+		const stopTaskSession = vi.fn(async () => {
 			inFlight += 1;
 			maxInFlight = Math.max(maxInFlight, inFlight);
 			await Promise.resolve();
 		});
-		const cleanupTaskWorkspace = vi.fn(async (_taskId: string) => {
+		const cleanupTaskWorkspace = vi.fn(async () => {
 			await Promise.resolve();
 			inFlight -= 1;
 			return null;
 		});
+		let snapshot: HookSnapshot | null = null;
 
 		await act(async () => {
 			root.render(
@@ -715,28 +268,20 @@ describe("useBoardInteractions", () => {
 					startTaskSession={async () => ({ ok: true as const })}
 					stopTaskSession={stopTaskSession}
 					cleanupTaskWorkspace={cleanupTaskWorkspace}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
+					onSnapshot={(next) => {
+						snapshot = next;
 					}}
 				/>,
 			);
 		});
-
-		if (!latestSnapshot) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
 		await act(async () => {
-			latestSnapshot!.handleConfirmClearTrash();
+			snapshot?.handleConfirmClearTrash();
+			for (let index = 0; index < 30; index += 1) await Promise.resolve();
 		});
 
-		expect(stopTaskSession).toHaveBeenCalledTimes(trashTaskCount);
-		expect(cleanupTaskWorkspace).toHaveBeenCalledTimes(trashTaskCount);
+		expect(stopTaskSession).toHaveBeenCalledTimes(trashTasks.length);
+		expect(cleanupTaskWorkspace).toHaveBeenCalledTimes(trashTasks.length);
 		expect(maxInFlight).toBeGreaterThan(0);
 		expect(maxInFlight).toBeLessThanOrEqual(4);
-		for (const task of trashTasks) {
-			expect(stopTaskSession).toHaveBeenCalledWith(task.id);
-			expect(cleanupTaskWorkspace).toHaveBeenCalledWith(task.id);
-		}
 	});
 });

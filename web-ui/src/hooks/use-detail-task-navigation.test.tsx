@@ -10,8 +10,8 @@ function createBoard(): BoardData {
 	return {
 		columns: [
 			{
-				id: "backlog",
-				title: "Backlog",
+				id: "in_progress",
+				title: "In Progress",
 				cards: [
 					{
 						id: "task-1",
@@ -27,7 +27,6 @@ function createBoard(): BoardData {
 			{ id: "review", title: "Review", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
@@ -195,7 +194,7 @@ describe("useDetailTaskNavigation", () => {
 		const sourceBoard = createBoard();
 		const destinationBoard: BoardData = {
 			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
+				{ id: "in_progress", title: "In Progress", cards: [] },
 				{
 					id: "in_progress",
 					title: "In Progress",
@@ -226,7 +225,6 @@ describe("useDetailTaskNavigation", () => {
 				},
 				{ id: "trash", title: "Done", cards: [] },
 			],
-			dependencies: [],
 		};
 		let latestSnapshot: HookSnapshot | null = null;
 		const onSelectProject = vi.fn();
@@ -290,7 +288,7 @@ describe("useDetailTaskNavigation", () => {
 		const destinationBoard: BoardData = {
 			...createBoard(),
 			columns: createBoard().columns.map((column) =>
-				column.id === "backlog"
+				column.id === "in_progress"
 					? {
 							...column,
 							cards: [

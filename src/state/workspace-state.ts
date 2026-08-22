@@ -13,12 +13,13 @@ import {
 	type RuntimeTaskSessionSummary,
 	type RuntimeWorkspaceStateResponse,
 	type RuntimeWorkspaceStateSaveRequest,
-	runtimeBoardDataSchema,
+	runtimeBoardCardSchema,
+	runtimeBoardColumnSchema,
 	runtimeTaskSessionSummarySchema,
 	runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
-import { getTaskColumnId, moveTaskToColumn, updateTaskDependencies } from "../core/task-board-mutations";
+import { getTaskColumnId, moveTaskToColumn } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 
 const RUNTIME_HOME_DIR = ".kanban";
@@ -32,7 +33,6 @@ const INDEX_VERSION = 1;
 const WORKSPACE_ID_COLLISION_SUFFIX_LENGTH = 4;
 
 const BOARD_COLUMNS: Array<{ id: RuntimeBoardColumnId; title: string }> = [
-	{ id: "backlog", title: "Backlog" },
 	{ id: "in_progress", title: "In Progress" },
 	{ id: "review", title: "Review" },
 	{ id: "on_hold", title: "On Hold" },
@@ -147,7 +147,32 @@ function createEmptyBoard(): RuntimeBoardData {
 			title: column.title,
 			cards: [],
 		})),
-		dependencies: [],
+	};
+}
+
+const legacyBoardColumnSchema = z.object({
+	id: z.literal("backlog"),
+	title: z.string(),
+	cards: z.array(runtimeBoardCardSchema),
+});
+
+const persistedBoardSchema = z.object({
+	columns: z.array(z.union([runtimeBoardColumnSchema, legacyBoardColumnSchema])),
+});
+
+function normalizePersistedBoard(board: z.infer<typeof persistedBoardSchema>): RuntimeBoardData {
+	const cardsByColumn = new Map<RuntimeBoardColumnId, RuntimeBoardData["columns"][number]["cards"]>(
+		BOARD_COLUMNS.map((column) => [column.id, []]),
+	);
+	for (const column of board.columns) {
+		const targetColumnId = column.id === "backlog" ? "in_progress" : column.id;
+		cardsByColumn.get(targetColumnId)?.push(...column.cards);
+	}
+	return {
+		columns: BOARD_COLUMNS.map((column) => ({
+			...column,
+			cards: cardsByColumn.get(column.id) ?? [],
+		})),
 	};
 }
 
@@ -296,9 +321,14 @@ function parseWorkspaceStateSavePayload(payload: RuntimeWorkspaceStateSaveReques
 async function readWorkspaceBoard(workspaceId: string): Promise<RuntimeBoardData> {
 	const boardPath = getWorkspaceBoardPath(workspaceId);
 	const rawBoard = await readJsonFile(boardPath);
-	return updateTaskDependencies(
-		parsePersistedStateFile(boardPath, BOARD_FILENAME, rawBoard, runtimeBoardDataSchema, createEmptyBoard()),
+	const persistedBoard = parsePersistedStateFile(
+		boardPath,
+		BOARD_FILENAME,
+		rawBoard,
+		persistedBoardSchema,
+		createEmptyBoard(),
 	);
+	return normalizePersistedBoard(persistedBoard);
 }
 
 export async function loadWorkspaceBoardById(workspaceId: string): Promise<RuntimeBoardData> {
@@ -712,7 +742,7 @@ function getSessionOwnedTargetColumn(
 	if (summary.state === "awaiting_review" && currentColumnId === "in_progress") {
 		return "review";
 	}
-	if (summary.state === "running" && (currentColumnId === "backlog" || currentColumnId === "review")) {
+	if (summary.state === "running" && currentColumnId === "review") {
 		return "in_progress";
 	}
 	return null;

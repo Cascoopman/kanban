@@ -2,7 +2,7 @@ import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -146,6 +146,21 @@ printf '%s\n' "$*" >> ${JSON.stringify(logPath)}
 	}
 }
 
+function installAgentStub(binDir: string): void {
+	mkdirSync(binDir, { recursive: true });
+	if (process.platform === "win32") {
+		writeFileSync(
+			join(binDir, "codex.cmd"),
+			"@echo off\r\n:loop\r\nping -n 2 127.0.0.1 >nul\r\ngoto loop\r\n",
+			"utf8",
+		);
+		return;
+	}
+	const scriptPath = join(binDir, "codex");
+	writeFileSync(scriptPath, "#!/bin/sh\nwhile :; do sleep 1; done\n", "utf8");
+	chmodSync(scriptPath, 0o755);
+}
+
 function readBrowserOpenLog(logPath: string): string[] {
 	if (!existsSync(logPath)) {
 		return [];
@@ -258,10 +273,13 @@ describe("source task commands", () => {
 			commitAll(projectPath, "init");
 
 			const port = String(await getAvailablePort());
+			const agentBinDir = join(homeDir, "agent-bin");
+			installAgentStub(agentBinDir);
 			const env = createGitTestEnv({
 				HOME: homeDir,
 				USERPROFILE: homeDir,
 				KANBAN_RUNTIME_PORT: port,
+				PATH: `${agentBinDir}${delimiter}${process.env.PATH ?? ""}`,
 			});
 
 			const serverProcess = spawn(
@@ -290,6 +308,8 @@ describe("source task commands", () => {
 						"create",
 						"--title",
 						"Add a demo banner component to the homepage that displays a welcome message and current weather summary",
+						"--agent-id",
+						"codex",
 						"--project-path",
 						projectPath,
 					],
@@ -451,10 +471,13 @@ describe("source task commands", () => {
 			commitAll(projectPath, "init");
 
 			const port = String(await getAvailablePort());
+			const agentBinDir = join(homeDir, "agent-bin");
+			installAgentStub(agentBinDir);
 			const env = createGitTestEnv({
 				HOME: homeDir,
 				USERPROFILE: homeDir,
 				KANBAN_RUNTIME_PORT: port,
+				PATH: `${agentBinDir}${delimiter}${process.env.PATH ?? ""}`,
 			});
 
 			const serverProcess = spawn(
@@ -484,7 +507,7 @@ describe("source task commands", () => {
 					"Create a legacy trash command task for done and delete",
 				]) {
 					const created = await runCliCommandAndCollectOutput({
-						args: ["task", "create", "--title", title, "--project-path", projectPath],
+						args: ["task", "create", "--title", title, "--agent-id", "codex", "--project-path", projectPath],
 						cwd: projectPath,
 						env,
 					});
@@ -519,7 +542,7 @@ describe("source task commands", () => {
 				expect(movedByDoneAlias.stdout).toContain('"ok": true');
 
 				const movedByTrashCommand = await runCliCommandAndCollectOutput({
-					args: ["task", "trash", "--column", "backlog", "--project-path", projectPath],
+					args: ["task", "trash", "--column", "in_progress", "--project-path", projectPath],
 					cwd: projectPath,
 					env,
 				});
@@ -529,7 +552,7 @@ describe("source task commands", () => {
 				).toBe(true);
 				expect(movedByTrashCommand.exitCode).toBe(0);
 				expect(movedByTrashCommand.stdout).toContain('"ok": true');
-				expect(movedByTrashCommand.stdout).toContain('"column": "backlog"');
+				expect(movedByTrashCommand.stdout).toContain('"column": "in_progress"');
 				expect(movedByTrashCommand.stdout).toContain('"count": 2');
 
 				const listedDoneBeforeDelete = await runCliCommandAndCollectOutput({

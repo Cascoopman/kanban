@@ -6,7 +6,7 @@ import { createInitialBoardData } from "@/data/board-data";
 import { isSupportedAgentId } from "@/runtime/supported-agents";
 import type { RuntimeAgentId } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import type { BoardCard, BoardColumn, BoardColumnId, BoardData, BoardDependency, CardSelection } from "@/types";
+import type { BoardCard, BoardColumn, BoardColumnId, BoardData, CardSelection } from "@/types";
 
 export interface TaskDraft {
 	taskId?: string;
@@ -46,7 +46,7 @@ function withUpdatedColumns(board: BoardData, columns: BoardColumn[]): BoardData
 	};
 }
 
-function normalizeColumnId(id: string): BoardColumnId | null {
+function normalizeColumnId(id: string): BoardColumnId | "backlog" | null {
 	if (id === "backlog" || id === "in_progress" || id === "review" || id === "on_hold" || id === "trash") {
 		return id;
 	}
@@ -99,69 +99,12 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	};
 }
 
-function createDependencyId(): string {
-	return createBrowserUuid().replaceAll("-", "").slice(0, 8);
-}
-
-function collectTaskIds(columns: BoardColumn[]): Set<string> {
-	const taskIds = new Set<string>();
-	for (const column of columns) {
-		for (const card of column.cards) {
-			taskIds.add(card.id);
-		}
-	}
-	return taskIds;
-}
-
-function normalizeDependency(rawDependency: unknown, taskIds: Set<string>): BoardDependency | null {
-	if (!rawDependency || typeof rawDependency !== "object") {
-		return null;
-	}
-
-	const dependency = rawDependency as {
-		id?: unknown;
-		fromTaskId?: unknown;
-		toTaskId?: unknown;
-		createdAt?: unknown;
-	};
-	const fromTaskId = typeof dependency.fromTaskId === "string" ? dependency.fromTaskId.trim() : "";
-	const toTaskId = typeof dependency.toTaskId === "string" ? dependency.toTaskId.trim() : "";
-	if (!fromTaskId || !toTaskId || fromTaskId === toTaskId) {
-		return null;
-	}
-	if (!taskIds.has(fromTaskId) || !taskIds.has(toTaskId)) {
-		return null;
-	}
-
-	return {
-		id: typeof dependency.id === "string" && dependency.id ? dependency.id : createDependencyId(),
-		fromTaskId,
-		toTaskId,
-		createdAt: typeof dependency.createdAt === "number" ? dependency.createdAt : Date.now(),
-	};
-}
-function removeDependenciesByTaskIds(board: BoardData, taskIds: Set<string>): BoardData {
-	if (taskIds.size === 0 || board.dependencies.length === 0) {
-		return board;
-	}
-	const dependencies = board.dependencies.filter(
-		(dependency) => !taskIds.has(dependency.fromTaskId) && !taskIds.has(dependency.toTaskId),
-	);
-	if (dependencies.length === board.dependencies.length) {
-		return board;
-	}
-	return {
-		...board,
-		dependencies,
-	};
-}
 export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 	if (!rawBoard || typeof rawBoard !== "object") {
 		return null;
 	}
 
 	const candidateColumns = (rawBoard as { columns?: unknown }).columns;
-	const candidateDependencies = (rawBoard as { dependencies?: unknown }).dependencies;
 	if (!Array.isArray(candidateColumns)) {
 		return null;
 	}
@@ -182,7 +125,8 @@ export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 		if (!normalizedId) {
 			continue;
 		}
-		const normalizedColumn = columnById.get(normalizedId);
+		const targetColumnId = normalizedId === "backlog" ? "in_progress" : normalizedId;
+		const normalizedColumn = columnById.get(targetColumnId);
 		if (!normalizedColumn || !Array.isArray(column.cards)) {
 			continue;
 		}
@@ -194,22 +138,7 @@ export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 		}
 	}
 
-	const taskIds = collectTaskIds(normalizedColumns);
-	const normalizedDependencies: BoardDependency[] = [];
-	if (Array.isArray(candidateDependencies)) {
-		for (const rawDependency of candidateDependencies) {
-			const dependency = normalizeDependency(rawDependency, taskIds);
-			if (!dependency) {
-				continue;
-			}
-			normalizedDependencies.push(dependency);
-		}
-	}
-
-	return runtimeTaskState.updateTaskDependencies({
-		columns: normalizedColumns,
-		dependencies: normalizedDependencies,
-	});
+	return { columns: normalizedColumns };
 }
 
 export function addTaskToColumn(board: BoardData, columnId: BoardColumnId, draft: TaskDraft): BoardData {
@@ -245,32 +174,6 @@ export function addTaskToColumnWithResult(
 		board: result.board,
 		task: result.task,
 	};
-}
-
-export interface AddTaskDependencyResult {
-	board: BoardData;
-	added: boolean;
-	reason?: NonNullable<runtimeTaskState.RuntimeAddTaskDependencyResult["reason"]>;
-	dependency?: BoardDependency;
-}
-
-export function addTaskDependency(board: BoardData, fromTaskId: string, toTaskId: string): AddTaskDependencyResult {
-	return runtimeTaskState.addTaskDependency(board, fromTaskId, toTaskId);
-}
-
-export function canCreateTaskDependency(board: BoardData, fromTaskId: string, toTaskId: string): boolean {
-	return runtimeTaskState.canAddTaskDependency(board, fromTaskId, toTaskId);
-}
-
-export function removeTaskDependency(board: BoardData, dependencyId: string): { board: BoardData; removed: boolean } {
-	return runtimeTaskState.removeTaskDependency(board, dependencyId);
-}
-
-export function trashTaskAndGetReadyLinkedTaskIds(
-	board: BoardData,
-	taskId: string,
-): { board: BoardData; moved: boolean; readyTaskIds: string[] } {
-	return runtimeTaskState.trashTaskAndGetReadyLinkedTaskIds(board, taskId);
 }
 
 export function applyDragResult(
@@ -340,7 +243,7 @@ export function applyDragResult(
 	};
 
 	return {
-		board: runtimeTaskState.updateTaskDependencies(withUpdatedColumns(board, columns)),
+		board: withUpdatedColumns(board, columns),
 		moveEvent: {
 			taskId: movedCard.id,
 			fromColumnId: sourceColumn.id,
@@ -461,10 +364,8 @@ export function clearColumnTasks(
 
 	const clearedTaskIds = targetColumn.cards.map((card) => card.id);
 	const columns = board.columns.map((column) => (column.id === columnId ? { ...column, cards: [] } : column));
-	const boardWithUpdatedColumns = withUpdatedColumns(board, columns);
-
 	return {
-		board: removeDependenciesByTaskIds(boardWithUpdatedColumns, new Set(clearedTaskIds)),
+		board: withUpdatedColumns(board, columns),
 		clearedTaskIds,
 	};
 }

@@ -84,7 +84,6 @@ function createProjectSnapshot(
 			path: `/tmp/${projectId}`,
 			name: projectId,
 			taskCounts: {
-				backlog: 0,
 				in_progress: board.columns.find((column) => column.id === "in_progress")?.cards.length ?? 0,
 				review: board.columns.find((column) => column.id === "review")?.cards.length ?? 0,
 				on_hold: board.columns.find((column) => column.id === "on_hold")?.cards.length ?? 0,

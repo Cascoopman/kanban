@@ -1,18 +1,7 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
-import {
-	AlertCircle,
-	AlertTriangle,
-	Bot,
-	Copy,
-	GitBranch,
-	Layers3,
-	Pencil,
-	Play,
-	RotateCcw,
-	Trash2,
-} from "lucide-react";
+import { AlertCircle, AlertTriangle, Bot, Copy, GitBranch, Layers3, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -207,7 +196,6 @@ export function BoardCard({
 	sessionSummary,
 	selected = false,
 	onClick,
-	onStart,
 	onBranch,
 	onMoveToTrash,
 	onRestoreFromTrash,
@@ -217,11 +205,6 @@ export function BoardCard({
 	isCommitLoading = false,
 	isOpenPrLoading = false,
 	isMoveToTrashLoading = false,
-	onDependencyPointerDown,
-	onDependencyPointerEnter,
-	isDependencySource = false,
-	isDependencyTarget = false,
-	isDependencyLinking = false,
 	workspacePath,
 	isDragDisabled = false,
 	hideActions = false,
@@ -232,7 +215,6 @@ export function BoardCard({
 	sessionSummary?: RuntimeTaskSessionSummary;
 	selected?: boolean;
 	onClick?: () => void;
-	onStart?: (taskId: string) => void;
 	onBranch?: (task: BoardCardModel) => void;
 	onMoveToTrash?: (taskId: string) => void;
 	onRestoreFromTrash?: (taskId: string) => void;
@@ -242,11 +224,6 @@ export function BoardCard({
 	isCommitLoading?: boolean;
 	isOpenPrLoading?: boolean;
 	isMoveToTrashLoading?: boolean;
-	onDependencyPointerDown?: (taskId: string, event: MouseEvent<HTMLElement>) => void;
-	onDependencyPointerEnter?: (taskId: string) => void;
-	isDependencySource?: boolean;
-	isDependencyTarget?: boolean;
-	isDependencyLinking?: boolean;
 	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideActions?: boolean;
@@ -380,36 +357,8 @@ export function BoardCard({
 						data-task-id={card.id}
 						data-column-id={columnId}
 						data-selected={selected}
-						onMouseDownCapture={(event) => {
-							if (!isCardInteractive) {
-								return;
-							}
-							if (isDependencyLinking) {
-								event.preventDefault();
-								event.stopPropagation();
-								return;
-							}
-							if (!event.metaKey && !event.ctrlKey) {
-								return;
-							}
-							const target = event.target as HTMLElement | null;
-							if (target?.closest("button, a, input, textarea, [contenteditable='true']")) {
-								return;
-							}
-							event.preventDefault();
-							event.stopPropagation();
-							onDependencyPointerDown?.(card.id, event);
-						}}
 						onClick={(event) => {
 							if (!isCardInteractive) {
-								return;
-							}
-							if (isDependencyLinking) {
-								event.preventDefault();
-								event.stopPropagation();
-								return;
-							}
-							if (event.metaKey || event.ctrlKey) {
 								return;
 							}
 							const target = event.target as HTMLElement | null;
@@ -425,16 +374,7 @@ export function BoardCard({
 							marginBottom: 6,
 							cursor: isDragDisabled ? "default" : "grab",
 						}}
-						onMouseEnter={() => {
-							setIsHovered(true);
-							onDependencyPointerEnter?.(card.id);
-						}}
-						onMouseMove={() => {
-							if (!isDependencyLinking) {
-								return;
-							}
-							onDependencyPointerEnter?.(card.id);
-						}}
+						onMouseEnter={() => setIsHovered(true)}
 						onMouseLeave={() => setIsHovered(false)}
 					>
 						<div
@@ -443,8 +383,6 @@ export function BoardCard({
 								isCardInteractive && "cursor-pointer hover:bg-surface-3 hover:border-border-bright",
 								isDragging && "shadow-lg",
 								isHovered && isCardInteractive && "bg-surface-3 border-border-bright",
-								isDependencySource && "kb-board-card-dependency-source",
-								isDependencyTarget && "kb-board-card-dependency-target",
 							)}
 						>
 							<div className="flex items-center gap-2" style={{ minHeight: 24 }}>
@@ -515,19 +453,7 @@ export function BoardCard({
 										/>
 									</Tooltip>
 								) : null}
-								{!hideActions && columnId === "backlog" ? (
-									<Button
-										icon={<Play size={14} />}
-										variant="ghost"
-										size="sm"
-										aria-label="Start task"
-										onMouseDown={stopEvent}
-										onClick={(event) => {
-											stopEvent(event);
-											onStart?.(card.id);
-										}}
-									/>
-								) : !hideActions && isReviewLikeColumnId(columnId) ? (
+								{!hideActions && isReviewLikeColumnId(columnId) ? (
 									<Button
 										icon={isMoveToTrashLoading ? <Spinner size={13} /> : <Trash2 size={13} />}
 										variant="ghost"

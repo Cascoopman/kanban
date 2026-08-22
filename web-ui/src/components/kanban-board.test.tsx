@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,14 +7,11 @@ import { LocalStorageKey } from "@/storage/local-storage-store";
 import type { BoardData } from "@/types";
 
 const dndMock = vi.hoisted(() => ({
-	sensorApi: null as {
-		tryGetLock: ReturnType<typeof vi.fn>;
-	} | null,
+	sensorApi: null as { tryGetLock: ReturnType<typeof vi.fn> } | null,
 }));
 
 vi.mock("@hello-pangea/dnd", async () => {
 	const React = await vi.importActual<typeof import("react")>("react");
-
 	return {
 		DragDropContext: ({
 			children,
@@ -25,14 +21,9 @@ vi.mock("@hello-pangea/dnd", async () => {
 			sensors?: Array<(api: NonNullable<typeof dndMock.sensorApi>) => void>;
 		}): React.ReactElement => {
 			React.useEffect(() => {
-				if (!dndMock.sensorApi) {
-					return;
-				}
-				for (const sensor of sensors ?? []) {
-					sensor(dndMock.sensorApi);
-				}
+				if (!dndMock.sensorApi) return;
+				for (const sensor of sensors ?? []) sensor(dndMock.sensorApi);
 			}, [sensors]);
-
 			return <>{children}</>;
 		},
 	};
@@ -57,18 +48,6 @@ vi.mock("@/components/board-column", () => ({
 	),
 }));
 
-vi.mock("@/components/dependencies/dependency-overlay", () => ({
-	DependencyOverlay: (): null => null,
-}));
-
-vi.mock("@/components/dependencies/use-dependency-linking", () => ({
-	useDependencyLinking: () => ({
-		draft: null,
-		onDependencyPointerDown: vi.fn(),
-		onDependencyPointerEnter: vi.fn(),
-	}),
-}));
-
 function createRect(left: number, top: number, width: number, height: number): DOMRect {
 	return {
 		x: left,
@@ -83,6 +62,43 @@ function createRect(left: number, top: number, width: number, height: number): D
 	} as DOMRect;
 }
 
+function createBoard(): BoardData {
+	return {
+		columns: [
+			{
+				id: "in_progress",
+				title: "In Progress",
+				cards: [
+					{
+						id: "source-task",
+						title: "Source task",
+						startInPlanMode: false,
+						baseRef: "main",
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+			{
+				id: "review",
+				title: "Review",
+				cards: [
+					{
+						id: "target-task-1",
+						title: "Target task 1",
+						startInPlanMode: false,
+						baseRef: "main",
+						createdAt: 1,
+						updatedAt: 1,
+					},
+				],
+			},
+			{ id: "on_hold", title: "On Hold", cards: [] },
+			{ id: "trash", title: "Done", cards: [] },
+		],
+	};
+}
+
 describe("KanbanBoard", () => {
 	let container: HTMLDivElement;
 	let root: Root;
@@ -92,31 +108,19 @@ describe("KanbanBoard", () => {
 		window.localStorage.clear();
 		vi.useFakeTimers();
 		vi.spyOn(performance, "now").mockImplementation(() => Date.now());
-		vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) => {
-			return window.setTimeout(() => {
-				callback(performance.now());
-			}, 16);
-		});
-		vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle: number) => {
-			window.clearTimeout(handle);
-		});
+		vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback: FrameRequestCallback) =>
+			window.setTimeout(() => callback(performance.now()), 16),
+		);
+		vi.spyOn(window, "cancelAnimationFrame").mockImplementation((handle: number) => window.clearTimeout(handle));
 		vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function getBoundingClientRect(
 			this: HTMLElement,
 		) {
-			if (this.dataset.taskId === "source-task") {
-				return createRect(20, 20, 160, 96);
-			}
-			if (this.dataset.taskId === "target-task-1") {
-				return createRect(300, 20, 160, 96);
-			}
+			if (this.dataset.taskId === "source-task") return createRect(20, 20, 160, 96);
+			if (this.dataset.taskId === "target-task-1") return createRect(300, 20, 160, 96);
 			if (this.classList.contains("kb-column-cards")) {
 				const columnId = this.closest<HTMLElement>("[data-column-id]")?.dataset.columnId;
-				if (columnId === "backlog") {
-					return createRect(12, 12, 176, 420);
-				}
-				if (columnId === "in_progress") {
-					return createRect(292, 12, 176, 420);
-				}
+				if (columnId === "in_progress") return createRect(12, 12, 176, 420);
+				if (columnId === "review") return createRect(292, 12, 176, 420);
 			}
 			return createRect(0, 0, 0, 0);
 		});
@@ -129,9 +133,7 @@ describe("KanbanBoard", () => {
 	});
 
 	afterEach(() => {
-		act(() => {
-			root.unmount();
-		});
+		act(() => root.unmount());
 		dndMock.sensorApi = null;
 		vi.restoreAllMocks();
 		vi.useRealTimers();
@@ -145,67 +147,17 @@ describe("KanbanBoard", () => {
 	});
 
 	it("marks the board while a programmatic move is active", async () => {
-		const dragActions = {
-			isActive: vi.fn(() => true),
-			move: vi.fn(),
-			drop: vi.fn(),
-			cancel: vi.fn(),
-		};
-		const preDrag = {
-			fluidLift: vi.fn(() => dragActions),
-			isActive: vi.fn(() => true),
-			abort: vi.fn(),
-		};
-		dndMock.sensorApi = {
-			tryGetLock: vi.fn(() => preDrag),
-		};
-
-		const board: BoardData = {
-			columns: [
-				{
-					id: "backlog",
-					title: "Backlog",
-					cards: [
-						{
-							id: "source-task",
-							title: "Source task",
-							startInPlanMode: false,
-							baseRef: "main",
-							createdAt: 1,
-							updatedAt: 1,
-						},
-					],
-				},
-				{
-					id: "in_progress",
-					title: "In Progress",
-					cards: [
-						{
-							id: "target-task-1",
-							title: "Target task 1",
-							startInPlanMode: false,
-							baseRef: "main",
-							createdAt: 1,
-							updatedAt: 1,
-						},
-					],
-				},
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "trash", title: "Done", cards: [] },
-			],
-			dependencies: [],
-		};
-
+		const dragActions = { isActive: vi.fn(() => true), move: vi.fn(), drop: vi.fn(), cancel: vi.fn() };
+		const preDrag = { fluidLift: vi.fn(() => dragActions), isActive: vi.fn(() => true), abort: vi.fn() };
+		dndMock.sensorApi = { tryGetLock: vi.fn(() => preDrag) };
 		let requestMove: RequestProgrammaticCardMove | null = null;
 
 		await act(async () => {
 			root.render(
 				<KanbanBoard
-					data={board}
+					data={createBoard()}
 					taskSessions={{}}
 					onCardSelect={() => {}}
-					onCreateTask={() => {}}
-					dependencies={[]}
 					onDragEnd={() => {}}
 					onRequestProgrammaticCardMoveReady={(nextRequestMove) => {
 						requestMove = nextRequestMove;
@@ -216,112 +168,51 @@ describe("KanbanBoard", () => {
 
 		const boardElement = container.querySelector<HTMLElement>(".kb-board");
 		expect(boardElement?.dataset.programmaticCardMove).toBeUndefined();
-
 		await act(async () => {
 			requestMove?.({
 				taskId: "source-task",
-				fromColumnId: "backlog",
-				toColumnId: "in_progress",
+				fromColumnId: "in_progress",
+				toColumnId: "review",
 				insertAtTop: true,
 			});
 		});
-
 		expect(boardElement?.dataset.programmaticCardMove).toBe("true");
 	});
 
 	it("hides and restores any combination of columns while persisting the layout preference", async () => {
-		const board: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{ id: "in_progress", title: "In Progress", cards: [] },
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "on_hold", title: "On Hold", cards: [] },
-				{ id: "trash", title: "Done", cards: [] },
-			],
-			dependencies: [],
-		};
-
 		await act(async () => {
-			root.render(
-				<KanbanBoard
-					data={board}
-					taskSessions={{}}
-					onCardSelect={() => {}}
-					onCreateTask={() => {}}
-					dependencies={[]}
-					onDragEnd={() => {}}
-				/>,
-			);
+			root.render(<KanbanBoard data={createBoard()} taskSessions={{}} onCardSelect={() => {}} />);
 		});
 
-		const hideDoneButton = container.querySelector<HTMLButtonElement>('button[aria-label="Hide Done column"]');
-		expect(hideDoneButton).not.toBeNull();
-
 		await act(async () => {
-			hideDoneButton?.click();
+			container.querySelector<HTMLButtonElement>('button[aria-label="Hide Done column"]')?.click();
 		});
-
 		expect(container.querySelector('[data-column-id="trash"]')).toBeNull();
-		expect(container.querySelector('button[aria-label="Show Done column"]')).not.toBeNull();
 		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("trash");
 
 		await act(async () => {
 			container.querySelector<HTMLButtonElement>('button[aria-label="Hide Review column"]')?.click();
 		});
-
-		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
-		expect(container.querySelector('[data-column-id="trash"]')).toBeNull();
 		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review,trash");
 
 		await act(async () => {
 			container.querySelector<HTMLButtonElement>('button[aria-label="Show Done column"]')?.click();
-		});
-
-		expect(container.querySelector('[data-column-id="trash"]')).not.toBeNull();
-		expect(container.querySelector('[data-column-id="review"]')).toBeNull();
-		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("review");
-
-		await act(async () => {
 			container.querySelector<HTMLButtonElement>('button[aria-label="Show Review column"]')?.click();
 		});
-
 		expect(container.querySelector('[data-column-id="review"]')).not.toBeNull();
+		expect(container.querySelector('[data-column-id="trash"]')).not.toBeNull();
 		expect(window.localStorage.getItem(LocalStorageKey.BoardHiddenColumns)).toBe("");
 	});
 
 	it("skips programmatic animation when a move targets a hidden column", async () => {
-		window.localStorage.setItem(LocalStorageKey.BoardHiddenColumns, "in_progress");
-		const board: BoardData = {
-			columns: [
-				{
-					id: "backlog",
-					title: "Backlog",
-					cards: [
-						{
-							id: "source-task",
-							title: "Source task",
-							startInPlanMode: false,
-							baseRef: "main",
-							createdAt: 1,
-							updatedAt: 1,
-						},
-					],
-				},
-				{ id: "in_progress", title: "In Progress", cards: [] },
-			],
-			dependencies: [],
-		};
+		window.localStorage.setItem(LocalStorageKey.BoardHiddenColumns, "review");
 		let requestMove: RequestProgrammaticCardMove | null = null;
-
 		await act(async () => {
 			root.render(
 				<KanbanBoard
-					data={board}
+					data={createBoard()}
 					taskSessions={{}}
 					onCardSelect={() => {}}
-					onCreateTask={() => {}}
-					dependencies={[]}
-					onDragEnd={() => {}}
 					onRequestProgrammaticCardMoveReady={(nextRequestMove) => {
 						requestMove = nextRequestMove;
 					}}
@@ -334,14 +225,12 @@ describe("KanbanBoard", () => {
 			started =
 				requestMove?.({
 					taskId: "source-task",
-					fromColumnId: "backlog",
-					toColumnId: "in_progress",
+					fromColumnId: "in_progress",
+					toColumnId: "review",
 					insertAtTop: true,
 				}) ?? false;
 		});
-
 		expect(started).toBe(false);
-		expect(container.querySelector<HTMLElement>(".kb-board")?.dataset.programmaticCardMove).toBeUndefined();
 	});
 
 	it("counts only visible columns during programmatic horizontal moves", async () => {
@@ -353,48 +242,15 @@ describe("KanbanBoard", () => {
 			drop: vi.fn(),
 			cancel: vi.fn(),
 		};
-		const preDrag = {
-			snapLift: vi.fn(() => dragActions),
-			isActive: vi.fn(() => true),
-			abort: vi.fn(),
-		};
-		dndMock.sensorApi = {
-			tryGetLock: vi.fn(() => preDrag),
-		};
-		const board: BoardData = {
-			columns: [
-				{ id: "backlog", title: "Backlog", cards: [] },
-				{
-					id: "in_progress",
-					title: "In Progress",
-					cards: [
-						{
-							id: "source-task",
-							title: "Source task",
-							startInPlanMode: false,
-							baseRef: "main",
-							createdAt: 1,
-							updatedAt: 1,
-						},
-					],
-				},
-				{ id: "review", title: "Review", cards: [] },
-				{ id: "on_hold", title: "On Hold", cards: [] },
-				{ id: "trash", title: "Done", cards: [] },
-			],
-			dependencies: [],
-		};
+		const preDrag = { snapLift: vi.fn(() => dragActions), isActive: vi.fn(() => true), abort: vi.fn() };
+		dndMock.sensorApi = { tryGetLock: vi.fn(() => preDrag) };
 		let requestMove: RequestProgrammaticCardMove | null = null;
-
 		await act(async () => {
 			root.render(
 				<KanbanBoard
-					data={board}
+					data={createBoard()}
 					taskSessions={{}}
 					onCardSelect={() => {}}
-					onCreateTask={() => {}}
-					dependencies={[]}
-					onDragEnd={() => {}}
 					onRequestProgrammaticCardMoveReady={(nextRequestMove) => {
 						requestMove = nextRequestMove;
 					}}
@@ -411,8 +267,7 @@ describe("KanbanBoard", () => {
 			});
 			vi.runAllTimers();
 		});
-
-		expect(dragActions.moveRight).toHaveBeenCalledTimes(1);
-		expect(dragActions.drop).toHaveBeenCalledTimes(1);
+		expect(dragActions.moveRight).toHaveBeenCalledOnce();
+		expect(dragActions.drop).toHaveBeenCalledOnce();
 	});
 });

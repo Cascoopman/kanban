@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-async function createTaskFromBacklog(page: Page, title: string) {
+async function createTask(page: Page, title: string) {
 	await page.getByRole("button", { name: /New task/ }).click();
 	await page.getByRole("menuitem").first().click();
 	await page.getByPlaceholder("What are you working on?").fill(title);
@@ -12,7 +12,6 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page).toHaveTitle(/Kanban/);
 	await expect(page.getByText("All projects", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Manage projects" })).toBeVisible();
-	await expect(page.getByText("Backlog", { exact: true })).toBeVisible();
 	await expect(page.getByText("In Progress", { exact: true })).toBeVisible();
 	await expect(page.getByText("Review", { exact: true })).toBeVisible();
 	await expect(page.getByText("Trash", { exact: true })).toBeVisible();
@@ -22,7 +21,7 @@ test("renders kanban top bar and columns", async ({ page }) => {
 test("creating a task opens it without a description editor", async ({ page }) => {
 	await page.goto("/");
 	const taskTitle = `smoke-${Date.now()}`;
-	await createTaskFromBacklog(page, taskTitle);
+	await createTask(page, taskTitle);
 	await expect(page.locator("[data-task-id]").filter({ hasText: taskTitle }).first()).toBeVisible();
 	await expect(page.getByPlaceholder("Describe the task")).toHaveCount(0);
 });

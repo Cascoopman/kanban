@@ -10,10 +10,6 @@ interface TelemetryEventMap {
 		selected_agent_id: TelemetrySelectedAgentId;
 		start_in_plan_mode: boolean;
 	};
-	task_dependency_created: Record<string, never>;
-	tasks_auto_started_from_dependency: {
-		started_task_count: number;
-	};
 	task_resumed_from_trash: Record<string, never>;
 }
 
@@ -38,16 +34,6 @@ function captureTelemetryEvent<EventName extends keyof TelemetryEventMap>(
 
 export function trackTaskCreated(properties: TelemetryEventMap["task_created"]): void {
 	captureTelemetryEvent("task_created", properties);
-}
-
-export function trackTaskDependencyCreated(): void {
-	captureTelemetryEvent("task_dependency_created", {});
-}
-
-export function trackTasksAutoStartedFromDependency(startedTaskCount: number): void {
-	captureTelemetryEvent("tasks_auto_started_from_dependency", {
-		started_task_count: startedTaskCount,
-	});
 }
 
 export function trackTaskResumedFromTrash(): void {

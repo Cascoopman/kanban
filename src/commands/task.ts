@@ -5,20 +5,15 @@ import type {
 	RuntimeAgentId,
 	RuntimeBoardCard,
 	RuntimeBoardColumnId,
-	RuntimeBoardDependency,
 	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import { runtimeAgentIdSchema } from "../core/api-contract";
 import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin, getRuntimeFetch } from "../core/runtime-endpoint";
 import {
-	addTaskDependency,
 	addTaskToColumn,
 	deleteTasksFromBoard,
 	getTaskColumnId,
-	moveTaskToColumn,
-	type RuntimeAddTaskDependencyResult,
-	removeTaskDependency,
-	trashTaskAndGetReadyLinkedTaskIds,
+	trashTask as moveTaskToTrash,
 	updateTask,
 } from "../core/task-board-mutations";
 import { resolveProjectInputPath } from "../projects/project-path";
@@ -26,7 +21,7 @@ import { loadWorkspaceContext, loadWorkspaceContextById, mutateWorkspaceState } 
 import { readTaskSessionContextFromEnv } from "../terminal/hook-runtime-context";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
-const LIST_TASK_COLUMNS = ["backlog", "in_progress", "review", "on_hold", "trash"] as const;
+const LIST_TASK_COLUMNS = ["in_progress", "review", "on_hold", "trash"] as const;
 type ListTaskColumn = (typeof LIST_TASK_COLUMNS)[number];
 type TaskCommandTarget = { taskId?: string; column?: ListTaskColumn };
 
@@ -65,13 +60,7 @@ function parseListColumn(value: string | undefined): ListTaskColumn | undefined 
 	if (value === "done") {
 		return "trash";
 	}
-	if (
-		value === "backlog" ||
-		value === "in_progress" ||
-		value === "review" ||
-		value === "on_hold" ||
-		value === "trash"
-	) {
+	if (value === "in_progress" || value === "review" || value === "on_hold" || value === "trash") {
 		return value;
 	}
 	throw new Error(`Invalid column "${value}". Expected one of: ${LIST_TASK_COLUMNS.join(", ")}, done.`);
@@ -274,36 +263,6 @@ async function getCurrentTask(input: { cwd: string; projectPath?: string }): Pro
 	};
 }
 
-function formatDependencyRecord(
-	state: RuntimeWorkspaceStateResponse,
-	dependency: RuntimeBoardDependency,
-): Record<string, unknown> {
-	return {
-		id: dependency.id,
-		backlogTaskId: dependency.fromTaskId,
-		backlogTaskColumn: getTaskColumnId(state.board, dependency.fromTaskId),
-		linkedTaskId: dependency.toTaskId,
-		linkedTaskColumn: getTaskColumnId(state.board, dependency.toTaskId),
-		createdAt: dependency.createdAt,
-	};
-}
-
-function getLinkFailureMessage(reason: RuntimeAddTaskDependencyResult["reason"]): string {
-	if (reason === "same_task") {
-		return "A task cannot be linked to itself.";
-	}
-	if (reason === "duplicate") {
-		return "These tasks are already linked.";
-	}
-	if (reason === "trash_task") {
-		return "Links cannot include done tasks.";
-	}
-	if (reason === "non_backlog") {
-		return "Links require at least one backlog task.";
-	}
-	return "One or both tasks could not be found.";
-}
-
 function findTasksInColumn(
 	state: RuntimeWorkspaceStateResponse,
 	columnId: ListTaskColumn,
@@ -340,7 +299,6 @@ async function listTasks(input: { cwd: string; projectPath?: string; column?: Li
 		workspacePath: workspace.repoPath,
 		column: input.column ?? null,
 		tasks,
-		dependencies: state.board.dependencies.map((dependency) => formatDependencyRecord(state, dependency)),
 		count: tasks.length,
 	};
 }
@@ -394,7 +352,7 @@ async function createTask(input: {
 		}
 		const result = addTaskToColumn(
 			state.board,
-			"backlog",
+			"in_progress",
 			{
 				title: input.title,
 				startInPlanMode: input.startInPlanMode,
@@ -408,12 +366,13 @@ async function createTask(input: {
 			value: result.task,
 		};
 	});
+	await startTask({ cwd: input.cwd, taskId: created.id, projectPath: input.projectPath });
 
 	return {
 		ok: true,
 		task: {
 			id: created.id,
-			column: "backlog",
+			column: "in_progress",
 			workspacePath: workspaceRepoPath,
 			title: created.title,
 			baseRef: created.baseRef,
@@ -477,69 +436,6 @@ async function updateTaskCommand(input: {
 	};
 }
 
-async function linkTasks(input: {
-	cwd: string;
-	taskId: string;
-	linkedTaskId: string;
-	projectPath?: string;
-}): Promise<JsonRecord> {
-	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
-	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
-	const runtimeClient = createRuntimeTrpcClient(workspaceId);
-	const dependency = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (runtimeState) => {
-		const linked = addTaskDependency(runtimeState.board, input.taskId, input.linkedTaskId);
-		if (!linked.added || !linked.dependency) {
-			throw new Error(getLinkFailureMessage(linked.reason));
-		}
-
-		const nextState: RuntimeWorkspaceStateResponse = {
-			...runtimeState,
-			board: linked.board,
-		};
-		return {
-			board: linked.board,
-			value: formatDependencyRecord(nextState, linked.dependency),
-		};
-	});
-	return {
-		ok: true,
-		workspacePath: workspaceRepoPath,
-		dependency,
-	};
-}
-
-async function unlinkTasks(input: { cwd: string; dependencyId: string; projectPath?: string }): Promise<JsonRecord> {
-	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
-	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
-	const runtimeClient = createRuntimeTrpcClient(workspaceId);
-	const removedDependency = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (runtimeState) => {
-		const dependency =
-			runtimeState.board.dependencies.find((candidate) => candidate.id === input.dependencyId) ?? null;
-		if (!dependency) {
-			throw new Error(`Dependency "${input.dependencyId}" was not found in workspace ${workspaceRepoPath}.`);
-		}
-
-		const unlinked = removeTaskDependency(runtimeState.board, input.dependencyId);
-		if (!unlinked.removed) {
-			throw new Error(`Dependency "${input.dependencyId}" could not be removed.`);
-		}
-
-		const nextState: RuntimeWorkspaceStateResponse = {
-			...runtimeState,
-			board: unlinked.board,
-		};
-		return {
-			board: unlinked.board,
-			value: formatDependencyRecord(nextState, dependency),
-		};
-	});
-	return {
-		ok: true,
-		workspacePath: workspaceRepoPath,
-		removedDependency,
-	};
-}
-
 async function startTask(input: { cwd: string; taskId: string; projectPath?: string }): Promise<JsonRecord> {
 	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
 	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
@@ -550,10 +446,8 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 		throw new Error(`Task "${input.taskId}" was not found in workspace ${workspaceRepoPath}.`);
 	}
 
-	if (fromColumnId !== "backlog" && fromColumnId !== "in_progress") {
-		throw new Error(
-			`Task "${input.taskId}" is in "${fromColumnId}" and can only be started from backlog or in_progress.`,
-		);
+	if (fromColumnId !== "in_progress") {
+		throw new Error(`Task "${input.taskId}" is in "${fromColumnId}" and can only be started from in_progress.`);
 	}
 
 	const currentRecord = findTaskRecord(runtimeState, input.taskId);
@@ -586,36 +480,6 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 		}
 	}
 
-	const moved = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (latestState) => {
-		const movement = moveTaskToColumn(latestState.board, input.taskId, "in_progress");
-		if (!movement.task) {
-			throw new Error(`Task "${input.taskId}" could not be resolved.`);
-		}
-		if (!movement.moved) {
-			return {
-				board: latestState.board,
-				value: movement,
-			};
-		}
-		return {
-			board: movement.board,
-			value: movement,
-		};
-	});
-
-	if (!moved.moved) {
-		return {
-			ok: true,
-			message: `Task "${input.taskId}" is already in progress.`,
-			task: {
-				id: task.id,
-				title: task.title,
-				column: "in_progress",
-				workspacePath: workspaceRepoPath,
-			},
-		};
-	}
-
 	return {
 		ok: true,
 		task: {
@@ -631,8 +495,6 @@ interface TrashTaskExecutionResult {
 	task: JsonRecord;
 	taskId: string;
 	previousColumnId: ListTaskColumn;
-	readyTaskIds: string[];
-	autoStartedTasks: JsonRecord[];
 	worktreeDeleted: boolean;
 	worktreeDeleteError?: string;
 	alreadyInTrash: boolean;
@@ -641,7 +503,6 @@ interface TrashTaskExecutionResult {
 interface TrashTaskMutationValue {
 	task: JsonRecord;
 	previousColumnId: ListTaskColumn;
-	readyTaskIds: string[];
 	alreadyInTrash: boolean;
 }
 
@@ -667,14 +528,13 @@ async function trashTaskById(input: {
 				value: {
 					task: formatTaskRecord(latestState, latestRecord.task, latestRecord.columnId),
 					previousColumnId: latestRecord.columnId,
-					readyTaskIds: [] as string[],
 					alreadyInTrash: true,
 				},
 				save: false,
 			};
 		}
 
-		const trashed = trashTaskAndGetReadyLinkedTaskIds(latestState.board, input.taskId);
+		const trashed = moveTaskToTrash(latestState.board, input.taskId);
 		if (!trashed.moved || !trashed.task) {
 			throw new Error(`Task "${input.taskId}" could not be moved to done.`);
 		}
@@ -688,7 +548,6 @@ async function trashTaskById(input: {
 			value: {
 				task: formatTaskRecord(nextState, trashed.task, "trash"),
 				previousColumnId: latestRecord.columnId,
-				readyTaskIds: trashed.readyTaskIds,
 				alreadyInTrash: false,
 			},
 		};
@@ -703,8 +562,6 @@ async function trashTaskById(input: {
 			task: mutation.value.task,
 			taskId: input.taskId,
 			previousColumnId: mutation.value.previousColumnId,
-			readyTaskIds: [],
-			autoStartedTasks: [],
 			worktreeDeleted: false,
 			alreadyInTrash: true,
 		};
@@ -714,24 +571,12 @@ async function trashTaskById(input: {
 		await stopTaskRuntimeSession(input.runtimeClient, input.taskId);
 	}
 
-	const autoStartedTasks: JsonRecord[] = [];
-	for (const readyTaskId of mutation.value.readyTaskIds) {
-		const started = await startTask({
-			cwd: input.cwd,
-			taskId: readyTaskId,
-			projectPath: input.projectPath,
-		});
-		autoStartedTasks.push(started);
-	}
-
 	const deletedWorkspace = await deleteTaskWorkspace(input.runtimeClient, input.taskId);
 
 	return {
 		task: mutation.value.task,
 		taskId: input.taskId,
 		previousColumnId: mutation.value.previousColumnId,
-		readyTaskIds: mutation.value.readyTaskIds,
-		autoStartedTasks,
 		worktreeDeleted: deletedWorkspace.removed,
 		worktreeDeleteError: deletedWorkspace.error,
 		alreadyInTrash: false,
@@ -763,16 +608,12 @@ async function trashTask(input: {
 				message: `Task "${target.taskId}" is already done.`,
 				task: trashed.task,
 				workspacePath: workspaceRepoPath,
-				readyTaskIds: [],
-				autoStartedTasks: [],
 			};
 		}
 		return {
 			ok: true,
 			task: trashed.task,
 			workspacePath: workspaceRepoPath,
-			readyTaskIds: trashed.readyTaskIds,
-			autoStartedTasks: trashed.autoStartedTasks,
 			worktreeDeleted: trashed.worktreeDeleted,
 			worktreeDeleteError: trashed.worktreeDeleteError,
 		};
@@ -787,8 +628,6 @@ async function trashTask(input: {
 			workspacePath: workspaceRepoPath,
 			trashedTasks: [],
 			alreadyTrashedTasks: [],
-			readyTaskIds: [],
-			autoStartedTasks: [],
 			worktreeCleanup: [],
 			count: 0,
 		};
@@ -816,8 +655,6 @@ async function trashTask(input: {
 		workspacePath: workspaceRepoPath,
 		trashedTasks: trashedTasks.map((result) => result.task),
 		alreadyTrashedTasks: alreadyTrashedTasks.map((result) => result.task),
-		readyTaskIds: [...new Set(trashedTasks.flatMap((result) => result.readyTaskIds))],
-		autoStartedTasks: trashedTasks.flatMap((result) => result.autoStartedTasks),
 		worktreeCleanup: trashedTasks.map((result) => ({
 			taskId: result.taskId,
 			removed: result.worktreeDeleted,
@@ -969,7 +806,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option(
 			"--column <column>",
-			"Filter column: backlog | in_progress | review | on_hold | done. trash is also accepted.",
+			"Filter column: in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.action(async (options: { projectPath?: string; column?: ListTaskColumn }) => {
@@ -1000,7 +837,7 @@ export function registerTaskCommand(program: Command): void {
 
 	task
 		.command("create")
-		.description("Create a task in backlog.")
+		.description("Create a task and start its agent session.")
 		.requiredOption("--title <text>", "Task title.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Task base branch/ref.")
@@ -1068,7 +905,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--task-id <id>", "Task ID.")
 		.option(
 			"--column <column>",
-			"Column to move to done: backlog | in_progress | review | on_hold | done. trash is also accepted.",
+			"Column to move to done: in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
@@ -1090,7 +927,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--task-id <id>", "Task ID to permanently delete.")
 		.option(
 			"--column <column>",
-			"Column to bulk-delete: backlog | in_progress | review | on_hold | done. trash is also accepted.",
+			"Column to bulk-delete: in_progress | review | on_hold | done. trash is also accepted.",
 			parseListColumn,
 		)
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
@@ -1107,58 +944,8 @@ export function registerTaskCommand(program: Command): void {
 		});
 
 	task
-		.command("link")
-		.description("Link two tasks so one task waits on another.")
-		.requiredOption("--task-id <id>", "One of the two task IDs to link.")
-		.requiredOption("--linked-task-id <id>", "The other task ID to link.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.addHelpText(
-			"after",
-			[
-				"",
-				"Dependency direction:",
-				"  If both linked tasks are in backlog, Kanban preserves the order you pass:",
-				"  --task-id waits on --linked-task-id, and on the board the arrow points into",
-				"  --linked-task-id.",
-				"  Once only one linked task remains in backlog, Kanban reorients the saved link",
-				"  so the backlog task is the waiting dependent task and the other task is the",
-				"  prerequisite.",
-				"  When the prerequisite moves from review or on hold to done, the waiting backlog",
-				"  task becomes ready to start.",
-				"",
-			].join("\n"),
-		)
-		.action(async (options: { taskId: string; linkedTaskId: string; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await linkTasks({
-						cwd: process.cwd(),
-						taskId: options.taskId,
-						linkedTaskId: options.linkedTaskId,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
-		.command("unlink")
-		.description("Remove an existing dependency link.")
-		.requiredOption("--dependency-id <id>", "Dependency ID.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.action(async (options: { dependencyId: string; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await unlinkTasks({
-						cwd: process.cwd(),
-						dependencyId: options.dependencyId,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
 		.command("start")
-		.description("Start a task session and move task to in_progress.")
+		.description("Start or restart an in-progress task session.")
 		.requiredOption("--task-id <id>", "Task ID.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.action(async (options: { taskId: string; projectPath?: string }) => {
