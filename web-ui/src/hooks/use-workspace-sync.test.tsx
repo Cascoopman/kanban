@@ -1,4 +1,4 @@
-import { act, useEffect, useState } from "react";
+import { act, type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInitialBoardData } from "@/data/board-data";
@@ -49,6 +49,55 @@ function createWorkspaceState(taskId: string, revision: number): RuntimeWorkspac
 		sessions: {},
 		revision,
 	};
+}
+
+function updateTask(board: BoardData, taskId: string, update: (title: string) => string): BoardData {
+	return {
+		...board,
+		columns: board.columns.map((column) => ({
+			...column,
+			cards: column.cards.map((card) =>
+				card.id === taskId ? { ...card, title: update(card.title), updatedAt: card.updatedAt + 1 } : card,
+			),
+		})),
+	};
+}
+
+function moveTaskToReview(board: BoardData, taskId: string): BoardData {
+	const task = board.columns.flatMap((column) => column.cards).find((card) => card.id === taskId);
+	if (!task) {
+		throw new Error(`Missing task ${taskId}.`);
+	}
+	return {
+		...board,
+		columns: board.columns.map((column) => ({
+			...column,
+			cards:
+				column.id === "review"
+					? [{ ...task, updatedAt: task.updatedAt + 2 }, ...column.cards.filter((card) => card.id !== taskId)]
+					: column.cards.filter((card) => card.id !== taskId),
+		})),
+	};
+}
+
+function findTask(board: BoardData | null, taskId: string) {
+	if (!board) {
+		return null;
+	}
+	for (const column of board.columns) {
+		const card = column.cards.find((candidate) => candidate.id === taskId);
+		if (card) {
+			return { card, columnId: column.id };
+		}
+	}
+	return null;
+}
+
+function requireSnapshot(snapshot: HookSnapshot | null): HookSnapshot {
+	if (!snapshot) {
+		throw new Error("Expected a hook snapshot.");
+	}
+	return snapshot;
 }
 
 function createSessionSummary(
@@ -107,9 +156,13 @@ function createDeferred<T>() {
 
 interface HookSnapshot {
 	board: BoardData;
+	workspaceBaseBoard: BoardData | null;
+	workspaceRevision: number | null;
 	sessions: Record<string, RuntimeTaskSessionSummary>;
 	canPersistWorkspaceState: boolean;
-	refreshWorkspaceState: () => Promise<void>;
+	setBoard: Dispatch<SetStateAction<BoardData>>;
+	refreshWorkspaceState: (options?: { discardLocalBoardChanges?: boolean }) => Promise<void>;
+	acceptWorkspaceState: (workspaceState: RuntimeWorkspaceStateResponse, persistedBoard?: BoardData) => void;
 	resetWorkspaceSyncState: () => void;
 }
 
@@ -117,17 +170,31 @@ function HookHarness({
 	streamedWorkspaceState,
 	hasReceivedSnapshot = true,
 	isDocumentVisible = false,
+	onWorkspaceStateConflict,
+	pendingPersistBoard = null,
 	onSnapshot,
 }: {
 	streamedWorkspaceState: RuntimeWorkspaceStateResponse | null;
 	hasReceivedSnapshot?: boolean;
 	isDocumentVisible?: boolean;
+	onWorkspaceStateConflict?: (input: { workspaceId: string; currentRevision: number }) => void;
+	pendingPersistBoard?: BoardData | null;
 	onSnapshot: (snapshot: HookSnapshot) => void;
 }): null {
 	const [board, setBoard] = useState<BoardData>(() => createInitialBoardData());
 	const [sessions, setSessions] = useState<Record<string, RuntimeTaskSessionSummary>>({});
 	const [canPersistWorkspaceState, setCanPersistWorkspaceState] = useState(false);
-	const { refreshWorkspaceState, resetWorkspaceSyncState } = useWorkspaceSync({
+	const pendingPersistBoardRef = useRef(pendingPersistBoard);
+	pendingPersistBoardRef.current = pendingPersistBoard;
+	const getPendingPersistBoard = useCallback(() => pendingPersistBoardRef.current, []);
+	const {
+		workspaceBaseBoard,
+		workspaceRevision,
+		refreshWorkspaceState,
+		acceptWorkspaceState,
+		resetWorkspaceSyncState,
+	} = useWorkspaceSync({
+		board,
 		currentProjectId: "project-a",
 		streamedWorkspaceState,
 		hasNoProjects: false,
@@ -136,17 +203,33 @@ function HookHarness({
 		setBoard,
 		setSessions,
 		setCanPersistWorkspaceState,
+		onWorkspaceStateConflict,
+		getPendingPersistBoard,
 	});
 
 	useEffect(() => {
 		onSnapshot({
 			board,
+			workspaceBaseBoard,
+			workspaceRevision,
 			sessions,
 			canPersistWorkspaceState,
+			setBoard,
 			refreshWorkspaceState,
+			acceptWorkspaceState,
 			resetWorkspaceSyncState,
 		});
-	}, [board, canPersistWorkspaceState, onSnapshot, refreshWorkspaceState, resetWorkspaceSyncState, sessions]);
+	}, [
+		acceptWorkspaceState,
+		board,
+		canPersistWorkspaceState,
+		onSnapshot,
+		refreshWorkspaceState,
+		resetWorkspaceSyncState,
+		sessions,
+		workspaceBaseBoard,
+		workspaceRevision,
+	]);
 
 	return null;
 }
@@ -326,5 +409,151 @@ describe("useWorkspaceSync", () => {
 
 		expect(fetchWorkspaceStateMock).not.toHaveBeenCalled();
 		expect(latestSnapshot).not.toBeNull();
+	});
+
+	it("preserves a local title edit when a streamed lifecycle update moves the task", async () => {
+		const initialState = createWorkspaceState("task-1", 1);
+		const remoteLifecycleState = {
+			...createWorkspaceState("task-1", 2),
+			board: moveTaskToReview(initialState.board, "task-1"),
+		};
+		const onWorkspaceStateConflict = vi.fn();
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSnapshot = (snapshot: HookSnapshot) => {
+			latestSnapshot = snapshot;
+		};
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={initialState}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+		if (!latestSnapshot) {
+			throw new Error("Expected an initial hook snapshot.");
+		}
+		const initialSnapshot: HookSnapshot = latestSnapshot;
+		await act(async () => {
+			initialSnapshot.setBoard((current) => updateTask(current, "task-1", () => "My local title"));
+		});
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={remoteLifecycleState}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+
+		const mergedSnapshot = requireSnapshot(latestSnapshot);
+		const mergedTask = findTask(mergedSnapshot.board, "task-1");
+		const baselineTask = findTask(mergedSnapshot.workspaceBaseBoard, "task-1");
+		expect(mergedTask).toMatchObject({ columnId: "review", card: { title: "My local title" } });
+		expect(baselineTask).toMatchObject({ columnId: "review", card: { title: "Prompt task-1" } });
+		expect(mergedSnapshot.workspaceRevision).toBe(2);
+		expect(onWorkspaceStateConflict).not.toHaveBeenCalled();
+	});
+
+	it("uses the server board and reports a conflict when the same field changed twice", async () => {
+		const initialState = createWorkspaceState("task-1", 1);
+		const remoteEditState = {
+			...createWorkspaceState("task-1", 2),
+			board: updateTask(initialState.board, "task-1", () => "Remote title"),
+		};
+		const onWorkspaceStateConflict = vi.fn();
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSnapshot = (snapshot: HookSnapshot) => {
+			latestSnapshot = snapshot;
+		};
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={initialState}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+		if (!latestSnapshot) {
+			throw new Error("Expected an initial hook snapshot.");
+		}
+		const initialSnapshot: HookSnapshot = latestSnapshot;
+		await act(async () => {
+			initialSnapshot.setBoard((current) => updateTask(current, "task-1", () => "Local title"));
+		});
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={remoteEditState}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+
+		const conflictSnapshot = requireSnapshot(latestSnapshot);
+		expect(findTask(conflictSnapshot.board, "task-1")?.card.title).toBe("Remote title");
+		expect(onWorkspaceStateConflict).toHaveBeenCalledWith({
+			workspaceId: "project-a",
+			currentRevision: 2,
+		});
+	});
+
+	it("preserves a newer local edit when the stream for an earlier save arrives first", async () => {
+		const initialState = createWorkspaceState("task-1", 1);
+		const onWorkspaceStateConflict = vi.fn();
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSnapshot = (snapshot: HookSnapshot) => {
+			latestSnapshot = snapshot;
+		};
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={initialState}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+		const initialSnapshot = requireSnapshot(latestSnapshot);
+		const submittedBoard = updateTask(initialSnapshot.board, "task-1", () => "First edit");
+		const newerBoard = updateTask(submittedBoard, "task-1", () => "Second edit");
+		await act(async () => {
+			initialSnapshot.setBoard(newerBoard);
+		});
+		const savedState = {
+			...createWorkspaceState("task-1", 2),
+			board: moveTaskToReview(submittedBoard, "task-1"),
+		};
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={savedState}
+					pendingPersistBoard={submittedBoard}
+					onWorkspaceStateConflict={onWorkspaceStateConflict}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+
+		const mergedSnapshot = requireSnapshot(latestSnapshot);
+		expect(findTask(mergedSnapshot.board, "task-1")).toMatchObject({
+			columnId: "review",
+			card: { title: "Second edit" },
+		});
+		expect(findTask(mergedSnapshot.workspaceBaseBoard, "task-1")).toMatchObject({
+			columnId: "review",
+			card: { title: "First edit" },
+		});
+		expect(onWorkspaceStateConflict).not.toHaveBeenCalled();
 	});
 });

@@ -25,4 +25,10 @@ describe.sequential("runtime home", () => {
 		process.env[KANBAN_RUNTIME_HOME_ENV] = "./tmp/isolated-kanban";
 		expect(getRuntimeHomePath()).toBe(resolve("./tmp/isolated-kanban"));
 	});
+
+	it("expands a home-relative isolated runtime directory", () => {
+		expect(getRuntimeHomePath({ [KANBAN_RUNTIME_HOME_ENV]: "~/.kanban-dev/test" }, "/Users/example")).toBe(
+			"/Users/example/.kanban-dev/test",
+		);
+	});
 });

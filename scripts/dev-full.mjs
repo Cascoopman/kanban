@@ -4,8 +4,10 @@
  * VS Code "Dev (Full Stack)" launch config.
  */
 import { createServer, connect } from "node:net";
+import { createHash } from "node:crypto";
 import { access } from "node:fs/promises";
-import { join } from "node:path";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { buildAgentRuntimeEnv } from "./agent-runtime-env.mjs";
 
@@ -73,20 +75,144 @@ function waitForPort(port, timeout = 15000) {
 	});
 }
 
-const runtimePortStart = Number.parseInt(process.env.KANBAN_RUNTIME_PORT_START || "3484", 10);
-const webUiPortStart = Number.parseInt(process.env.KANBAN_WEB_UI_PORT_START || "4173", 10);
-const runtimePort = await findPort(Number.isFinite(runtimePortStart) ? runtimePortStart : 3484);
-const webUiPort = await findPort(Number.isFinite(webUiPortStart) ? webUiPortStart : 4173, new Set([runtimePort]));
+function getDefaultDevRuntimeHome() {
+	const workspacePath = resolve(repoRoot);
+	const workspaceHash = createHash("sha256").update(workspacePath).digest("hex").slice(0, 10);
+	return join(homedir(), ".kanban-dev", `${basename(workspacePath)}-${workspaceHash}`);
+}
+
+function resolveRuntimeHomeInput(value) {
+	if (value === "~") {
+		return homedir();
+	}
+	if (value.startsWith("~/") || value.startsWith("~\\")) {
+		return resolve(homedir(), value.slice(2));
+	}
+	return resolve(value);
+}
+
+function parsePort(value, flag) {
+	const port = Number(value);
+	if (!Number.isInteger(port) || port < 1 || port > 65535) {
+		throw new Error(`${flag} requires an integer between 1 and 65535.`);
+	}
+	return port;
+}
+
+function parseDevFullArgs(args) {
+	let runtimeHome = null;
+	let useProductionState = false;
+	let requestedRuntimePort = null;
+	let requestedWebUiPort = null;
+	let projectPath = null;
+	let openBrowser = true;
+	const runtimeArgs = [];
+	for (let index = 0; index < args.length; index += 1) {
+		const arg = args[index];
+		if (arg === "--use-production-state") {
+			useProductionState = true;
+			continue;
+		}
+		if (arg === "--no-browser" || arg === "--no-open") {
+			openBrowser = false;
+			continue;
+		}
+		if (arg === "--runtime-port" || arg === "--web-port") {
+			const value = args[index + 1]?.trim();
+			if (!value) {
+				throw new Error(`${arg} requires a port.`);
+			}
+			if (arg === "--runtime-port") {
+				requestedRuntimePort = parsePort(value, arg);
+			} else {
+				requestedWebUiPort = parsePort(value, arg);
+			}
+			index += 1;
+			continue;
+		}
+		if (arg.startsWith("--runtime-port=") || arg.startsWith("--web-port=")) {
+			const [flag, value = ""] = arg.split("=", 2);
+			if (flag === "--runtime-port") {
+				requestedRuntimePort = parsePort(value, flag);
+			} else {
+				requestedWebUiPort = parsePort(value, flag);
+			}
+			continue;
+		}
+		if (arg === "--runtime-home") {
+			const value = args[index + 1]?.trim();
+			if (!value) {
+				throw new Error("--runtime-home requires a path.");
+			}
+			runtimeHome = resolveRuntimeHomeInput(value);
+			index += 1;
+			continue;
+		}
+		if (arg === "--project-path") {
+			const value = args[index + 1]?.trim();
+			if (!value) {
+				throw new Error("--project-path requires a path.");
+			}
+			projectPath = resolve(value);
+			index += 1;
+			continue;
+		}
+		if (arg.startsWith("--project-path=")) {
+			const value = arg.slice("--project-path=".length).trim();
+			if (!value) {
+				throw new Error("--project-path requires a path.");
+			}
+			projectPath = resolve(value);
+			continue;
+		}
+		if (arg.startsWith("--runtime-home=")) {
+			const value = arg.slice("--runtime-home=".length).trim();
+			if (!value) {
+				throw new Error("--runtime-home requires a path.");
+			}
+			runtimeHome = resolveRuntimeHomeInput(value);
+			continue;
+		}
+		runtimeArgs.push(arg);
+	}
+	if (useProductionState && runtimeHome) {
+		throw new Error("--use-production-state cannot be combined with --runtime-home.");
+	}
+	return {
+		runtimeArgs,
+		runtimeHome,
+		useProductionState,
+		requestedRuntimePort,
+		requestedWebUiPort,
+		projectPath,
+		openBrowser,
+	};
+}
+
 const requestedDevFullArgs = process.argv.slice(2);
 const withShutdownCleanupFlag = "--with-shutdown-cleanup";
-const noOpenFlag = "--no-open";
-const requestedRuntimeArgs = requestedDevFullArgs.filter(
-	(arg) => arg !== withShutdownCleanupFlag && arg !== noOpenFlag,
-);
-const shouldOpenBrowser = !requestedDevFullArgs.includes(noOpenFlag);
+const parsedDevFullArgs = parseDevFullArgs(requestedDevFullArgs);
+const configuredRuntimePortStart = Number.parseInt(process.env.KANBAN_RUNTIME_PORT_START || "3484", 10);
+const configuredWebUiPortStart = Number.parseInt(process.env.KANBAN_WEB_UI_PORT_START || "4173", 10);
+const runtimePortStart = Number.isFinite(configuredRuntimePortStart) ? configuredRuntimePortStart : 3484;
+const webUiPortStart = Number.isFinite(configuredWebUiPortStart) ? configuredWebUiPortStart : 4173;
+const runtimePort = await findPort(parsedDevFullArgs.requestedRuntimePort ?? runtimePortStart);
+if (parsedDevFullArgs.requestedRuntimePort && runtimePort !== parsedDevFullArgs.requestedRuntimePort) {
+	throw new Error(`Runtime port ${parsedDevFullArgs.requestedRuntimePort} is already in use.`);
+}
+const webUiPort = await findPort(parsedDevFullArgs.requestedWebUiPort ?? webUiPortStart, new Set([runtimePort]));
+if (parsedDevFullArgs.requestedWebUiPort && webUiPort !== parsedDevFullArgs.requestedWebUiPort) {
+	throw new Error(`Web UI port ${parsedDevFullArgs.requestedWebUiPort} is already in use.`);
+}
+const requestedRuntimeArgs = parsedDevFullArgs.runtimeArgs.filter((arg) => arg !== withShutdownCleanupFlag);
 const hasExplicitSkipCleanupArg = requestedRuntimeArgs.some((arg) => arg === "--skip-shutdown-cleanup");
 const shouldDefaultSkipShutdownCleanup = !requestedDevFullArgs.includes(withShutdownCleanupFlag);
-const runtimeCwd = process.env.KANBAN_DEV_PROJECT_PATH?.trim() || repoRoot;
+const configuredRuntimeHome = process.env.KANBAN_RUNTIME_HOME?.trim();
+const runtimeHome = parsedDevFullArgs.useProductionState
+	? null
+	: (parsedDevFullArgs.runtimeHome ??
+		(configuredRuntimeHome ? resolveRuntimeHomeInput(configuredRuntimeHome) : getDefaultDevRuntimeHome()));
+const runtimeCwd = parsedDevFullArgs.projectPath ?? process.env.KANBAN_DEV_PROJECT_PATH?.trim() ?? repoRoot;
 const runtimeCliArgs = [
 	"--port",
 	String(runtimePort),
@@ -96,13 +222,11 @@ const runtimeCliArgs = [
 ];
 
 console.log(`\n  Runtime port: ${runtimePort}`);
-console.log(`  Web UI:       http://127.0.0.1:${webUiPort}\n`);
+console.log(`  Web UI:       http://127.0.0.1:${webUiPort}`);
 if (runtimeCwd !== repoRoot) {
 	console.log(`  Project:      ${runtimeCwd}`);
 }
-if (process.env.KANBAN_RUNTIME_HOME?.trim()) {
-	console.log(`  Runtime home: ${process.env.KANBAN_RUNTIME_HOME.trim()}\n`);
-}
+console.log(`  Runtime data: ${runtimeHome ?? join(homedir(), ".kanban")}\n`);
 
 const env = {
 	...buildAgentRuntimeEnv(process.env, [join(repoRoot, "node_modules", ".bin")]),
@@ -110,6 +234,11 @@ const env = {
 	KANBAN_RUNTIME_PORT: String(runtimePort),
 	KANBAN_WEB_UI_PORT: String(webUiPort),
 };
+if (runtimeHome) {
+	env.KANBAN_RUNTIME_HOME = runtimeHome;
+} else {
+	delete env.KANBAN_RUNTIME_HOME;
+}
 
 const tsxBin = join(repoRoot, "node_modules", ".bin", isWindows ? "tsx.cmd" : "tsx");
 const runtime = spawn(tsxBin, ["watch", join(repoRoot, "src", "cli.ts"), ...runtimeCliArgs], {
@@ -152,8 +281,8 @@ vite = spawn("npm", ["run", "web:dev"], {
 vite.on("exit", () => cleanup(1));
 
 // Auto-open browser after a short delay for Vite to start
-setTimeout(() => {
-	if (shouldOpenBrowser) {
+if (parsedDevFullArgs.openBrowser) {
+	setTimeout(() => {
 		open(`http://127.0.0.1:${webUiPort}`);
-	}
-}, 2000);
+	}, 2000);
+}

@@ -17,6 +17,10 @@ import { closeGitSshMultiplexing, initializeGitSshMultiplexing } from "../../src
 import { runGit } from "../../src/workspace/git-utils";
 
 describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
+	const isolatedGitEnv: NodeJS.ProcessEnv = {
+		PATH: process.env.PATH,
+	};
+
 	beforeEach(() => {
 		childProcessMocks.execFile.mockReset();
 		childProcessMocks.execFilePromise.mockReset();
@@ -42,8 +46,12 @@ describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
 		});
 		expect(initializeGitSshMultiplexing()).toBe(true);
 
-		await expect(runGit("/tmp", ["fetch", "--all", "--prune"])).resolves.toMatchObject({ ok: true });
-		await expect(runGit("/tmp", ["fetch", "--all", "--prune"])).resolves.toMatchObject({ ok: true });
+		await expect(runGit("/tmp", ["fetch", "--all", "--prune"], { env: isolatedGitEnv })).resolves.toMatchObject({
+			ok: true,
+		});
+		await expect(runGit("/tmp", ["fetch", "--all", "--prune"], { env: isolatedGitEnv })).resolves.toMatchObject({
+			ok: true,
+		});
 
 		const fetchCalls = childProcessMocks.execFilePromise.mock.calls.filter(([, args]) =>
 			(args as string[]).includes("fetch"),
@@ -84,9 +92,9 @@ describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
 		);
 		expect(initializeGitSshMultiplexing()).toBe(true);
 
-		await runGit("/repos/main", ["fetch", "--all", "--prune"]);
-		await runGit("/repos/worktree", ["fetch", "--all", "--prune"]);
-		await runGit("/repos/personal", ["fetch", "--all", "--prune"]);
+		await runGit("/repos/main", ["fetch", "--all", "--prune"], { env: isolatedGitEnv });
+		await runGit("/repos/worktree", ["fetch", "--all", "--prune"], { env: isolatedGitEnv });
+		await runGit("/repos/personal", ["fetch", "--all", "--prune"], { env: isolatedGitEnv });
 
 		const commands = childProcessMocks.execFilePromise.mock.calls
 			.filter(([, args]) => (args as string[]).includes("fetch"))

@@ -4,7 +4,6 @@ import { readFile, realpath, rm } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
-
 import {
 	type RuntimeBoardColumnId,
 	type RuntimeBoardData,
@@ -18,12 +17,11 @@ import {
 	runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
-
-export { getRuntimeHomePath } from "../core/runtime-home";
-
 import { getRuntimeHomePath } from "../core/runtime-home";
 import { getTaskColumnId, moveTaskToColumn } from "../core/task-board-mutations";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
+
+export { getRuntimeHomePath } from "../core/runtime-home";
 
 const RUNTIME_WORKTREES_DIR = "worktrees";
 const WORKSPACES_DIR = "workspaces";

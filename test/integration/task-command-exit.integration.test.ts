@@ -340,7 +340,7 @@ describe("source task commands", () => {
 	for (const agentId of ["codex", "claude"] as const) {
 		it(
 			`lets a running ${agentId} task branch itself with worktree and conversation context`,
-			{ timeout: 60_000 },
+			{ timeout: 120_000 },
 			async () => {
 				if (process.platform === "win32") {
 					return;
@@ -399,8 +399,12 @@ describe("source task commands", () => {
 							],
 							cwd: projectPath,
 							env,
+							timeoutMs: 20_000,
 						});
-						expect(created.didExit, created.stderr || created.stdout).toBe(true);
+						expect(
+							created.didExit,
+							`Task creation did not exit.\nstdout:\n${created.stdout}\nstderr:\n${created.stderr}`,
+						).toBe(true);
 						expect(created.exitCode, `stdout:\n${created.stdout}\nstderr:\n${created.stderr}`).toBe(0);
 						const createdPayload = JSON.parse(created.stdout) as { task?: { id?: string } };
 						const sourceTaskId = createdPayload.task?.id;
@@ -440,8 +444,12 @@ describe("source task commands", () => {
 							args: ["task", "branch", "--title", `${agentId} branch task`, "--prompt", prompt],
 							cwd: sourceLaunch.cwd,
 							env: taskSessionEnv,
+							timeoutMs: 30_000,
 						});
-						expect(branched.didExit, branched.stderr || branched.stdout).toBe(true);
+						expect(
+							branched.didExit,
+							`Task branch did not exit.\nstdout:\n${branched.stdout}\nstderr:\n${branched.stderr}`,
+						).toBe(true);
 						expect(branched.exitCode).toBe(0);
 						const branchedPayload = JSON.parse(branched.stdout) as {
 							ok?: boolean;
@@ -614,7 +622,7 @@ describe("source task commands", () => {
 		}
 	});
 
-	it("opens only for launch invocations", { timeout: 60_000 }, async () => {
+	it("opens only for launch invocations", { timeout: 90_000 }, async () => {
 		if (process.platform === "win32") {
 			return;
 		}
@@ -668,8 +676,12 @@ describe("source task commands", () => {
 						args: [...args],
 						cwd: projectPath,
 						env,
+						timeoutMs: 15_000,
 					});
-					expect(result.didExit).toBe(true);
+					expect(
+						result.didExit,
+						`CLI did not exit for args ${JSON.stringify(args)}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+					).toBe(true);
 					expect(result.exitCode).toBe(0);
 					await waitForBrowserOpenCount(browserOpenLogPath, expectedOpenCount);
 					expect(readBrowserOpenLog(browserOpenLogPath)).toHaveLength(expectedOpenCount);

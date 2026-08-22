@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { notifyError } from "@/components/app-toaster";
 import { createInitialBoardData } from "@/data/board-data";
 import { selectNewestTaskSessionSummary } from "@/hooks/task-session-summary";
+import { areWorkspaceBoardsEqual, mergeWorkspaceBoards } from "@/runtime/merge-workspace-board";
 import type {
 	RuntimeGitRepositoryInfo,
 	RuntimeTaskSessionSummary,
@@ -14,6 +15,7 @@ import { normalizeBoardData } from "@/state/board-state";
 import type { BoardData } from "@/types";
 
 interface UseWorkspaceSyncInput {
+	board: BoardData;
 	currentProjectId: string | null;
 	streamedWorkspaceState: RuntimeWorkspaceStateResponse | null;
 	hasNoProjects: boolean;
@@ -22,17 +24,24 @@ interface UseWorkspaceSyncInput {
 	setBoard: Dispatch<SetStateAction<BoardData>>;
 	setSessions: Dispatch<SetStateAction<Record<string, RuntimeTaskSessionSummary>>>;
 	setCanPersistWorkspaceState: Dispatch<SetStateAction<boolean>>;
+	onWorkspaceStateConflict?: (input: { workspaceId: string; currentRevision: number }) => void;
+	getPendingPersistBoard?: () => BoardData | null;
+}
+
+interface RefreshWorkspaceStateOptions {
+	discardLocalBoardChanges?: boolean;
+	mergeBaseBoard?: BoardData;
 }
 
 interface UseWorkspaceSyncResult {
 	workspacePath: string | null;
 	workspaceGit: RuntimeGitRepositoryInfo | null;
 	workspaceRevision: number | null;
-	setWorkspaceRevision: Dispatch<SetStateAction<number | null>>;
-	workspaceHydrationNonce: number;
+	workspaceBaseBoard: BoardData | null;
 	isWorkspaceStateRefreshing: boolean;
 	isWorkspaceMetadataPending: boolean;
-	refreshWorkspaceState: () => Promise<void>;
+	refreshWorkspaceState: (options?: RefreshWorkspaceStateOptions) => Promise<void>;
+	acceptWorkspaceState: (workspaceState: RuntimeWorkspaceStateResponse, persistedBoard?: BoardData) => void;
 	resetWorkspaceSyncState: () => void;
 }
 
@@ -51,6 +60,7 @@ function mergeTaskSessionSummaries(
 }
 
 export function useWorkspaceSync({
+	board,
 	currentProjectId,
 	streamedWorkspaceState,
 	hasNoProjects,
@@ -59,16 +69,24 @@ export function useWorkspaceSync({
 	setBoard,
 	setSessions,
 	setCanPersistWorkspaceState,
+	onWorkspaceStateConflict,
+	getPendingPersistBoard,
 }: UseWorkspaceSyncInput): UseWorkspaceSyncResult {
 	const [workspacePath, setWorkspacePath] = useState<string | null>(null);
 	const [workspaceGit, setWorkspaceGit] = useState<RuntimeGitRepositoryInfo | null>(null);
 	const [appliedWorkspaceProjectId, setAppliedWorkspaceProjectId] = useState<string | null>(null);
 	const [workspaceRevision, setWorkspaceRevision] = useState<number | null>(null);
-	const [workspaceHydrationNonce, setWorkspaceHydrationNonce] = useState(0);
+	const [workspaceBaseBoard, setWorkspaceBaseBoard] = useState<BoardData | null>(null);
 	const [isWorkspaceStateRefreshing, setIsWorkspaceStateRefreshing] = useState(false);
+	const boardRef = useRef(board);
+	boardRef.current = board;
 	const workspaceVersionRef = useRef<{ projectId: string | null; revision: number | null }>({
 		projectId: null,
 		revision: null,
+	});
+	const workspaceBaseBoardRef = useRef<{ projectId: string | null; board: BoardData | null }>({
+		projectId: null,
+		board: null,
 	});
 	const workspaceRefreshRequestIdRef = useRef(0);
 
@@ -85,7 +103,7 @@ export function useWorkspaceSync({
 	}, [currentProjectId, workspaceRevision]);
 
 	const applyWorkspaceState = useCallback(
-		(nextWorkspaceState: RuntimeWorkspaceStateResponse | null) => {
+		(nextWorkspaceState: RuntimeWorkspaceStateResponse | null, options: RefreshWorkspaceStateOptions = {}) => {
 			if (!nextWorkspaceState) {
 				setCanPersistWorkspaceState(false);
 				setWorkspacePath(null);
@@ -94,9 +112,14 @@ export function useWorkspaceSync({
 				setBoard(createInitialBoardData());
 				setSessions({});
 				setWorkspaceRevision(null);
+				setWorkspaceBaseBoard(null);
 				workspaceVersionRef.current = {
 					projectId: currentProjectId,
 					revision: null,
+				};
+				workspaceBaseBoardRef.current = {
+					projectId: currentProjectId,
+					board: null,
 				};
 				return;
 			}
@@ -112,11 +135,50 @@ export function useWorkspaceSync({
 				const incomingSessions = nextWorkspaceState.sessions ?? {};
 				return mergeTaskSessionSummaries(currentSessions, incomingSessions);
 			});
-			const shouldHydrateBoard = !isSameProject || currentRevision !== nextWorkspaceState.revision;
-			if (shouldHydrateBoard) {
-				const normalized = normalizeBoardData(nextWorkspaceState.board) ?? createInitialBoardData();
-				setBoard(normalized);
-				setWorkspaceHydrationNonce((current) => current + 1);
+			const normalizedRemoteBoard = normalizeBoardData(nextWorkspaceState.board) ?? createInitialBoardData();
+			const shouldApplyBoard =
+				options.discardLocalBoardChanges || !isSameProject || currentRevision !== nextWorkspaceState.revision;
+			if (shouldApplyBoard) {
+				let currentBaseBoard =
+					options.mergeBaseBoard ??
+					(workspaceBaseBoardRef.current.projectId === currentProjectId
+						? workspaceBaseBoardRef.current.board
+						: null);
+				const pendingPersistBoard = options.mergeBaseBoard ? null : getPendingPersistBoard?.();
+				if (isSameProject && currentBaseBoard && pendingPersistBoard) {
+					const pendingInRemote = mergeWorkspaceBoards(
+						currentBaseBoard,
+						pendingPersistBoard,
+						normalizedRemoteBoard,
+					);
+					if (
+						pendingInRemote.status === "merged" &&
+						areWorkspaceBoardsEqual(pendingInRemote.board, normalizedRemoteBoard)
+					) {
+						currentBaseBoard = pendingPersistBoard;
+					}
+				}
+				let nextBoard = normalizedRemoteBoard;
+				if (isSameProject && currentBaseBoard && !options.discardLocalBoardChanges) {
+					const merged = mergeWorkspaceBoards(currentBaseBoard, boardRef.current, normalizedRemoteBoard);
+					if (merged.status === "merged") {
+						nextBoard = merged.board;
+					} else {
+						onWorkspaceStateConflict?.({
+							workspaceId: currentProjectId ?? "",
+							currentRevision: nextWorkspaceState.revision,
+						});
+					}
+				}
+				if (!areWorkspaceBoardsEqual(boardRef.current, nextBoard)) {
+					boardRef.current = nextBoard;
+					setBoard(nextBoard);
+				}
+				setWorkspaceBaseBoard(normalizedRemoteBoard);
+				workspaceBaseBoardRef.current = {
+					projectId: currentProjectId,
+					board: normalizedRemoteBoard,
+				};
 			}
 			setWorkspaceRevision(nextWorkspaceState.revision);
 			workspaceVersionRef.current = {
@@ -126,51 +188,73 @@ export function useWorkspaceSync({
 			setAppliedWorkspaceProjectId(currentProjectId);
 			setCanPersistWorkspaceState(true);
 		},
-		[currentProjectId, setBoard, setCanPersistWorkspaceState, setSessions],
+		[
+			currentProjectId,
+			getPendingPersistBoard,
+			onWorkspaceStateConflict,
+			setBoard,
+			setCanPersistWorkspaceState,
+			setSessions,
+		],
 	);
 
-	const refreshWorkspaceState = useCallback(async () => {
-		if (!currentProjectId) {
-			return;
-		}
-		const requestId = workspaceRefreshRequestIdRef.current + 1;
-		workspaceRefreshRequestIdRef.current = requestId;
-		const requestedProjectId = currentProjectId;
-		setIsWorkspaceStateRefreshing(true);
-		try {
-			const refreshed = await fetchWorkspaceState(requestedProjectId);
-			if (
-				workspaceRefreshRequestIdRef.current !== requestId ||
-				workspaceVersionRef.current.projectId !== requestedProjectId
-			) {
+	const refreshWorkspaceState = useCallback(
+		async (options: RefreshWorkspaceStateOptions = {}) => {
+			if (!currentProjectId) {
 				return;
 			}
-			applyWorkspaceState(refreshed);
-		} catch (error) {
-			if (
-				workspaceRefreshRequestIdRef.current !== requestId ||
-				workspaceVersionRef.current.projectId !== requestedProjectId
-			) {
-				return;
+			const requestId = workspaceRefreshRequestIdRef.current + 1;
+			workspaceRefreshRequestIdRef.current = requestId;
+			const requestedProjectId = currentProjectId;
+			setIsWorkspaceStateRefreshing(true);
+			try {
+				const refreshed = await fetchWorkspaceState(requestedProjectId);
+				if (
+					workspaceRefreshRequestIdRef.current !== requestId ||
+					workspaceVersionRef.current.projectId !== requestedProjectId
+				) {
+					return;
+				}
+				applyWorkspaceState(refreshed, options);
+			} catch (error) {
+				if (
+					workspaceRefreshRequestIdRef.current !== requestId ||
+					workspaceVersionRef.current.projectId !== requestedProjectId
+				) {
+					return;
+				}
+				const message = error instanceof Error ? error.message : String(error);
+				notifyError(message);
+			} finally {
+				if (workspaceRefreshRequestIdRef.current === requestId) {
+					setIsWorkspaceStateRefreshing(false);
+				}
 			}
-			const message = error instanceof Error ? error.message : String(error);
-			notifyError(message);
-		} finally {
-			if (workspaceRefreshRequestIdRef.current === requestId) {
-				setIsWorkspaceStateRefreshing(false);
-			}
-		}
-	}, [applyWorkspaceState, currentProjectId]);
+		},
+		[applyWorkspaceState, currentProjectId],
+	);
+
+	const acceptWorkspaceState = useCallback(
+		(workspaceState: RuntimeWorkspaceStateResponse, persistedBoard?: BoardData) => {
+			applyWorkspaceState(workspaceState, { mergeBaseBoard: persistedBoard });
+		},
+		[applyWorkspaceState],
+	);
 
 	const resetWorkspaceSyncState = useCallback(() => {
 		workspaceRefreshRequestIdRef.current += 1;
 		setCanPersistWorkspaceState(false);
 		setWorkspaceRevision(null);
+		setWorkspaceBaseBoard(null);
 		setIsWorkspaceStateRefreshing(false);
 		setAppliedWorkspaceProjectId(null);
 		workspaceVersionRef.current = {
 			projectId: currentProjectId,
 			revision: null,
+		};
+		workspaceBaseBoardRef.current = {
+			projectId: currentProjectId,
+			board: null,
 		};
 	}, [currentProjectId, setCanPersistWorkspaceState]);
 
@@ -196,11 +280,11 @@ export function useWorkspaceSync({
 		workspacePath,
 		workspaceGit,
 		workspaceRevision,
-		setWorkspaceRevision,
-		workspaceHydrationNonce,
+		workspaceBaseBoard,
 		isWorkspaceStateRefreshing,
 		isWorkspaceMetadataPending,
 		refreshWorkspaceState,
+		acceptWorkspaceState,
 		resetWorkspaceSyncState,
 	};
 }
