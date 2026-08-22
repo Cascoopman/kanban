@@ -15,6 +15,7 @@ export default defineConfig({
 			"@": resolve(__dirname, "src"),
 			"@runtime-agent-catalog": resolve(__dirname, "../src/core/agent-catalog.ts"),
 			"@runtime-shortcuts": resolve(__dirname, "../src/config/shortcut-utils.ts"),
+			"@runtime-theme-appearance": resolve(__dirname, "../src/core/theme-appearance.ts"),
 			"@runtime-task-id": resolve(__dirname, "../src/core/task-id.ts"),
 			"@runtime-task-title": resolve(__dirname, "../src/core/task-title.ts"),
 			"@runtime-task-worktree-path": resolve(__dirname, "../src/workspace/task-worktree-path.ts"),

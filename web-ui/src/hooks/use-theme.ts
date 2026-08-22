@@ -1,3 +1,4 @@
+import { isKanbanThemeId, type KanbanThemeId } from "@runtime-theme-appearance";
 import { useCallback, useSyncExternalStore } from "react";
 
 import { LocalStorageKey, readLocalStorageItem, writeLocalStorageItem } from "@/storage/local-storage-store";
@@ -6,18 +7,7 @@ import { LocalStorageKey, readLocalStorageItem, writeLocalStorageItem } from "@/
 // Theme definitions
 // ---------------------------------------------------------------------------
 
-export type ThemeId =
-	| "default"
-	| "graphite"
-	| "midnight"
-	| "pitch"
-	| "solarized-dark"
-	| "light"
-	| "overcast"
-	| "solarized-light"
-	| "latte"
-	| "high-contrast-dark"
-	| "high-contrast-light";
+export type ThemeId = KanbanThemeId;
 
 export type ThemeGroup = "dark" | "light" | "high-contrast";
 
@@ -159,7 +149,6 @@ export const THEME_GROUPS: readonly { key: ThemeGroup; label: string }[] = [
 	{ key: "high-contrast", label: "High Contrast" },
 ];
 
-const THEME_IDS = new Set<string>(THEMES.map((theme) => theme.id));
 const themeStoreListeners = new Set<() => void>();
 let storageSyncInstalled = false;
 let currentThemeId: ThemeId = readStoredThemeId();
@@ -287,7 +276,7 @@ const TERMINAL_COLORS_BY_THEME: Record<ThemeId, ThemeTerminalColors> = {
 // ---------------------------------------------------------------------------
 
 export function isThemeId(value: string | null): value is ThemeId {
-	return value !== null && THEME_IDS.has(value);
+	return isKanbanThemeId(value);
 }
 
 function notifyThemeStoreListeners(): void {

@@ -1,8 +1,10 @@
+import { resolveVsCodeColorTheme, VSCODE_COLOR_THEME_QUERY_PARAMETER } from "@runtime-theme-appearance";
 import { Code2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { type ThemeId, useTheme } from "@/hooks/use-theme";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 
 interface VsCodeWebState {
@@ -10,6 +12,12 @@ interface VsCodeWebState {
 	url: string | null;
 	workspacePath: string | null;
 	error?: string;
+}
+
+export function buildThemedVsCodeWebUrl(url: string, themeId: ThemeId): string {
+	const themedUrl = new URL(url);
+	themedUrl.searchParams.set(VSCODE_COLOR_THEME_QUERY_PARAMETER, resolveVsCodeColorTheme(themeId));
+	return themedUrl.toString();
 }
 
 export function VscodeInlinePanel({
@@ -22,6 +30,7 @@ export function VscodeInlinePanel({
 	workspaceId: string | null;
 }): React.ReactElement {
 	const requestIdRef = useRef(0);
+	const { themeId } = useTheme();
 	const [state, setState] = useState<VsCodeWebState>({
 		status: workspaceId ? "starting" : "unavailable",
 		url: null,
@@ -61,12 +70,17 @@ export function VscodeInlinePanel({
 		void start();
 	}, [start]);
 
-	if (state.status === "ready" && state.url) {
+	const themedUrl = useMemo(
+		() => (state.url ? buildThemedVsCodeWebUrl(state.url, themeId) : null),
+		[state.url, themeId],
+	);
+
+	if (state.status === "ready" && themedUrl) {
 		return (
 			<iframe
 				title={`VS Code — ${taskId}`}
-				src={state.url}
-				className="min-h-0 min-w-0 flex-1 border-0 bg-[#181818]"
+				src={themedUrl}
+				className="min-h-0 min-w-0 flex-1 border-0 bg-surface-0"
 				allow="clipboard-read; clipboard-write"
 			/>
 		);

@@ -41,6 +41,7 @@ describe("VS Code Web proxy", () => {
 		});
 		expect(result.configurationDefaults).toEqual({
 			"editor.fontSize": 15,
+			"workbench.colorTheme": "Dark Modern",
 			"workbench.secondarySideBar.defaultVisibility": "hidden",
 			"workbench.startupEditor": "none",
 		});
@@ -48,6 +49,23 @@ describe("VS Code Web proxy", () => {
 			force: true,
 			views: [{ id: "workbench.view.explorer" }],
 			editors: [],
+		});
+	});
+
+	it("uses the requested Kanban-matched color theme", () => {
+		const configuration = { configurationDefaults: {} };
+		const html = `<meta id="vscode-workbench-web-configuration" data-settings="${encodeHtmlAttribute(JSON.stringify(configuration))}">`;
+
+		const customized = customizeVsCodeWorkbenchHtml({
+			html,
+			upstreamAuthority: "127.0.0.1:41001",
+			publicAuthority: "127.0.0.1:41002",
+			configurationDefaults: {},
+			colorTheme: "Solarized Light",
+		});
+
+		expect(readWorkbenchConfiguration(customized).configurationDefaults).toMatchObject({
+			"workbench.colorTheme": "Solarized Light",
 		});
 	});
 

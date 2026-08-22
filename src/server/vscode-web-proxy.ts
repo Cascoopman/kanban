@@ -2,6 +2,13 @@ import { request as createHttpRequest, createServer, type IncomingMessage, type 
 import { Socket } from "node:net";
 import type { Duplex } from "node:stream";
 
+import {
+	DEFAULT_VSCODE_COLOR_THEME,
+	isSupportedVsCodeColorTheme,
+	VSCODE_COLOR_THEME_QUERY_PARAMETER,
+	type VsCodeColorTheme,
+} from "../core/theme-appearance";
+
 const WORKBENCH_CONFIGURATION_META_PATTERN =
 	/(<meta id="vscode-workbench-web-configuration" data-settings=")([^"]*)(">)/u;
 
@@ -37,6 +44,7 @@ export function customizeVsCodeWorkbenchHtml(options: {
 	upstreamAuthority: string;
 	publicAuthority: string;
 	configurationDefaults: Record<string, unknown>;
+	colorTheme?: VsCodeColorTheme;
 }): string {
 	return options.html.replace(
 		WORKBENCH_CONFIGURATION_META_PATTERN,
@@ -58,6 +66,7 @@ export function customizeVsCodeWorkbenchHtml(options: {
 				rewrittenConfiguration.configurationDefaults = {
 					...existingDefaults,
 					...options.configurationDefaults,
+					"workbench.colorTheme": options.colorTheme ?? DEFAULT_VSCODE_COLOR_THEME,
 					"workbench.secondarySideBar.defaultVisibility": "hidden",
 					"workbench.startupEditor": "none",
 				};
@@ -72,6 +81,18 @@ export function customizeVsCodeWorkbenchHtml(options: {
 			}
 		},
 	);
+}
+
+function getRequestedColorTheme(url: string | undefined): VsCodeColorTheme {
+	if (!url) {
+		return DEFAULT_VSCODE_COLOR_THEME;
+	}
+	try {
+		const requestedTheme = new URL(url, "http://localhost").searchParams.get(VSCODE_COLOR_THEME_QUERY_PARAMETER);
+		return isSupportedVsCodeColorTheme(requestedTheme) ? requestedTheme : DEFAULT_VSCODE_COLOR_THEME;
+	} catch {
+		return DEFAULT_VSCODE_COLOR_THEME;
+	}
 }
 
 function isWorkbenchDocumentRequest(url: string | undefined): boolean {
@@ -123,6 +144,7 @@ function proxyHttpRequest(options: {
 					upstreamAuthority,
 					publicAuthority: options.publicAuthority,
 					configurationDefaults: options.configurationDefaults,
+					colorTheme: getRequestedColorTheme(options.request.url),
 				});
 				const responseHeaders = { ...upstreamResponse.headers };
 				delete responseHeaders["content-encoding"];
