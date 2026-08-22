@@ -76,8 +76,8 @@ vi.mock("@radix-ui/react-select", () => ({
 
 const resetLayoutCustomizationsMock = vi.hoisted(() => vi.fn());
 const agentInstructionsHookMocks = vi.hoisted(() => ({
-	useAgentInstructions: vi.fn(),
-	save: vi.fn(),
+	useGlobalAgentInstructions: vi.fn(),
+	saveGlobal: vi.fn(),
 }));
 
 vi.mock("@runtime-agent-catalog", () => ({
@@ -112,7 +112,7 @@ vi.mock("@/runtime/use-runtime-config", () => ({
 }));
 
 vi.mock("@/runtime/use-agent-instructions", () => ({
-	useAgentInstructions: agentInstructionsHookMocks.useAgentInstructions,
+	useGlobalAgentInstructions: agentInstructionsHookMocks.useGlobalAgentInstructions,
 }));
 
 vi.mock("@/runtime/runtime-config-query", () => ({
@@ -174,22 +174,22 @@ describe("RuntimeSettingsDialog", () => {
 
 	beforeEach(() => {
 		resetLayoutCustomizationsMock.mockReset();
-		agentInstructionsHookMocks.save.mockReset();
-		agentInstructionsHookMocks.save.mockResolvedValue({
-			path: "/tmp/project/AGENTS.md",
-			content: "# Existing instructions\n",
+		agentInstructionsHookMocks.saveGlobal.mockReset();
+		agentInstructionsHookMocks.saveGlobal.mockResolvedValue({
+			path: "/tmp/home/.kanban/AGENTS.md",
+			content: "# Global instructions\n",
 			exists: true,
 		});
-		agentInstructionsHookMocks.useAgentInstructions.mockReturnValue({
+		agentInstructionsHookMocks.useGlobalAgentInstructions.mockReturnValue({
 			instructions: {
-				path: "/tmp/project/AGENTS.md",
-				content: "# Existing instructions\n",
+				path: "/tmp/home/.kanban/AGENTS.md",
+				content: "# Global instructions\n",
 				exists: true,
 			},
 			isLoading: false,
 			isSaving: false,
 			loadError: null,
-			save: agentInstructionsHookMocks.save,
+			save: agentInstructionsHookMocks.saveGlobal,
 		});
 		window.localStorage.clear();
 		document.documentElement.removeAttribute("data-theme");
@@ -339,7 +339,7 @@ describe("RuntimeSettingsDialog", () => {
 		expect(document.documentElement.getAttribute("data-theme")).toBe("graphite");
 	});
 
-	it("shows and saves the project AGENTS.md contents", async () => {
+	it("shows and saves only the Kanban-wide AGENTS.md contents", async () => {
 		const handleOpenChange = vi.fn();
 		await act(async () => {
 			root.render(
@@ -352,18 +352,21 @@ describe("RuntimeSettingsDialog", () => {
 			);
 		});
 
-		const editor = document.querySelector('textarea[aria-label="AGENTS.md contents"]') as HTMLTextAreaElement | null;
+		const globalEditor = document.querySelector(
+			'textarea[aria-label="Kanban-wide AGENTS.md contents"]',
+		) as HTMLTextAreaElement | null;
 		const saveButton = findButtonByText(document.body, "Save");
-		expect(editor?.value).toBe("# Existing instructions\n");
+		expect(globalEditor?.value).toBe("# Global instructions\n");
+		expect(document.querySelector('textarea[aria-label="Project AGENTS.md contents"]')).toBeNull();
 		expect(saveButton?.disabled).toBe(true);
 
 		await act(async () => {
-			if (!editor) {
-				throw new Error("Expected AGENTS.md editor.");
+			if (!globalEditor) {
+				throw new Error("Expected the Kanban-wide AGENTS.md editor.");
 			}
 			const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-			valueSetter?.call(editor, "# Updated instructions\n\nRun tests.\n");
-			editor.dispatchEvent(new Event("input", { bubbles: true }));
+			valueSetter?.call(globalEditor, "# Updated global instructions\n");
+			globalEditor.dispatchEvent(new Event("input", { bubbles: true }));
 		});
 
 		expect(saveButton?.disabled).toBe(false);
@@ -371,17 +374,17 @@ describe("RuntimeSettingsDialog", () => {
 			saveButton?.click();
 		});
 
-		expect(agentInstructionsHookMocks.save).toHaveBeenCalledWith("# Updated instructions\n\nRun tests.\n");
+		expect(agentInstructionsHookMocks.saveGlobal).toHaveBeenCalledWith("# Updated global instructions\n");
 		expect(handleOpenChange).toHaveBeenCalledWith(false);
 	});
 
 	it("explains that a missing AGENTS.md procedure requires a runtime restart", async () => {
-		agentInstructionsHookMocks.useAgentInstructions.mockReturnValue({
+		agentInstructionsHookMocks.useGlobalAgentInstructions.mockReturnValue({
 			instructions: null,
 			isLoading: false,
 			isSaving: false,
-			loadError: new Error('No procedure found on path "runtime.getAgentInstructions"'),
-			save: agentInstructionsHookMocks.save,
+			loadError: new Error('No procedure found on path "runtime.getGlobalAgentInstructions"'),
+			save: agentInstructionsHookMocks.saveGlobal,
 		});
 
 		await act(async () => {

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,6 +17,14 @@ function setupTempHome(): string {
 	tempHome = mkdtempSync(join(tmpdir(), "kanban-agent-adapters-"));
 	process.env.HOME = tempHome;
 	return tempHome;
+}
+
+function writeGlobalAgentInstructions(content: string): string {
+	const home = setupTempHome();
+	const path = join(home, ".kanban", "AGENTS.md");
+	mkdirSync(join(home, ".kanban"), { recursive: true });
+	writeFileSync(path, content);
+	return path;
 }
 
 function setKanbanProcessContext(): void {
@@ -131,6 +139,101 @@ describe("prepareAgentLaunch", () => {
 		});
 
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["true"]);
+	});
+
+	it("loads Kanban-wide instructions before project instructions for Codex", async () => {
+		writeGlobalAgentInstructions("# Shared rules\n\nRun focused tests.\n");
+		const launch = await prepareAgentLaunch({
+			taskId: "task-codex-global-instructions",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Fix the bug",
+			resumeFromTrash: true,
+		});
+
+		expect(getCodexConfigOverrideValues(launch.args, "developer_instructions")).toEqual([
+			JSON.stringify("# Shared rules\n\nRun focused tests.\n"),
+		]);
+		expect(launch.args.indexOf("-c")).toBeLessThan(launch.args.indexOf("resume"));
+		expect(launch.args.slice(-3)).toEqual(["resume", "--last", "Fix the bug"]);
+	});
+
+	it("loads Kanban-wide instructions from a file for Claude", async () => {
+		writeGlobalAgentInstructions("# Shared rules\n");
+		const launch = await prepareAgentLaunch({
+			taskId: "task-claude-global-instructions",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp",
+			prompt: "Fix the bug",
+		});
+
+		const instructionFlagIndex = launch.args.indexOf("--append-system-prompt-file");
+		const instructionsPath = launch.args[instructionFlagIndex + 1];
+		expect(instructionsPath).toBe(
+			join(homedir(), ".kanban", "hooks", "claude", "instructions", "task-claude-global-instructions.md"),
+		);
+		expect(readFileSync(instructionsPath, "utf8")).toBe("# Shared rules\n");
+		expect(launch.args.indexOf("--append-system-prompt-file")).toBeLessThan(launch.args.indexOf("Fix the bug"));
+	});
+
+	it("uses project instructions from the source workspace when the task worktree does not contain them", async () => {
+		const home = setupTempHome();
+		const projectCwd = join(home, "project");
+		const taskCwd = join(home, "task");
+		mkdirSync(projectCwd, { recursive: true });
+		mkdirSync(taskCwd, { recursive: true });
+		writeFileSync(join(projectCwd, "AGENTS.md"), "# Project rules\n");
+
+		const codexLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-project-instructions",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: taskCwd,
+			projectCwd,
+			prompt: "",
+		});
+		expect(getCodexConfigOverrideValues(codexLaunch.args, "developer_instructions")).toEqual([
+			JSON.stringify("# Project rules\n"),
+		]);
+
+		const claudeLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-project-instructions",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: taskCwd,
+			projectCwd,
+			prompt: "",
+		});
+		const instructionFlagIndex = claudeLaunch.args.indexOf("--append-system-prompt-file");
+		expect(readFileSync(claudeLaunch.args[instructionFlagIndex + 1], "utf8")).toBe("# Project rules\n");
+	});
+
+	it("prepends global instructions without duplicating a task worktree AGENTS.md for Codex", async () => {
+		const home = setupTempHome();
+		const taskCwd = join(home, "task");
+		mkdirSync(join(home, ".kanban"), { recursive: true });
+		mkdirSync(taskCwd, { recursive: true });
+		writeFileSync(join(home, ".kanban", "AGENTS.md"), "# Global rules\n");
+		writeFileSync(join(taskCwd, "AGENTS.md"), "# Project rules\n");
+
+		const codexLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-native-project-instructions",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: taskCwd,
+			prompt: "",
+		});
+
+		expect(getCodexConfigOverrideValues(codexLaunch.args, "developer_instructions")).toEqual([
+			JSON.stringify("# Global rules\n"),
+		]);
 	});
 
 	it("writes Claude settings with explicit permission hooks", async () => {

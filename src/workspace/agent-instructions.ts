@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { RuntimeAgentInstructionsResponse } from "../core/api-contract";
 import { lockedFileSystem } from "../fs/locked-file-system";
+import { getRuntimeHomePath } from "../state/workspace-state";
 
 export const AGENT_INSTRUCTIONS_FILENAME = "AGENTS.md";
 
@@ -14,8 +15,11 @@ export function getAgentInstructionsPath(workspacePath: string): string {
 	return join(workspacePath, AGENT_INSTRUCTIONS_FILENAME);
 }
 
-export async function loadAgentInstructionsFile(workspacePath: string): Promise<RuntimeAgentInstructionsResponse> {
-	const path = getAgentInstructionsPath(workspacePath);
+export function getGlobalAgentInstructionsPath(): string {
+	return join(getRuntimeHomePath(), AGENT_INSTRUCTIONS_FILENAME);
+}
+
+async function loadAgentInstructionsPath(path: string): Promise<RuntimeAgentInstructionsResponse> {
 	try {
 		return {
 			path,
@@ -30,11 +34,15 @@ export async function loadAgentInstructionsFile(workspacePath: string): Promise<
 	}
 }
 
-export async function saveAgentInstructionsFile(
-	workspacePath: string,
-	content: string,
-): Promise<RuntimeAgentInstructionsResponse> {
-	const path = getAgentInstructionsPath(workspacePath);
+export async function loadAgentInstructionsFile(workspacePath: string): Promise<RuntimeAgentInstructionsResponse> {
+	return await loadAgentInstructionsPath(getAgentInstructionsPath(workspacePath));
+}
+
+export async function loadGlobalAgentInstructionsFile(): Promise<RuntimeAgentInstructionsResponse> {
+	return await loadAgentInstructionsPath(getGlobalAgentInstructionsPath());
+}
+
+async function saveAgentInstructionsPath(path: string, content: string): Promise<RuntimeAgentInstructionsResponse> {
 	let isSymbolicLink = false;
 	try {
 		isSymbolicLink = (await lstat(path)).isSymbolicLink();
@@ -53,4 +61,8 @@ export async function saveAgentInstructionsFile(
 	}
 
 	return { path, content, exists: true };
+}
+
+export async function saveGlobalAgentInstructionsFile(content: string): Promise<RuntimeAgentInstructionsResponse> {
+	return await saveAgentInstructionsPath(getGlobalAgentInstructionsPath(), content);
 }

@@ -128,9 +128,8 @@ export interface RuntimeTrpcContext {
 	requestedWorkspaceId: string | null;
 	workspaceScope: RuntimeTrpcWorkspaceScope | null;
 	runtimeApi: {
-		loadAgentInstructions: (scope: RuntimeTrpcWorkspaceScope) => Promise<RuntimeAgentInstructionsResponse>;
-		saveAgentInstructions: (
-			scope: RuntimeTrpcWorkspaceScope,
+		loadGlobalAgentInstructions: () => Promise<RuntimeAgentInstructionsResponse>;
+		saveGlobalAgentInstructions: (
 			input: RuntimeAgentInstructionsSaveRequest,
 		) => Promise<RuntimeAgentInstructionsResponse>;
 		loadConfig: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeConfigResponse>;
@@ -305,14 +304,14 @@ const gitSyncActionInputSchema = z.object({
 
 export const runtimeAppRouter = t.router({
 	runtime: t.router({
-		getAgentInstructions: workspaceProcedure.output(runtimeAgentInstructionsResponseSchema).query(async ({ ctx }) => {
-			return await ctx.runtimeApi.loadAgentInstructions(ctx.workspaceScope);
+		getGlobalAgentInstructions: t.procedure.output(runtimeAgentInstructionsResponseSchema).query(async ({ ctx }) => {
+			return await ctx.runtimeApi.loadGlobalAgentInstructions();
 		}),
-		saveAgentInstructions: workspaceProcedure
+		saveGlobalAgentInstructions: t.procedure
 			.input(runtimeAgentInstructionsSaveRequestSchema)
 			.output(runtimeAgentInstructionsResponseSchema)
 			.mutation(async ({ ctx, input }) => {
-				return await ctx.runtimeApi.saveAgentInstructions(ctx.workspaceScope, input);
+				return await ctx.runtimeApi.saveGlobalAgentInstructions(input);
 			}),
 		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.loadConfig(ctx.workspaceScope);
