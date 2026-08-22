@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createGitProcessEnv } from "../core/git-process-env";
+import { applyGitSshMultiplexing, isGitSshMultiplexingActive } from "../core/git-ssh-multiplexing";
 
 const execFileAsync = promisify(execFile);
 const GIT_MAX_BUFFER_BYTES = 10 * 1024 * 1024;
@@ -19,6 +20,29 @@ export interface RunGitOptions {
 	env?: NodeJS.ProcessEnv;
 }
 
+function mayUseSshTransport(args: readonly string[]): boolean {
+	const command = args[0];
+	return (
+		command === "clone" ||
+		command === "fetch" ||
+		command === "pull" ||
+		command === "push" ||
+		command === "ls-remote" ||
+		(command === "submodule" && args.includes("update"))
+	);
+}
+
+async function resolveGitProcessEnv(
+	cwd: string,
+	args: readonly string[],
+	env: NodeJS.ProcessEnv,
+): Promise<NodeJS.ProcessEnv> {
+	if (!isGitSshMultiplexingActive() || !mayUseSshTransport(args)) {
+		return env;
+	}
+	return await applyGitSshMultiplexing(cwd, env);
+}
+
 function normalizeProcessExitCode(code: unknown): number {
 	if (typeof code === "number" && Number.isFinite(code)) {
 		return code;
@@ -35,11 +59,12 @@ function normalizeProcessExitCode(code: unknown): number {
 export async function runGit(cwd: string, args: string[], options: RunGitOptions = {}): Promise<GitCommandResult> {
 	try {
 		const fullArgs = ["-c", "core.quotepath=false", ...args];
+		const env = await resolveGitProcessEnv(cwd, args, options.env || createGitProcessEnv());
 		const { stdout, stderr } = await execFileAsync("git", fullArgs, {
 			cwd,
 			encoding: "utf8",
 			maxBuffer: GIT_MAX_BUFFER_BYTES,
-			env: options.env || createGitProcessEnv(),
+			env,
 		});
 		const normalizedStdout = String(stdout ?? "").trim();
 		const normalizedStderr = String(stderr ?? "").trim();

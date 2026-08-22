@@ -11,6 +11,7 @@ import { registerTaskCommand } from "./commands/task";
 import { loadGlobalRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config";
 import type { RuntimeCommandRunResponse } from "./core/api-contract";
 import { createGitProcessEnv } from "./core/git-process-env";
+import { closeGitSshMultiplexing, initializeGitSshMultiplexing } from "./core/git-ssh-multiplexing";
 import {
 	installGracefulShutdownHandlers,
 	shouldSuppressImmediateDuplicateShutdownSignals,
@@ -447,9 +448,14 @@ async function startServer(): Promise<{
 		collectProjectWorktreeTaskIdsForRemoval,
 		pickDirectoryPathFromSystemDialog,
 	});
+	initializeGitSshMultiplexing();
 
 	const close = async () => {
-		await runtimeServer.close();
+		try {
+			await runtimeServer.close();
+		} finally {
+			await closeGitSshMultiplexing();
+		}
 	};
 
 	const shutdown = async (options?: { skipSessionCleanup?: boolean }) => {

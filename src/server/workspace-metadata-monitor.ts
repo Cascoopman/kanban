@@ -5,6 +5,7 @@ import type {
 	RuntimeWorkspaceMetadata,
 } from "../core/api-contract";
 import { getGitSyncSummary, probeGitWorkspaceState } from "../workspace/git-sync";
+import { refreshTaskBaseRefs } from "../workspace/task-base-ref";
 import { getTaskWorkspacePathInfo } from "../workspace/task-worktree";
 
 const WORKSPACE_METADATA_POLL_INTERVAL_MS = 5_000;
@@ -350,6 +351,10 @@ export function createWorkspaceMetadataMonitor(
 			const entry = updateWorkspaceEntry({ workspaceId, workspacePath, board });
 			entry.subscriberCount += 1;
 			ensureWorkspaceTimer(workspaceId, entry);
+			// Authenticate and warm remote refs while the application is opening the
+			// workspace. Later task fetches remain fresh while reusing that project's
+			// isolated multiplexed SSH connection.
+			void refreshTaskBaseRefs(workspacePath);
 			return await refreshWorkspace(workspaceId);
 		},
 		updateWorkspaceState: async ({ workspaceId, workspacePath, board }) => {

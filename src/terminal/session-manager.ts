@@ -9,6 +9,7 @@ import type {
 	RuntimeTaskSessionSummary,
 	RuntimeTaskTurnCheckpoint,
 } from "../core/api-contract";
+import { applyGitSshMultiplexing } from "../core/git-ssh-multiplexing";
 import {
 	type AgentAdapterLaunchInput,
 	type AgentOutputTransitionDetector,
@@ -352,7 +353,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 			workspaceId: request.workspaceId,
 		});
 
-		const env = buildTerminalEnvironment(request.env, launch.env);
+		const env = await applyGitSshMultiplexing(request.cwd, buildTerminalEnvironment(request.env, launch.env));
 
 		// Adapters can wrap the configured agent binary when they need extra runtime wiring
 		// (for example, Codex uses a wrapper script to watch session logs for hook transitions).
@@ -595,7 +596,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 				entry.active.session.write(data);
 			},
 		});
-		const env = buildTerminalEnvironment(request.env);
+		const env = await applyGitSshMultiplexing(request.cwd, buildTerminalEnvironment(request.env));
 
 		let session: PtySession;
 		try {
