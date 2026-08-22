@@ -37,7 +37,6 @@ export function KanbanBoard({
 	moveToTrashLoadingById,
 	onDragEnd,
 	onRequestProgrammaticCardMoveReady,
-	workspacePath,
 	isDragDisabled = false,
 	hideCardActions = false,
 }: {
@@ -52,7 +51,6 @@ export function KanbanBoard({
 	moveToTrashLoadingById?: Record<string, boolean>;
 	onDragEnd?: (result: DropResult) => void;
 	onRequestProgrammaticCardMoveReady?: (requestMove: RequestProgrammaticCardMove | null) => void;
-	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideCardActions?: boolean;
 }): React.ReactElement {
@@ -367,7 +365,6 @@ export function KanbanBoard({
 							activeDragTaskId={activeDragTaskId}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							programmaticCardMoveInFlight={programmaticCardMoveInFlight}
-							workspacePath={workspacePath}
 							isDragDisabled={isDragDisabled}
 							hideCardActions={hideCardActions}
 							onCardClick={(card) => {

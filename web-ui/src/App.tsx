@@ -729,7 +729,6 @@ export default function App(): ReactElement {
 								<CardDetailView
 									selection={selectedCard}
 									workspaceId={selectedProjectId}
-									workspacePath={selectedCard.card.projectPath ?? workspacePath}
 									sessionSummary={detailSession}
 									taskSessions={allProjectBoard.sessions}
 									onSessionSummary={upsertSession}

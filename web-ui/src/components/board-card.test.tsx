@@ -241,21 +241,26 @@ describe("BoardCard", () => {
 		expect(onMoveToTrash).toHaveBeenCalledWith(card.id);
 	});
 
-	it("reconstructs and shows trashed worktree path when workspace metadata is not tracked", async () => {
+	it("does not show stale worktree metadata on done cards", async () => {
+		mockWorkspaceSnapshot = {
+			taskId: "trash-task-1",
+			path: "/tmp/worktrees/trash-task-1/kanban",
+			branch: "feature/completed-task",
+			isDetached: false,
+			headCommit: "abc12345",
+			changedFiles: 0,
+			additions: 0,
+			deletions: 0,
+		};
 		await act(async () => {
 			root.render(
 				<TooltipProvider>
-					<BoardCard
-						card={createCard({ id: "trash-task-1" })}
-						index={0}
-						columnId="trash"
-						workspacePath="/Users/alice/projects/kanban"
-					/>
+					<BoardCard card={createCard({ id: "trash-task-1" })} index={0} columnId="trash" />
 				</TooltipProvider>,
 			);
 		});
 
-		expect(container.textContent).toContain("~/.kanban/worktrees/trash-task-1/kanban");
+		expect(container.textContent).not.toContain("/tmp/worktrees/trash-task-1/kanban");
 	});
 
 	it("shows only the worktree path from review workspace metadata", async () => {

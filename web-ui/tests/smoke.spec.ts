@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
 import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../src/runtime/types";
 import type { BoardCard, BoardColumnId, BoardData } from "../src/types";
@@ -92,7 +92,10 @@ test("creating a task opens its live agent terminal directly", async ({ page }) 
 	await createTask(page);
 	await expect(page).toHaveURL(/\?task=/);
 	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
-	await expect(page.getByRole("navigation", { name: "Task breadcrumb" }).getByText("New task", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Open VS Code", exact: true })).toHaveCount(1);
+	await expect(
+		page.getByRole("navigation", { name: "Task breadcrumb" }).getByText("Deep mode", { exact: true }),
+	).toBeVisible();
 });
 
 test("creating a task does not open a prompt dialog", async ({ page }) => {
@@ -100,6 +103,70 @@ test("creating a task does not open a prompt dialog", async ({ page }) => {
 	await createTask(page);
 	await expect(page.getByRole("dialog", { name: "Start a task" })).toHaveCount(0);
 	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
+});
+
+test("moving a card to Done removes the stale worktree path", async ({ page, request }) => {
+	const projects = await requestTrpc<RuntimeProjectsResponse>({
+		request,
+		procedure: "projects.list",
+		type: "query",
+	});
+	const workspaceId = projects.currentProjectId ?? projects.projects[0]?.id;
+	if (!workspaceId) {
+		throw new Error("Expected the isolated runtime to expose its current workspace.");
+	}
+	const initialState = await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.getState",
+		type: "query",
+		workspaceId,
+	});
+	const testRunId = Date.now();
+	const task: BoardCard = {
+		id: `e2e-done-${testRunId}`,
+		title: "Move without stale worktree path",
+		startInPlanMode: false,
+		baseRef: "main",
+		createdAt: testRunId,
+		updatedAt: testRunId,
+	};
+	await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.saveState",
+		type: "mutation",
+		workspaceId,
+		payload: {
+			board: placeTask(initialState.board, "review", task),
+			sessions: initialState.sessions,
+			expectedRevision: initialState.revision,
+		},
+	});
+
+	let releaseWorkspaceCleanup: (() => void) | null = null;
+	const workspaceCleanupReleased = new Promise<void>((resolve) => {
+		releaseWorkspaceCleanup = resolve;
+	});
+	await page.route("**/api/trpc/workspace.deleteWorktree**", async (route) => {
+		await workspaceCleanupReleased;
+		await route.continue();
+	});
+
+	await page.goto("/");
+	const reviewCard = page.locator(`[data-task-id="${task.id}"][data-column-id="review"]`);
+	await expect(reviewCard).toContainText(task.title);
+	await reviewCard.focus();
+	await page.keyboard.press("Space");
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.press("Space");
+
+	try {
+		const doneCard = page.locator(`[data-task-id="${task.id}"][data-column-id="trash"]`);
+		await expect(doneCard).toContainText(task.title);
+		await expect(doneCard).not.toContainText(new RegExp(`worktrees/${task.id}/project`));
+	} finally {
+		releaseWorkspaceCleanup?.();
+	}
 });
 
 test("settings button opens runtime settings dialog", async ({ page }) => {
@@ -141,11 +208,7 @@ test("merges a local card move with a concurrent server lifecycle move", async (
 		createdAt: testRunId,
 		updatedAt: testRunId,
 	};
-	const seededBoard = placeTask(
-		placeTask(initialState.board, "review", localTask),
-		"in_progress",
-		lifecycleTask,
-	);
+	const seededBoard = placeTask(placeTask(initialState.board, "review", localTask), "in_progress", lifecycleTask);
 	const seededState = await requestTrpc<RuntimeWorkspaceStateResponse>({
 		request,
 		procedure: "workspace.saveState",

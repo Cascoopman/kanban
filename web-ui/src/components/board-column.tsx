@@ -23,7 +23,6 @@ export function BoardColumn({
 	activeDragTaskId,
 	activeDragSourceColumnId,
 	programmaticCardMoveInFlight,
-	workspacePath,
 	isDragDisabled = false,
 	hideCardActions = false,
 }: {
@@ -40,7 +39,6 @@ export function BoardColumn({
 	activeDragTaskId?: string | null;
 	activeDragSourceColumnId?: BoardColumnId | null;
 	programmaticCardMoveInFlight?: ProgrammaticCardMoveInFlight | null;
-	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideCardActions?: boolean;
 }): React.ReactElement {
@@ -137,7 +135,6 @@ export function BoardColumn({
 											onMoveToTrash={onMoveToTrashTask}
 											onRestoreFromTrash={onRestoreFromTrashTask}
 											isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
-											workspacePath={workspacePath}
 											isDragDisabled={isDragDisabled}
 											hideActions={hideCardActions}
 											onClick={() => onCardClick?.(card)}

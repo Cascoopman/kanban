@@ -29,7 +29,6 @@ function ColumnSection({
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
 	activeDragSourceColumnId,
-	workspacePath,
 	mutableProjectId,
 }: {
 	column: BoardColumn;
@@ -44,7 +43,6 @@ function ColumnSection({
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	activeDragSourceColumnId?: BoardColumnId | null;
-	workspacePath?: string | null;
 	mutableProjectId?: string | null;
 }): React.ReactElement {
 	const [open, setOpen] = useState(defaultOpen);
@@ -163,7 +161,6 @@ function ColumnSection({
 												onMoveToTrash={isCardMutable ? onMoveToTrashTask : undefined}
 												onRestoreFromTrash={isCardMutable ? onRestoreFromTrashTask : undefined}
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
-												workspacePath={card.projectPath ?? workspacePath}
 												isDragDisabled={!isCardMutable}
 												wrapTitle
 												onClick={() => onCardClick(card)}
@@ -188,7 +185,6 @@ function ColumnSection({
 
 export function ColumnContextPanel({
 	selection,
-	workspacePath,
 	onCardSelect,
 	taskSessions,
 	onTaskDragEnd,
@@ -202,7 +198,6 @@ export function ColumnContextPanel({
 	mutableProjectId,
 }: {
 	selection: CardSelection;
-	workspacePath?: string | null;
 	onCardSelect: (taskId: string) => void;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onTaskDragEnd: (result: DropResult) => void;
@@ -299,7 +294,6 @@ export function ColumnContextPanel({
 									: undefined
 							}
 							activeDragSourceColumnId={activeDragSourceColumnId}
-							workspacePath={workspacePath}
 							mutableProjectId={mutableProjectId}
 						/>
 					))}
