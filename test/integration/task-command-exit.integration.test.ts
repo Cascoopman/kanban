@@ -1,8 +1,8 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -161,6 +161,80 @@ function installAgentStub(binDir: string): void {
 	chmodSync(scriptPath, 0o755);
 }
 
+function installRecordingAgentStubs(binDir: string, logPath: string): void {
+	mkdirSync(binDir, { recursive: true });
+	const script = `#!/usr/bin/env node
+const fs = require("node:fs");
+fs.appendFileSync(${JSON.stringify(logPath)}, JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2) }) + "\\n");
+setInterval(() => {}, 1000);
+`;
+	for (const commandName of ["claude", "codex"]) {
+		const scriptPath = join(binDir, commandName);
+		writeFileSync(scriptPath, script, "utf8");
+		chmodSync(scriptPath, 0o755);
+	}
+}
+
+function readAgentLaunches(logPath: string): Array<{ cwd: string; args: string[] }> {
+	if (!existsSync(logPath)) {
+		return [];
+	}
+	return readFileSync(logPath, "utf8")
+		.split("\n")
+		.filter(Boolean)
+		.map((line) => JSON.parse(line) as { cwd: string; args: string[] });
+}
+
+async function waitForAgentLaunchCount(logPath: string, expectedCount: number, timeoutMs = 5_000): Promise<void> {
+	const startedAt = Date.now();
+	while (Date.now() - startedAt < timeoutMs) {
+		if (readAgentLaunches(logPath).length >= expectedCount) {
+			return;
+		}
+		await new Promise<void>((resolveWait) => {
+			setTimeout(resolveWait, 25);
+		});
+	}
+	throw new Error(`Timed out waiting for ${expectedCount} agent launches.`);
+}
+
+function writeAgentSessionFixture(options: {
+	agentId: "claude" | "codex";
+	homeDir: string;
+	cwd: string;
+	sessionId: string;
+}): void {
+	if (options.agentId === "codex") {
+		const sessionsDir = join(options.homeDir, ".codex", "sessions", "2026", "08", "22");
+		mkdirSync(sessionsDir, { recursive: true });
+		writeFileSync(
+			join(sessionsDir, "rollout-2026-08-22T12-00-00-source.jsonl"),
+			`${JSON.stringify({
+				type: "session_meta",
+				payload: { id: options.sessionId, cwd: options.cwd, source: "cli" },
+			})}\n`,
+			"utf8",
+		);
+		return;
+	}
+
+	const projectDir = join(options.homeDir, ".claude", "projects", "source-task");
+	mkdirSync(projectDir, { recursive: true });
+	writeFileSync(
+		join(projectDir, `${options.sessionId}.jsonl`),
+		[
+			JSON.stringify({ type: "last-prompt", sessionId: options.sessionId }),
+			JSON.stringify({
+				type: "user",
+				cwd: options.cwd,
+				sessionId: options.sessionId,
+				isSidechain: false,
+			}),
+		].join("\n"),
+		"utf8",
+	);
+}
+
 function readBrowserOpenLog(logPath: string): string[] {
 	if (!existsSync(logPath)) {
 		return [];
@@ -263,6 +337,159 @@ async function runCliCommandAndCollectOutput(options: {
 }
 
 describe("source task commands", () => {
+	for (const agentId of ["codex", "claude"] as const) {
+		it(
+			`lets a running ${agentId} task branch itself with worktree and conversation context`,
+			{ timeout: 60_000 },
+			async () => {
+				if (process.platform === "win32") {
+					return;
+				}
+
+				const { path: homeDir, cleanup: cleanupHome } = createTempDir(`kanban-home-task-branch-${agentId}-`);
+				const { path: projectPath, cleanup: cleanupProject } = createTempDir(
+					`kanban-project-task-branch-${agentId}-`,
+				);
+
+				try {
+					initGitRepository(projectPath);
+					writeFileSync(join(projectPath, "README.md"), `# ${agentId} branch test\n`, "utf8");
+					commitAll(projectPath, "init");
+
+					const port = String(await getAvailablePort());
+					const agentBinDir = join(homeDir, "agent-bin");
+					const agentLogPath = join(homeDir, "agent-launches.jsonl");
+					installRecordingAgentStubs(agentBinDir, agentLogPath);
+					const env = createGitTestEnv({
+						HOME: homeDir,
+						USERPROFILE: homeDir,
+						KANBAN_RUNTIME_PORT: port,
+						PATH: `${agentBinDir}${delimiter}${process.env.PATH ?? ""}`,
+					});
+
+					const serverProcess = spawn(
+						process.execPath,
+						[
+							"--require",
+							resolveShutdownIpcHookPath(),
+							"--import",
+							resolveTsxLoaderImportSpecifier(),
+							resolve(process.cwd(), "src/cli.ts"),
+							"--no-open",
+						],
+						{
+							cwd: projectPath,
+							env,
+							stdio: ["ignore", "pipe", "pipe", "ipc"],
+						},
+					);
+
+					try {
+						await waitForServerStart(serverProcess);
+						const created = await runCliCommandAndCollectOutput({
+							args: [
+								"task",
+								"create",
+								"--title",
+								`${agentId} source task`,
+								"--agent-id",
+								agentId,
+								"--project-path",
+								projectPath,
+							],
+							cwd: projectPath,
+							env,
+						});
+						expect(created.didExit, created.stderr || created.stdout).toBe(true);
+						expect(created.exitCode, `stdout:\n${created.stdout}\nstderr:\n${created.stderr}`).toBe(0);
+						const createdPayload = JSON.parse(created.stdout) as { task?: { id?: string } };
+						const sourceTaskId = createdPayload.task?.id;
+						if (!sourceTaskId) {
+							throw new Error(`Task creation did not return an id.\n${created.stdout}`);
+						}
+
+						await waitForAgentLaunchCount(agentLogPath, 1);
+						const sourceLaunch = readAgentLaunches(agentLogPath)[0];
+						if (!sourceLaunch) {
+							throw new Error("Source agent launch was not recorded.");
+						}
+						writeFileSync(join(sourceLaunch.cwd, "branch-working-copy.txt"), "copied into branch\n", "utf8");
+						const sourceWorkspacePath = join(homeDir, relative(realpathSync(homeDir), sourceLaunch.cwd));
+						const sourceSessionId = `${agentId}-source-session-id`;
+						writeAgentSessionFixture({
+							agentId,
+							homeDir,
+							cwd: sourceWorkspacePath,
+							sessionId: sourceSessionId,
+						});
+
+						const workspaceIndex = JSON.parse(
+							readFileSync(join(homeDir, ".kanban", "workspaces", "index.json"), "utf8"),
+						) as { entries?: Record<string, { workspaceId?: string }> };
+						const workspaceId = Object.values(workspaceIndex.entries ?? {})[0]?.workspaceId;
+						if (!workspaceId) {
+							throw new Error(`Could not resolve workspace id for ${projectPath}.`);
+						}
+						const taskSessionEnv = createGitTestEnv({
+							...env,
+							KANBAN_TASK_ID: sourceTaskId,
+							KANBAN_WORKSPACE_ID: workspaceId,
+						});
+						const prompt = `Explore the ${agentId} alternative`;
+						const branched = await runCliCommandAndCollectOutput({
+							args: ["task", "branch", "--title", `${agentId} branch task`, "--prompt", prompt],
+							cwd: sourceLaunch.cwd,
+							env: taskSessionEnv,
+						});
+						expect(branched.didExit, branched.stderr || branched.stdout).toBe(true);
+						expect(branched.exitCode).toBe(0);
+						const branchedPayload = JSON.parse(branched.stdout) as {
+							ok?: boolean;
+							task?: { id?: string; workspacePath?: string; branchedFromTaskId?: string };
+						};
+						expect(branchedPayload.ok).toBe(true);
+						expect(branchedPayload.task?.branchedFromTaskId).toBe(sourceTaskId);
+						const targetWorkspacePath = branchedPayload.task?.workspacePath;
+						if (!targetWorkspacePath) {
+							throw new Error(`Task branch did not return its workspace path.\n${branched.stdout}`);
+						}
+
+						await waitForAgentLaunchCount(agentLogPath, 2);
+						const targetLaunch = readAgentLaunches(agentLogPath).at(-1);
+						if (!targetLaunch) {
+							throw new Error("Target agent launch was not recorded.");
+						}
+						expect(realpathSync(targetLaunch.cwd)).toBe(realpathSync(targetWorkspacePath));
+						expect(readFileSync(join(targetWorkspacePath, "branch-working-copy.txt"), "utf8")).toBe(
+							"copied into branch\n",
+						);
+						expect(targetLaunch.args).toContain(prompt);
+						if (agentId === "codex") {
+							expect(targetLaunch.args).toEqual(
+								expect.arrayContaining(["-C", targetWorkspacePath, "fork", sourceSessionId]),
+							);
+						} else {
+							expect(targetLaunch.args).toEqual(
+								expect.arrayContaining(["--resume", sourceSessionId, "--fork-session"]),
+							);
+							expect(targetLaunch.args).not.toContain("--continue");
+						}
+					} finally {
+						await requestGracefulShutdown(serverProcess);
+						const stopped = await waitForExit(serverProcess, 5_000);
+						if (!stopped) {
+							serverProcess.kill("SIGKILL");
+							await waitForExit(serverProcess, 5_000);
+						}
+					}
+				} finally {
+					cleanupProject();
+					cleanupHome();
+				}
+			},
+		);
+	}
+
 	it("exits after creating a task when the runtime server is already running", { timeout: 60_000 }, async () => {
 		const { path: homeDir, cleanup: cleanupHome } = createTempDir("kanban-home-task-exit-");
 		const { path: projectPath, cleanup: cleanupProject } = createTempDir("kanban-project-task-exit-");

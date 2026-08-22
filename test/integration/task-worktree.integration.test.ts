@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -474,6 +475,55 @@ describe.sequential("task-worktree integration", () => {
 				expect(readFileSync(join(branched.path, "branch-only.txt"), "utf8")).toBe("committed on source\n");
 				expect(readFileSync(join(branched.path, "tracked.txt"), "utf8")).toBe("base\nworking change\n");
 				expect(readFileSync(join(branched.path, "untracked.txt"), "utf8")).toBe("untracked\n");
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
+	it("keeps a branch usable when its working-copy transfer exceeds the safe limit", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-large-branch-");
+			try {
+				const repoPath = join(sandboxRoot, "repo");
+				mkdirSync(repoPath, { recursive: true });
+				runGit(repoPath, ["init"]);
+				runGit(repoPath, ["config", "user.name", "Kanban Test"]);
+				runGit(repoPath, ["config", "user.email", "kanban-test@example.com"]);
+				writeFileSync(join(repoPath, "README.md"), "committed\n", "utf8");
+				runGit(repoPath, ["add", "README.md"]);
+				runGit(repoPath, ["commit", "-m", "init"]);
+
+				const source = await ensureTaskWorktreeIfDoesntExist({
+					cwd: repoPath,
+					taskId: "large-source-task",
+					baseRef: "HEAD",
+				});
+				expect(source.ok).toBe(true);
+				if (!source.ok) {
+					throw new Error("Source task worktree was not created");
+				}
+
+				writeFileSync(join(source.path, "00-copied.txt"), "copied before the limit\n", "utf8");
+				writeFileSync(join(source.path, "10-too-large.bin"), randomBytes(7 * 1024 * 1024));
+				writeFileSync(join(source.path, "20-not-copied.txt"), "after the limit\n", "utf8");
+
+				const branched = await branchTaskWorktree({
+					cwd: repoPath,
+					sourceTaskId: "large-source-task",
+					targetTaskId: "large-target-task",
+					baseRef: "HEAD",
+				});
+
+				expect(branched.ok).toBe(true);
+				if (!branched.ok) {
+					throw new Error(branched.error ?? "Target task worktree was not created");
+				}
+				expect(branched.warning).toContain("Only part of the source task's working-copy changes");
+				expect(readFileSync(join(branched.path, "README.md"), "utf8")).toBe("committed\n");
+				expect(readFileSync(join(branched.path, "00-copied.txt"), "utf8")).toBe("copied before the limit\n");
+				expect(existsSync(join(branched.path, "10-too-large.bin"))).toBe(false);
+				expect(existsSync(join(branched.path, "20-not-copied.txt"))).toBe(false);
 			} finally {
 				cleanup();
 			}

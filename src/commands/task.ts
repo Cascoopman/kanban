@@ -227,6 +227,7 @@ function formatTaskRecord(
 		baseRef: task.baseRef,
 		startInPlanMode: task.startInPlanMode,
 		...(task.agentId ? { agentId: task.agentId } : {}),
+		...(task.branchedFromTaskId ? { branchedFromTaskId: task.branchedFromTaskId } : {}),
 		createdAt: task.createdAt,
 		updatedAt: task.updatedAt,
 		session: session
@@ -382,6 +383,86 @@ async function createTask(input: {
 	};
 }
 
+async function branchTaskCommand(input: {
+	cwd: string;
+	taskId: string;
+	title: string;
+	prompt?: string;
+	projectPath?: string;
+}): Promise<JsonRecord> {
+	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
+	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
+	const runtimeClient = createRuntimeTrpcClient(workspaceId);
+	const runtimeState = await runtimeClient.workspace.getState.query();
+	const sourceRecord = findTaskRecord(runtimeState, input.taskId);
+	if (!sourceRecord) {
+		throw new Error(`Task "${input.taskId}" was not found in workspace ${workspaceRepoPath}.`);
+	}
+
+	const targetTaskId = globalThis.crypto.randomUUID();
+	const branchedWorkspace = await runtimeClient.workspace.branchTaskWorkspace.mutate({
+		sourceTaskId: sourceRecord.task.id,
+		targetTaskId,
+		baseRef: sourceRecord.task.baseRef,
+	});
+	if (!branchedWorkspace.ok) {
+		throw new Error(branchedWorkspace.error ?? "Could not branch the task workspace.");
+	}
+
+	let created: RuntimeBoardCard;
+	try {
+		created = await updateRuntimeWorkspaceState(runtimeClient, workspaceRepoPath, (latestState) => {
+			const latestSource = findTaskRecord(latestState, input.taskId);
+			if (!latestSource) {
+				throw new Error(`Task "${input.taskId}" was deleted before the branch could be created.`);
+			}
+			const result = addTaskToColumn(
+				latestState.board,
+				"in_progress",
+				{
+					taskId: targetTaskId,
+					title: input.title,
+					startInPlanMode: latestSource.task.startInPlanMode,
+					agentId: latestSource.task.agentId,
+					branchedFromTaskId: latestSource.task.id,
+					baseRef: latestSource.task.baseRef,
+				},
+				() => targetTaskId,
+			);
+			return {
+				board: result.board,
+				value: result.task,
+			};
+		});
+	} catch (error) {
+		await deleteTaskWorkspace(runtimeClient, targetTaskId);
+		throw error;
+	}
+
+	await startTask({
+		cwd: input.cwd,
+		taskId: created.id,
+		projectPath: input.projectPath,
+		prompt: input.prompt,
+	});
+
+	return {
+		ok: true,
+		sourceTaskId: sourceRecord.task.id,
+		warning: branchedWorkspace.warning,
+		task: {
+			id: created.id,
+			column: "in_progress",
+			workspacePath: branchedWorkspace.path,
+			title: created.title,
+			baseRef: created.baseRef,
+			startInPlanMode: created.startInPlanMode,
+			...(created.agentId ? { agentId: created.agentId } : {}),
+			branchedFromTaskId: sourceRecord.task.id,
+		},
+	};
+}
+
 async function updateTaskCommand(input: {
 	cwd: string;
 	taskId: string;
@@ -436,7 +517,12 @@ async function updateTaskCommand(input: {
 	};
 }
 
-async function startTask(input: { cwd: string; taskId: string; projectPath?: string }): Promise<JsonRecord> {
+async function startTask(input: {
+	cwd: string;
+	taskId: string;
+	projectPath?: string;
+	prompt?: string;
+}): Promise<JsonRecord> {
 	const workspaceRepoPath = await resolveWorkspaceRepoPath(input.projectPath, input.cwd);
 	const workspaceId = await ensureRuntimeWorkspace(workspaceRepoPath);
 	const runtimeClient = createRuntimeTrpcClient(workspaceId);
@@ -470,10 +556,11 @@ async function startTask(input: { cwd: string; taskId: string; projectPath?: str
 
 		const started = await runtimeClient.runtime.startTaskSession.mutate({
 			taskId: task.id,
-			prompt: "",
+			prompt: input.prompt ?? "",
 			startInPlanMode: task.startInPlanMode,
 			baseRef: task.baseRef,
 			agentId: task.agentId,
+			branchedFromTaskId: task.branchedFromTaskId,
 		});
 		if (!started.ok || !started.summary) {
 			throw new Error(started.error ?? "Could not start task session.");
@@ -864,6 +951,27 @@ export function registerTaskCommand(program: Command): void {
 				);
 			},
 		);
+
+	task
+		.command("branch")
+		.alias("fork")
+		.description("Branch a task's worktree and agent conversation into a new running task.")
+		.requiredOption("--title <text>", "New task title.")
+		.option("--task-id <id>", "Source task ID. Defaults to the current agent task.")
+		.option("--prompt <text>", "Optional first prompt for the forked agent session.")
+		.option("--project-path <path>", "Workspace path. Defaults to the current task workspace.")
+		.action(async (options: { title: string; taskId?: string; prompt?: string; projectPath?: string }) => {
+			await runTaskCommand(
+				async () =>
+					await branchTaskCommand({
+						cwd: process.cwd(),
+						taskId: resolveCurrentTaskId(options.taskId, "task branch"),
+						title: options.title,
+						prompt: options.prompt,
+						projectPath: options.projectPath,
+					}),
+			);
+		});
 
 	task
 		.command("update")

@@ -25,6 +25,7 @@ import {
 import { openInBrowser } from "../server/browser";
 import type { VsCodeWebManager } from "../server/vscode-web-manager";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
+import { resolveClaudeSessionIdForCwd } from "../terminal/claude-session-resolver";
 import { resolveCodexSessionIdForCwd } from "../terminal/codex-session-resolver";
 import type { TerminalSessionManager } from "../terminal/session-manager";
 import { loadAgentInstructionsFile, saveAgentInstructionsFile } from "../workspace/agent-instructions";
@@ -135,12 +136,17 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 				//   1. previousTerminalAgentId — persisted in the terminal session summary from
 				//      the last run; ensures trash-restore resumes with the same agent runtime.
 				//   2. body.agentId — the card's current per-task agent override.
-				//   3. scopedRuntimeConfig.selectedAgentId — the workspace-level default.
+				//   3. sourceTerminalAgentId — the source session used for a branched task.
+				//   4. scopedRuntimeConfig.selectedAgentId — the workspace-level default.
 				const terminalManager = await deps.getScopedTerminalManager(workspaceScope);
 				const previousTerminalAgentId = shouldResumeSession
 					? (terminalManager.getSummary(body.taskId)?.agentId ?? null)
 					: null;
-				const effectiveAgentId = previousTerminalAgentId ?? body.agentId ?? scopedRuntimeConfig.selectedAgentId;
+				const sourceTerminalAgentId = body.branchedFromTaskId
+					? (terminalManager.getSummary(body.branchedFromTaskId)?.agentId ?? null)
+					: null;
+				const effectiveAgentId =
+					previousTerminalAgentId ?? body.agentId ?? sourceTerminalAgentId ?? scopedRuntimeConfig.selectedAgentId;
 				const resolvedConfig =
 					effectiveAgentId !== scopedRuntimeConfig.selectedAgentId
 						? { ...scopedRuntimeConfig, selectedAgentId: effectiveAgentId }
@@ -153,19 +159,32 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 						error: "No runnable agent command is configured. Open Settings, install a supported CLI, and select it.",
 					};
 				}
+				let claudeResumeSessionId: string | undefined;
+				let claudeForkSessionId: string | undefined;
 				let codexResumeSessionId: string | undefined;
 				let codexForkSessionId: string | undefined;
-				if (resolved.agentId === "codex" && (shouldResumeSession || body.branchedFromTaskId)) {
-					const existingSessionId = await resolveCodexSessionIdForCwd(taskCwd);
+				if (shouldResumeSession || body.branchedFromTaskId) {
+					const resolveSessionIdForCwd =
+						resolved.agentId === "claude" ? resolveClaudeSessionIdForCwd : resolveCodexSessionIdForCwd;
+					const existingSessionId = await resolveSessionIdForCwd(taskCwd);
+					let resumeSessionId: string | undefined;
+					let forkSessionId: string | undefined;
 					if (existingSessionId) {
-						codexResumeSessionId = existingSessionId;
+						resumeSessionId = existingSessionId;
 					} else if (body.branchedFromTaskId) {
 						const sourceWorkspace = await getTaskWorkspacePathInfo({
 							cwd: workspaceScope.workspacePath,
 							taskId: body.branchedFromTaskId,
 							baseRef: body.baseRef,
 						});
-						codexForkSessionId = (await resolveCodexSessionIdForCwd(sourceWorkspace.path)) ?? undefined;
+						forkSessionId = (await resolveSessionIdForCwd(sourceWorkspace.path)) ?? undefined;
+					}
+					if (resolved.agentId === "claude") {
+						claudeResumeSessionId = resumeSessionId;
+						claudeForkSessionId = forkSessionId;
+					} else {
+						codexResumeSessionId = resumeSessionId;
+						codexForkSessionId = forkSessionId;
 					}
 				}
 				const summary = await terminalManager.startTaskSession({
@@ -180,6 +199,8 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 					startInPlanMode: body.startInPlanMode,
 					resumeFromTrash: body.resumeFromTrash,
 					resumeExistingSession: body.resumeExistingSession,
+					claudeResumeSessionId,
+					claudeForkSessionId,
 					codexResumeSessionId,
 					codexForkSessionId,
 					cols: body.cols,

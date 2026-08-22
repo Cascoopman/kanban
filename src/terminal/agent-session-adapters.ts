@@ -28,6 +28,8 @@ export interface AgentAdapterLaunchInput {
 	startInPlanMode?: boolean;
 	resumeFromTrash?: boolean;
 	resumeExistingSession?: boolean;
+	claudeResumeSessionId?: string;
+	claudeForkSessionId?: string;
 	codexResumeSessionId?: string;
 	codexForkSessionId?: string;
 	env?: Record<string, string | undefined>;
@@ -137,6 +139,19 @@ function removeCliOptionWithValue(args: string[], optionNames: readonly string[]
 	}
 }
 
+function removeCliFlags(args: string[], optionNames: readonly string[]): void {
+	for (let index = args.length - 1; index >= 0; index -= 1) {
+		if (optionNames.includes(args[index])) {
+			args.splice(index, 1);
+		}
+	}
+}
+
+function removeClaudeSessionOptions(args: string[]): void {
+	removeCliOptionWithValue(args, ["--resume", "-r"]);
+	removeCliFlags(args, ["--continue", "-c", "--fork-session"]);
+}
+
 function getHookAgentDirectory(agentId: RuntimeAgentId): string {
 	return join(getRuntimeHomePath(), "hooks", agentId);
 }
@@ -177,7 +192,13 @@ const claudeAdapter: AgentSessionAdapter = {
 		) {
 			args.push("--dangerously-skip-permissions");
 		}
-		if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
+		if (input.claudeForkSessionId) {
+			removeClaudeSessionOptions(args);
+			args.push("--resume", input.claudeForkSessionId, "--fork-session");
+		} else if (input.claudeResumeSessionId) {
+			removeClaudeSessionOptions(args);
+			args.push("--resume", input.claudeResumeSessionId);
+		} else if (shouldResumeAgentSession(input) && !hasCliOption(args, "--continue")) {
 			args.push("--continue");
 		}
 		if (input.startInPlanMode) {

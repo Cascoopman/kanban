@@ -126,6 +126,9 @@ Rename the current agent task:
 Create a task manually:
 .B kanban task create --title "Implement API pagination"
 .TP
+Branch the current agent task, including its worktree and conversation:
+.B kanban task branch --title "Explore alternate implementation" --prompt "Try the streaming approach"
+.TP
 Ingest a hook event:
 .B kanban hooks ingest --event to_review
 .SH EXIT STATUS
