@@ -26,12 +26,8 @@ function ColumnSection({
 	onBranchTask,
 	onClearTrash,
 	onSaveTitle,
-	onCommitTask,
-	onOpenPrTask,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
-	commitTaskLoadingById,
-	openPrTaskLoadingById,
 	moveToTrashLoadingById,
 	activeDragSourceColumnId,
 	workspacePath,
@@ -45,12 +41,8 @@ function ColumnSection({
 	onBranchTask?: (task: BoardCardModel) => void;
 	onClearTrash?: () => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
-	onCommitTask?: (taskId: string) => void;
-	onOpenPrTask?: (taskId: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
-	commitTaskLoadingById?: Record<string, boolean>;
-	openPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	activeDragSourceColumnId?: BoardColumnId | null;
 	workspacePath?: string | null;
@@ -168,10 +160,6 @@ function ColumnSection({
 												onBranch={onBranchTask}
 												onMoveToTrash={onMoveToTrashTask}
 												onRestoreFromTrash={onRestoreFromTrashTask}
-												onCommit={onCommitTask}
-												onOpenPr={onOpenPrTask}
-												isCommitLoading={commitTaskLoadingById?.[card.id] ?? false}
-												isOpenPrLoading={openPrTaskLoadingById?.[card.id] ?? false}
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 												workspacePath={workspacePath}
 												onSaveTitle={onSaveTitle}
@@ -205,12 +193,8 @@ export function ColumnContextPanel({
 	onBranchTask,
 	onClearTrash,
 	onSaveTaskTitle,
-	onCommitTask,
-	onOpenPrTask,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
-	commitTaskLoadingById,
-	openPrTaskLoadingById,
 	moveToTrashLoadingById,
 	panelWidth,
 }: {
@@ -223,12 +207,8 @@ export function ColumnContextPanel({
 	onBranchTask?: (task: BoardCardModel) => void;
 	onClearTrash?: () => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
-	onCommitTask?: (taskId: string) => void;
-	onOpenPrTask?: (taskId: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
-	commitTaskLoadingById?: Record<string, boolean>;
-	openPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	panelWidth?: string;
 }): React.ReactElement {
@@ -286,7 +266,7 @@ export function ColumnContextPanel({
 			<DragDropContext onBeforeCapture={handleBeforeCapture} onDragEnd={handleDragEnd}>
 				<div
 					ref={scrollContainerRef}
-					className="flex flex-col gap-2 p-2"
+					className="flex flex-col gap-2 p-2 pt-12"
 					style={{
 						flex: "1 1 0",
 						minHeight: 0,
@@ -307,12 +287,8 @@ export function ColumnContextPanel({
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
-							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
-							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
 							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
 							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
-							commitTaskLoadingById={isReviewLikeColumnId(column.id) ? commitTaskLoadingById : undefined}
-							openPrTaskLoadingById={isReviewLikeColumnId(column.id) ? openPrTaskLoadingById : undefined}
 							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							workspacePath={workspacePath}

@@ -43,9 +43,9 @@ export const TASK_START_ONBOARDING_SLIDES: OnboardingSlide[] = [
 		kind: "media",
 		title: "Review changes with comments",
 		description:
-			"Your workflow will feel like writing tickets, reviewing code, and shipping. Watch the agent work next to real-time diffs, then click lines to leave comments like you're reviewing a PR.",
+			"Your workflow will feel like writing tickets, reviewing code, and shipping. Watch the agent work beside its VS Code workspace, then use quick prompts for the follow-up actions you repeat most.",
 		assetVideoUrl: "https://github.com/user-attachments/assets/17992035-c1ca-449a-a48b-bb094007f0a1",
-		assetAlt: "Leaving comments on code diffs in Kanban",
+		assetAlt: "Reviewing agent changes in VS Code beside Kanban",
 		assetWidthPx: 1616,
 		assetHeightPx: 1080,
 	},

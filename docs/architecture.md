@@ -57,7 +57,7 @@ The browser is a control surface. The local runtime owns projects, worktrees, PT
 
 ## Frontend Responsibilities
 
-`web-ui/src/App.tsx` is the composition root. Domain orchestration belongs primarily in hooks, while components render board, settings, terminal, diff, and navigation state. Runtime requests should go through helpers in `web-ui/src/runtime/` rather than creating TRPC clients throughout the component tree.
+`web-ui/src/App.tsx` is the composition root. Domain orchestration belongs primarily in hooks, while components render board, settings, terminal, editor, and navigation state. Runtime requests should go through helpers in `web-ui/src/runtime/` rather than creating TRPC clients throughout the component tree.
 
 Task details and the home sidebar both render terminal-backed agent sessions. Switching projects or agents rotates the synthetic home session; switching sidebar tabs does not.
 
@@ -69,7 +69,7 @@ Task details and the home sidebar both render terminal-backed agent sessions. Sw
 4. The agent adapter prepares arguments, hooks, environment variables, resume metadata, and the prompt.
 5. The session manager starts the process in a PTY and emits output and summary changes.
 6. The runtime state hub broadcasts updates to the browser.
-7. The board, terminal panel, and diff view update from streamed runtime state.
+7. The board, terminal panel, and inline editor update from streamed runtime state.
 
 ## Configuration and Compatibility
 

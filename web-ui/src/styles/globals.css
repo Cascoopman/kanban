@@ -367,28 +367,10 @@ body,
 	justify-content: center;
 }
 
-/* -- Navbar blended buttons -- */
-
-.kb-navbar-btn {
-	background-color: var(--color-surface-1) !important;
-}
-
-.kb-navbar-btn:hover {
-	background-color: var(--color-surface-2) !important;
-}
-
-.kb-navbar-btn:active {
-	background-color: var(--color-surface-3) !important;
-}
-
 /* -- Shared UI patterns -- */
 
 .kb-status-banner {
 	padding: 8px 12px;
-}
-
-.kb-navbar-tag {
-	margin-left: 8px;
 }
 
 /* -- Project navigation rows -- */
@@ -1100,30 +1082,5 @@ body,
 
 	.kb-dialog-content button:not([role='checkbox']):not([role='switch']) {
 		min-height: 44px;
-	}
-}
-
-/* -- PWA Window Controls Overlay --
-   When installed as a PWA with display_override: window-controls-overlay,
-   the title bar disappears and web content extends to the top of the window.
-   The traffic light buttons (macOS) are overlaid, so the navbar needs left
-   padding to avoid them, and drag regions so the window can be repositioned. */
-
-@media (display-mode: window-controls-overlay) {
-	.kb-top-bar {
-		padding-left: env(titlebar-area-x, 12px) !important;
-		-webkit-app-region: drag;
-		app-region: drag;
-	}
-
-	.kb-top-bar button,
-	.kb-top-bar a,
-	.kb-top-bar input,
-	.kb-top-bar select,
-	.kb-top-bar [role="button"],
-	.kb-top-bar [role="menu"],
-	.kb-top-bar [data-radix-collection-item] {
-		-webkit-app-region: no-drag;
-		app-region: no-drag;
 	}
 }

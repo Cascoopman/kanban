@@ -1,7 +1,7 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
 import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
-import { AlertCircle, AlertTriangle, Bot, Copy, GitBranch, Layers3, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bot, Copy, Layers3, Pencil, RotateCcw, Trash2 } from "lucide-react";
 import type { KeyboardEvent, MouseEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -200,10 +200,6 @@ export function BoardCard({
 	onMoveToTrash,
 	onRestoreFromTrash,
 	onSaveTitle,
-	onCommit,
-	onOpenPr,
-	isCommitLoading = false,
-	isOpenPrLoading = false,
 	isMoveToTrashLoading = false,
 	workspacePath,
 	isDragDisabled = false,
@@ -219,10 +215,6 @@ export function BoardCard({
 	onMoveToTrash?: (taskId: string) => void;
 	onRestoreFromTrash?: (taskId: string) => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
-	onCommit?: (taskId: string) => void;
-	onOpenPr?: (taskId: string) => void;
-	isCommitLoading?: boolean;
-	isOpenPrLoading?: boolean;
 	isMoveToTrashLoading?: boolean;
 	workspacePath?: string | null;
 	isDragDisabled?: boolean;
@@ -326,18 +318,6 @@ export function BoardCard({
 		: isTrashCard
 			? reconstructTaskWorktreeDisplayPath(card.id, workspacePath)
 			: null;
-	const reviewRefLabel = reviewWorkspaceSnapshot?.branch ?? reviewWorkspaceSnapshot?.headCommit?.slice(0, 8) ?? "HEAD";
-	const reviewChangeSummary = reviewWorkspaceSnapshot
-		? reviewWorkspaceSnapshot.changedFiles == null
-			? null
-			: {
-					filesLabel: `${reviewWorkspaceSnapshot.changedFiles} ${reviewWorkspaceSnapshot.changedFiles === 1 ? "file" : "files"}`,
-					additions: reviewWorkspaceSnapshot.additions ?? 0,
-					deletions: reviewWorkspaceSnapshot.deletions ?? 0,
-				}
-		: null;
-	const showReviewGitActions = isReviewLikeColumnId(columnId) && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
-	const isAnyGitActionLoading = isCommitLoading || isOpenPrLoading;
 	const agentOverrideLabel = useMemo(
 		() => (card.agentId ? (getRuntimeAgentCatalogEntry(card.agentId)?.label ?? card.agentId) : null),
 		[card.agentId],
@@ -562,64 +542,9 @@ export function BoardCard({
 											{reviewWorkspacePath}
 										</span>
 									) : reviewWorkspaceSnapshot ? (
-										<>
-											<span style={{ color: SESSION_ACTIVITY_COLOR.secondary }}>{reviewWorkspacePath}</span>
-											<GitBranch
-												size={10}
-												style={{
-													display: "inline",
-													color: SESSION_ACTIVITY_COLOR.secondary,
-													margin: "0px 4px 2px",
-													verticalAlign: "middle",
-												}}
-											/>
-											<span style={{ color: SESSION_ACTIVITY_COLOR.secondary }}>{reviewRefLabel}</span>
-											{reviewChangeSummary ? (
-												<>
-													<span style={{ color: SESSION_ACTIVITY_COLOR.muted }}> (</span>
-													<span style={{ color: SESSION_ACTIVITY_COLOR.muted }}>
-														{reviewChangeSummary.filesLabel}
-													</span>
-													<span className="text-status-green"> +{reviewChangeSummary.additions}</span>
-													<span className="text-status-red"> -{reviewChangeSummary.deletions}</span>
-													<span style={{ color: SESSION_ACTIVITY_COLOR.muted }}>)</span>
-												</>
-											) : null}
-										</>
+										<span style={{ color: SESSION_ACTIVITY_COLOR.secondary }}>{reviewWorkspacePath}</span>
 									) : null}
 								</p>
-							) : null}
-							{showReviewGitActions ? (
-								<div className="flex gap-1.5 mt-1.5">
-									<Button
-										variant="primary"
-										size="sm"
-										icon={isCommitLoading ? <Spinner size={12} /> : undefined}
-										disabled={isAnyGitActionLoading}
-										style={{ flex: "1 1 0" }}
-										onMouseDown={stopEvent}
-										onClick={(event) => {
-											stopEvent(event);
-											onCommit?.(card.id);
-										}}
-									>
-										Commit
-									</Button>
-									<Button
-										variant="primary"
-										size="sm"
-										icon={isOpenPrLoading ? <Spinner size={12} /> : undefined}
-										disabled={isAnyGitActionLoading}
-										style={{ flex: "1 1 0" }}
-										onMouseDown={stopEvent}
-										onClick={(event) => {
-											stopEvent(event);
-											onOpenPr?.(card.id);
-										}}
-									>
-										Open PR
-									</Button>
-								</div>
 							) : null}
 						</div>
 					</div>

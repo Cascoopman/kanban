@@ -170,6 +170,32 @@ describe("BoardCard", () => {
 		expect(container.textContent).toContain("~/.kanban/worktrees/trash-task-1/kanban");
 	});
 
+	it("shows only the worktree path from review workspace metadata", async () => {
+		mockWorkspaceSnapshot = {
+			taskId: "task-1",
+			path: "/tmp/worktrees/task-1/kanban",
+			branch: "feature/remove-old-chrome",
+			isDetached: false,
+			headCommit: "abc12345",
+			changedFiles: 17,
+			additions: 321,
+			deletions: 45,
+		};
+
+		await act(async () => {
+			root.render(<BoardCard card={createCard()} index={0} columnId="review" />);
+		});
+
+		expect(container.textContent).toContain("/tmp/worktrees/task-1/kanban");
+		expect(container.textContent).not.toContain("feature/remove-old-chrome");
+		expect(container.textContent).not.toContain("abc12345");
+		expect(container.textContent).not.toContain("17 files");
+		expect(container.textContent).not.toContain("+321");
+		expect(container.textContent).not.toContain("-45");
+		expect(container.textContent).not.toContain("Commit");
+		expect(container.textContent).not.toContain("Open PR");
+	});
+
 	it("shows tool input details in the session preview text", async () => {
 		await act(async () => {
 			root.render(

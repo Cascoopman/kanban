@@ -2,7 +2,7 @@
 // Keep this file focused on wiring top-level hooks and surfaces together, and
 // push runtime-specific orchestration down into hooks and service modules.
 import type { DropResult } from "@hello-pangea/dnd";
-import { FolderOpen } from "lucide-react";
+import { ArrowLeft, FolderOpen, Settings } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,36 +10,22 @@ import { AddProjectDialog } from "@/components/add-project-dialog";
 import { notifyError, showAppToast } from "@/components/app-toaster";
 import { CardDetailView } from "@/components/card-detail-view";
 import { ClearTrashDialog } from "@/components/clear-trash-dialog";
-import { DebugDialog } from "@/components/debug-dialog";
 import { AgentTerminalPanel } from "@/components/detail-panels/agent-terminal-panel";
-import { GitHistoryView } from "@/components/git-history-view";
 import { KanbanBoard } from "@/components/kanban-board";
 import { ProjectBoardToolbar } from "@/components/project-board-toolbar";
 import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components/runtime-settings-dialog";
 import { StartupOnboardingDialog } from "@/components/startup-onboarding-dialog";
 import { TaskBranchDialog } from "@/components/task-branch-dialog";
 import { TaskCreateDialog } from "@/components/task-create-dialog";
-import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogBody,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import { createInitialBoardData } from "@/data/board-data";
 import { createIdleTaskSession } from "@/hooks/app-utils";
 import { RuntimeDisconnectedFallback } from "@/hooks/runtime-disconnected-fallback";
 import { useAppHotkeys } from "@/hooks/use-app-hotkeys";
 import { useBoardInteractions } from "@/hooks/use-board-interactions";
-import { useDebugTools } from "@/hooks/use-debug-tools";
 import { useDetailTaskNavigation } from "@/hooks/use-detail-task-navigation";
 import { useDocumentVisibility } from "@/hooks/use-document-visibility";
-import { useGitActions } from "@/hooks/use-git-actions";
-import { useOpenWorkspace } from "@/hooks/use-open-workspace";
 import {
 	buildUnifiedProjectBoard,
 	createProjectBoardMove,
@@ -52,7 +38,6 @@ import { useProjectUiState } from "@/hooks/use-project-ui-state";
 import { useQuickPromptActions } from "@/hooks/use-quick-prompt-actions";
 import { useResumeInterruptedTaskSessions } from "@/hooks/use-resume-interrupted-task-sessions";
 import { useReviewReadyNotifications } from "@/hooks/use-review-ready-notifications";
-import { useShortcutActions } from "@/hooks/use-shortcut-actions";
 import { useStartupOnboarding } from "@/hooks/use-startup-onboarding";
 import { useTaskBranchOptions } from "@/hooks/use-task-branch-options";
 import { useTaskBranching } from "@/hooks/use-task-branching";
@@ -63,7 +48,6 @@ import { useTerminalPanels } from "@/hooks/use-terminal-panels";
 import { useWorkspaceSync } from "@/hooks/use-workspace-sync";
 import { LayoutCustomizationsProvider } from "@/resize/layout-customizations";
 import { ResizableBottomPane } from "@/resize/resizable-bottom-pane";
-import { getTaskAgentNavbarHint } from "@/runtime/supported-agents";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useRuntimeProjectConfig } from "@/runtime/use-runtime-project-config";
 import { useTerminalConnectionReady } from "@/runtime/use-terminal-connection-ready";
@@ -90,13 +74,11 @@ export default function App(): ReactElement {
 	const [pendingCreateProjectId, setPendingCreateProjectId] = useState<string | null>(null);
 	const [pendingUnifiedBoardMove, setPendingUnifiedBoardMove] = useState<ProjectBoardMove | null>(null);
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
-	const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
 	const taskEditorResetRef = useRef<() => void>(() => {});
 	const lastStreamErrorRef = useRef<string | null>(null);
 	const knownProjectIdsRef = useRef<Set<string>>(new Set());
 	const handleProjectSwitchStart = useCallback(() => {
 		setCanPersistWorkspaceState(false);
-		setIsGitHistoryOpen(false);
 		taskEditorResetRef.current();
 	}, []);
 	const {
@@ -139,7 +121,6 @@ export default function App(): ReactElement {
 		useRuntimeProjectConfig(settingsWorkspaceId);
 	const {
 		isStartupOnboardingDialogOpen,
-		handleOpenStartupOnboardingDialog,
 		handleCloseStartupOnboardingDialog,
 		handleSelectOnboardingAgent,
 	} = useStartupOnboarding({
@@ -149,36 +130,9 @@ export default function App(): ReactElement {
 		refreshRuntimeProjectConfig,
 		refreshSettingsRuntimeProjectConfig,
 	});
-	const {
-		debugModeEnabled,
-		isDebugDialogOpen,
-		isResetAllStatePending,
-		handleOpenDebugDialog,
-		handleShowStartupOnboardingDialog,
-		handleDebugDialogOpenChange,
-		handleResetAllState,
-	} = useDebugTools({
-		runtimeProjectConfig,
-		settingsRuntimeProjectConfig,
-		onOpenStartupOnboardingDialog: handleOpenStartupOnboardingDialog,
-	});
-	const {
-		markConnectionReady: markTerminalConnectionReady,
-		prepareWaitForConnection: prepareWaitForTerminalConnectionReady,
-	} = useTerminalConnectionReady();
+	const { markConnectionReady: markTerminalConnectionReady } = useTerminalConnectionReady();
 	const readyForReviewNotificationsEnabled = runtimeProjectConfig?.readyForReviewNotificationsEnabled ?? true;
-	const shortcuts = runtimeProjectConfig?.shortcuts ?? [];
 	const quickPrompts = runtimeProjectConfig?.quickPrompts ?? [];
-	const selectedShortcutLabel = useMemo(() => {
-		if (shortcuts.length === 0) {
-			return null;
-		}
-		const configured = runtimeProjectConfig?.selectedShortcutLabel ?? null;
-		if (configured && shortcuts.some((shortcut) => shortcut.label === configured)) {
-			return configured;
-		}
-		return shortcuts[0]?.label ?? null;
-	}, [runtimeProjectConfig?.selectedShortcutLabel, shortcuts]);
 	const {
 		upsertSession,
 		ensureTaskWorkspace,
@@ -228,9 +182,6 @@ export default function App(): ReactElement {
 			isProjectSwitching,
 			isWorkspaceMetadataPending,
 			onSelectProject: handleSelectProject,
-			onDetailClosed: () => {
-				setIsGitHistoryOpen(false);
-			},
 		});
 
 	useEffect(() => {
@@ -244,21 +195,20 @@ export default function App(): ReactElement {
 		resetWorkspaceMetadataStore();
 	}, [isProjectSwitching]);
 
-	const { displayedProjects, navigationProjectPath, shouldShowProjectLoadingState, shouldUseNavigationPath } =
-		useProjectUiState({
-			board,
-			canPersistWorkspaceState,
-			currentProjectId,
-			projects,
-			navigationCurrentProjectId,
-			selectedTaskId,
-			streamError,
-			isProjectSwitching,
-			isInitialRuntimeLoad,
-			isAwaitingWorkspaceSnapshot,
-			isWorkspaceMetadataPending,
-			hasReceivedSnapshot,
-		});
+	const { displayedProjects, navigationProjectPath } = useProjectUiState({
+		board,
+		canPersistWorkspaceState,
+		currentProjectId,
+		projects,
+		navigationCurrentProjectId,
+		selectedTaskId,
+		streamError,
+		isProjectSwitching,
+		isInitialRuntimeLoad,
+		isAwaitingWorkspaceSnapshot,
+		isWorkspaceMetadataPending,
+		hasReceivedSnapshot,
+	});
 	const projectBoards = useProjectBoards({
 		projects: displayedProjects,
 		projectBoards: streamedProjectBoards,
@@ -382,31 +332,6 @@ export default function App(): ReactElement {
 		resetTaskEditorState();
 	}, [isProjectSwitching, resetTaskEditorState]);
 
-	const {
-		runningGitAction,
-		commitTaskLoadingById,
-		openPrTaskLoadingById,
-		agentCommitTaskLoadingById,
-		agentOpenPrTaskLoadingById,
-		gitActionError,
-		gitActionErrorTitle,
-		clearGitActionError,
-		gitHistory,
-		handleCommitTask,
-		handleOpenPrTask,
-		handleAgentCommitTask,
-		handleAgentOpenPrTask,
-		resetGitActionState,
-	} = useGitActions({
-		currentProjectId,
-		board,
-		selectedCard,
-		runtimeProjectConfig,
-		sendTaskSessionInput,
-		fetchTaskWorkspaceInfo,
-		isGitHistoryOpen,
-		refreshWorkspaceState,
-	});
 	const agentCommand = runtimeProjectConfig?.effectiveCommand ?? null;
 	const {
 		homeTerminalTaskId,
@@ -426,7 +351,6 @@ export default function App(): ReactElement {
 		handleToggleDetailTerminal,
 		handleSendAgentCommandToHomeTerminal,
 		handleSendAgentCommandToDetailTerminal,
-		prepareTerminalForShortcut,
 		resetBottomTerminalLayoutCustomizations,
 		collapseHomeTerminal,
 		collapseDetailTerminal,
@@ -442,16 +366,6 @@ export default function App(): ReactElement {
 		sendTaskSessionInput,
 	});
 	const homeTerminalSummary = sessions[homeTerminalTaskId] ?? null;
-	const { runningShortcutLabel, handleSelectShortcutLabel, handleRunShortcut, handleCreateShortcut } =
-		useShortcutActions({
-			currentProjectId,
-			selectedShortcutLabel: runtimeProjectConfig?.selectedShortcutLabel,
-			shortcuts,
-			refreshRuntimeProjectConfig,
-			prepareTerminalForShortcut,
-			prepareWaitForTerminalConnectionReady,
-			sendTaskSessionInput,
-		});
 
 	const persistWorkspaceStateAsync = useCallback(
 		async (input: { workspaceId: string; payload: Parameters<typeof saveWorkspaceState>[1] }) =>
@@ -519,16 +433,9 @@ export default function App(): ReactElement {
 	useEffect(() => {
 		resetTaskEditorState();
 		setIsClearTrashDialogOpen(false);
-		resetGitActionState();
 		resetProjectNavigationState();
 		resetTerminalPanelsState();
-	}, [
-		currentProjectId,
-		resetGitActionState,
-		resetProjectNavigationState,
-		resetTaskEditorState,
-		resetTerminalPanelsState,
-	]);
+	}, [currentProjectId, resetProjectNavigationState, resetTaskEditorState, resetTerminalPanelsState]);
 
 	useEffect(() => {
 		if (selectedCard) {
@@ -551,16 +458,6 @@ export default function App(): ReactElement {
 		setSettingsInitialSection(section ?? null);
 		setIsSettingsOpen(true);
 	}, []);
-	const handleToggleGitHistory = useCallback(() => {
-		if (hasNoProjects) {
-			return;
-		}
-		setIsGitHistoryOpen((current) => !current);
-	}, [hasNoProjects]);
-	const handleCloseGitHistory = useCallback(() => {
-		setIsGitHistoryOpen(false);
-	}, []);
-
 	const {
 		handleDragEnd,
 		handleStartTask,
@@ -582,7 +479,6 @@ export default function App(): ReactElement {
 		currentProjectId,
 		setSelectedTaskId,
 		setIsClearTrashDialogOpen,
-		setIsGitHistoryOpen,
 		stopTaskSession,
 		cleanupTaskWorkspace,
 		ensureTaskWorkspace,
@@ -679,7 +575,6 @@ export default function App(): ReactElement {
 		selectedCard,
 		isDetailTerminalOpen,
 		isHomeTerminalOpen: showHomeBottomTerminal,
-		isHomeGitHistoryOpen: !selectedCard && isGitHistoryOpen,
 		canUseCreateTaskShortcut: !hasNoProjects && currentProjectId !== null,
 		handleToggleDetailTerminal,
 		handleToggleHomeTerminal,
@@ -687,8 +582,6 @@ export default function App(): ReactElement {
 		handleToggleExpandHomeTerminal: handleToggleExpandHomeTerminal,
 		handleOpenCreateTask,
 		handleOpenSettings,
-		handleToggleGitHistory,
-		handleCloseGitHistory,
 	});
 
 	const detailSession = selectedCard
@@ -706,52 +599,6 @@ export default function App(): ReactElement {
 		);
 	}, [selectedCard]);
 
-	const runtimeHint = useMemo(() => {
-		return getTaskAgentNavbarHint(runtimeProjectConfig, {
-			shouldUseNavigationPath,
-		});
-	}, [runtimeProjectConfig, shouldUseNavigationPath]);
-
-	const activeWorkspacePath = selectedCard
-		? (getTaskWorkspaceInfo(selectedCard.card.id, selectedCard.card.baseRef)?.path ??
-			getTaskWorkspaceSnapshot(selectedCard.card.id)?.path ??
-			workspacePath ??
-			undefined)
-		: shouldUseNavigationPath
-			? (navigationProjectPath ?? undefined)
-			: (workspacePath ?? undefined);
-
-	const activeWorkspaceHint = useMemo(() => {
-		if (!selectedCard) {
-			return undefined;
-		}
-		const activeSelectedTaskWorkspaceInfo = getTaskWorkspaceInfo(selectedCard.card.id, selectedCard.card.baseRef);
-		if (!activeSelectedTaskWorkspaceInfo) {
-			return undefined;
-		}
-		if (!activeSelectedTaskWorkspaceInfo.exists) {
-			return selectedCard.column.id === "trash" ? "Task worktree deleted" : "Task worktree not created yet";
-		}
-		return undefined;
-	}, [selectedCard]);
-
-	const navbarWorkspacePath = selectedCard ? activeWorkspacePath : undefined;
-	const navbarWorkspaceHint = selectedCard ? activeWorkspaceHint : undefined;
-	const navbarRuntimeHint = selectedCard ? runtimeHint : undefined;
-	const shouldHideProjectDependentTopBarActions =
-		!selectedCard || isProjectSwitching || isAwaitingWorkspaceSnapshot || isWorkspaceMetadataPending;
-
-	const {
-		openTargetOptions,
-		selectedOpenTargetId,
-		onSelectOpenTarget,
-		onOpenWorkspace,
-		canOpenWorkspace,
-		isOpeningWorkspace,
-	} = useOpenWorkspace({
-		currentProjectId,
-		workspacePath: activeWorkspacePath,
-	});
 	const handleCreateDialogOpenChange = useCallback(
 		(open: boolean) => {
 			if (!open) {
@@ -768,38 +615,6 @@ export default function App(): ReactElement {
 		<LayoutCustomizationsProvider onResetBottomTerminalLayoutCustomizations={resetBottomTerminalLayoutCustomizations}>
 			<div className="flex h-[100svh] min-w-0 overflow-hidden">
 				<div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-					<TopBar
-						onBack={selectedCard ? handleBack : undefined}
-						workspacePath={navbarWorkspacePath}
-						isWorkspacePathLoading={selectedCard ? shouldShowProjectLoadingState : false}
-						workspaceHint={navbarWorkspaceHint}
-						runtimeHint={navbarRuntimeHint}
-						selectedTaskId={selectedCard?.card.id ?? null}
-						selectedTaskBaseRef={selectedCard?.card.baseRef ?? null}
-						showHomeGitSummary={false}
-						runningGitAction={selectedCard ? runningGitAction : null}
-						onToggleTerminal={selectedCard ? handleToggleDetailTerminal : undefined}
-						isTerminalOpen={selectedCard ? isDetailTerminalOpen : false}
-						isTerminalLoading={selectedCard ? isDetailTerminalStarting : false}
-						onOpenSettings={handleOpenSettings}
-						showDebugButton={debugModeEnabled}
-						onOpenDebugDialog={debugModeEnabled ? handleOpenDebugDialog : undefined}
-						shortcuts={shortcuts}
-						selectedShortcutLabel={selectedShortcutLabel}
-						onSelectShortcutLabel={handleSelectShortcutLabel}
-						runningShortcutLabel={runningShortcutLabel}
-						onRunShortcut={handleRunShortcut}
-						onCreateFirstShortcut={currentProjectId ? handleCreateShortcut : undefined}
-						openTargetOptions={openTargetOptions}
-						selectedOpenTargetId={selectedOpenTargetId}
-						onSelectOpenTarget={onSelectOpenTarget}
-						onOpenWorkspace={onOpenWorkspace}
-						canOpenWorkspace={canOpenWorkspace}
-						isOpeningWorkspace={isOpeningWorkspace}
-						onToggleGitHistory={selectedCard ? handleToggleGitHistory : undefined}
-						isGitHistoryOpen={isGitHistoryOpen}
-						hideProjectDependentActions={shouldHideProjectDependentTopBarActions}
-					/>
 					<div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
 						<div
 							className="kb-home-layout"
@@ -818,14 +633,23 @@ export default function App(): ReactElement {
 										<p className="text-[13px] text-text-secondary">
 											Add a git repository to start using Kanban.
 										</p>
-										<Button
-											variant="primary"
-											onClick={() => {
-												void handleAddProject();
-											}}
-										>
-											Add Project
-										</Button>
+										<div className="flex gap-2">
+											<Button
+												variant="primary"
+												onClick={() => {
+													void handleAddProject();
+												}}
+											>
+												Add Project
+											</Button>
+											<Button
+												variant="default"
+												icon={<Settings size={14} />}
+												onClick={() => handleOpenSettings()}
+											>
+												Settings
+											</Button>
+										</div>
 									</div>
 								</div>
 							) : (
@@ -839,6 +663,7 @@ export default function App(): ReactElement {
 										}}
 										onRemoveProject={handleRemoveProject}
 										onCreateTask={handleCreateTaskForProject}
+										onOpenSettings={() => handleOpenSettings()}
 										removingProjectId={removingProjectId}
 									/>
 									<div className="flex flex-1 min-h-0 min-w-0">
@@ -895,6 +720,14 @@ export default function App(): ReactElement {
 						</div>
 						{selectedCard && detailSession ? (
 							<div className="absolute inset-0 flex min-h-0 min-w-0">
+								<Button
+									variant="default"
+									size="sm"
+									icon={<ArrowLeft size={16} />}
+									onClick={handleBack}
+									aria-label="Back to board"
+									className="absolute top-1 left-1 z-30 h-7 w-7 p-0 shadow-lg"
+								/>
 								<CardDetailView
 									selection={selectedCard}
 									currentProjectId={currentProjectId}
@@ -908,14 +741,6 @@ export default function App(): ReactElement {
 									onBranchTask={taskBranching.handleOpenBranchTask}
 									onClearTrash={handleOpenClearTrash}
 									onSaveTaskTitle={handleSaveTaskTitle}
-									onCommitTask={handleCommitTask}
-									onOpenPrTask={handleOpenPrTask}
-									onAgentCommitTask={handleAgentCommitTask}
-									onAgentOpenPrTask={handleAgentOpenPrTask}
-									commitTaskLoadingById={commitTaskLoadingById}
-									openPrTaskLoadingById={openPrTaskLoadingById}
-									agentCommitTaskLoadingById={agentCommitTaskLoadingById}
-									agentOpenPrTaskLoadingById={agentOpenPrTaskLoadingById}
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
@@ -924,13 +749,9 @@ export default function App(): ReactElement {
 									onEditQuickPrompts={() => handleOpenSettings("quick-prompts")}
 									onMoveToTrash={handleMoveToTrash}
 									isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
-									gitHistoryPanel={
-										isGitHistoryOpen ? (
-											<GitHistoryView workspaceId={currentProjectId} gitHistory={gitHistory} />
-										) : undefined
-									}
-									onCloseGitHistory={handleCloseGitHistory}
 									bottomTerminalOpen={isDetailTerminalOpen}
+									onToggleBottomTerminal={handleToggleDetailTerminal}
+									isBottomTerminalLoading={isDetailTerminalStarting}
 									bottomTerminalTaskId={detailTerminalTaskId}
 									bottomTerminalSummary={detailTerminalSummary}
 									bottomTerminalSubtitle={detailTerminalSubtitle}
@@ -963,13 +784,6 @@ export default function App(): ReactElement {
 						refreshRuntimeProjectConfig();
 						refreshSettingsRuntimeProjectConfig();
 					}}
-				/>
-				<DebugDialog
-					open={isDebugDialogOpen}
-					onOpenChange={handleDebugDialogOpenChange}
-					isResetAllStatePending={isResetAllStatePending}
-					onShowStartupOnboardingDialog={handleShowStartupOnboardingDialog}
-					onResetAllState={handleResetAllState}
 				/>
 				<TaskCreateDialog
 					open={isInlineTaskCreateOpen}
@@ -1012,34 +826,6 @@ export default function App(): ReactElement {
 					currentProjectId={currentProjectId}
 					initialGitInitPath={pendingNativeGitInitPath}
 				/>
-
-				<AlertDialog
-					open={gitActionError !== null}
-					onOpenChange={(open) => {
-						if (!open) {
-							clearGitActionError();
-						}
-					}}
-				>
-					<AlertDialogHeader>
-						<AlertDialogTitle>{gitActionErrorTitle}</AlertDialogTitle>
-					</AlertDialogHeader>
-					<AlertDialogBody>
-						<p>{gitActionError?.message}</p>
-						{gitActionError?.output ? (
-							<pre className="max-h-[220px] overflow-auto rounded-md bg-surface-0 p-3 font-mono text-xs text-text-secondary whitespace-pre-wrap">
-								{gitActionError.output}
-							</pre>
-						) : null}
-					</AlertDialogBody>
-					<AlertDialogFooter className="justify-end">
-						<AlertDialogAction asChild>
-							<Button variant="default" onClick={clearGitActionError}>
-								Close
-							</Button>
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialog>
 			</div>
 		</LayoutCustomizationsProvider>
 	);
