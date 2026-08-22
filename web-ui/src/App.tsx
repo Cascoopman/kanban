@@ -52,7 +52,7 @@ import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useRuntimeProjectConfig } from "@/runtime/use-runtime-project-config";
 import { useTerminalConnectionReady } from "@/runtime/use-terminal-connection-ready";
 import { useWorkspacePersistence } from "@/runtime/use-workspace-persistence";
-import { saveWorkspaceState } from "@/runtime/workspace-state-query";
+import { fetchWorkspaceState, saveWorkspaceState } from "@/runtime/workspace-state-query";
 import { findCardSelection } from "@/state/board-state";
 import {
 	getTaskWorkspaceInfo,
@@ -394,6 +394,7 @@ export default function App(): ReactElement {
 		isDocumentVisible,
 		isWorkspaceStateRefreshing,
 		persistWorkspaceState: persistWorkspaceStateAsync,
+		loadWorkspaceState: fetchWorkspaceState,
 		refetchWorkspaceState: refreshWorkspaceState,
 		onWorkspaceRevisionChange: setWorkspaceRevision,
 		onWorkspaceStateConflict: handleWorkspaceStateConflict,
