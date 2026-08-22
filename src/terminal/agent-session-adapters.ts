@@ -175,6 +175,31 @@ function toBracketedPasteSubmission(command: string): string {
 	return `\u001b[200~${command}\u001b[201~\r`;
 }
 
+const CLAUDE_INTERRUPTED_PROMPT_PATTERN = /Interrupted\s*(?:·\s*)?What\s+should\s+Claude\s+do\s+instead\?/u;
+const CLAUDE_INTERRUPTED_PROMPT_BUFFER_CHARS = 512;
+
+function createClaudeOutputTransitionDetector(): AgentOutputTransitionDetector {
+	let buffer = "";
+	return (data, summary) => {
+		if (summary.state !== "running") {
+			buffer = "";
+			return null;
+		}
+
+		buffer = `${buffer}${stripAnsi(data)}`.slice(-CLAUDE_INTERRUPTED_PROMPT_BUFFER_CHARS);
+		if (!CLAUDE_INTERRUPTED_PROMPT_PATTERN.test(buffer)) {
+			return null;
+		}
+
+		buffer = "";
+		return { type: "hook.to_review" };
+	};
+}
+
+function shouldInspectClaudeOutputForTransition(summary: RuntimeTaskSessionSummary): boolean {
+	return summary.state === "running";
+}
+
 const claudeAdapter: AgentSessionAdapter = {
 	async prepare(input) {
 		const args = [...input.args];
@@ -269,6 +294,8 @@ const claudeAdapter: AgentSessionAdapter = {
 				...launch.env,
 				...env,
 			},
+			detectOutputTransition: createClaudeOutputTransitionDetector(),
+			shouldInspectOutputForTransition: shouldInspectClaudeOutputForTransition,
 		};
 	},
 };

@@ -277,6 +277,68 @@ describe("startCodexSessionWatcher", () => {
 		]);
 	});
 
+	it("emits review when a rollout turn is cancelled", async () => {
+		const tempDir = await mkdtemp(join(tmpdir(), "kanban-codex-watcher-"));
+		const logPath = join(tempDir, "session.jsonl");
+		const sessionsRoot = join(tempDir, "sessions");
+		const taskCwd = "/tmp/kanban/task-rollout-cancelled";
+		const rolloutDir = join(sessionsRoot, "2026", "08", "22");
+		const rolloutPath = join(rolloutDir, "rollout-2026-08-22T00-00-01-cancelled.jsonl");
+		const events: Array<{ event: string; metadata?: Record<string, unknown> }> = [];
+		const stopWatcher = await startCodexSessionWatcher(
+			logPath,
+			(mapped) => {
+				events.push(mapped as { event: string; metadata?: Record<string, unknown> });
+			},
+			60_000,
+			{
+				cwd: taskCwd,
+				sessionsRoot,
+				rolloutPollIntervalMs: 0,
+			},
+		);
+
+		try {
+			await mkdir(rolloutDir, { recursive: true });
+			await writeFile(
+				rolloutPath,
+				[
+					createRolloutLine({
+						type: "session_meta",
+						payload: { cwd: taskCwd },
+					}),
+					createRolloutLine(
+						{
+							type: "event_msg",
+							payload: {
+								type: "turn_aborted",
+								turn_id: "turn-cancelled-123",
+								reason: "interrupted",
+							},
+						},
+						false,
+					),
+				].join(""),
+				"utf8",
+			);
+
+			await stopWatcher();
+		} finally {
+			await rm(tempDir, { recursive: true, force: true });
+		}
+
+		expect(events).toEqual([
+			{
+				event: "to_review",
+				metadata: {
+					source: "codex",
+					hookEventName: "turn_aborted",
+					activityText: "Turn cancelled; waiting for review",
+				},
+			},
+		]);
+	});
+
 	it("emits to_review for request_user_input in rollout logs", async () => {
 		const tempDir = await mkdtemp(join(tmpdir(), "kanban-codex-watcher-"));
 		const logPath = join(tempDir, "session.jsonl");
