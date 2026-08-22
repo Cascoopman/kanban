@@ -2,7 +2,7 @@ import type { IncomingMessage } from "node:http";
 import { PassThrough } from "node:stream";
 import { describe, expect, it } from "vitest";
 import { getKanbanRuntimeOrigin, getKanbanRuntimePort } from "../../../src/core/runtime-endpoint";
-import { evaluateCors, evaluateHost, handleSocketUpgrade } from "../../../src/server/middleware";
+import { evaluateCors, evaluateHost, getDevServerOrigins, handleSocketUpgrade } from "../../../src/server/middleware";
 
 const RUNTIME_PORT = getKanbanRuntimePort();
 const ALLOWED_ORIGIN = getKanbanRuntimeOrigin();
@@ -13,6 +13,18 @@ function makeFakeRequest(headers: Partial<IncomingMessage["headers"]>, method = 
 }
 
 describe("evaluateCors", () => {
+	it("derives development origins from the configured web UI port", () => {
+		expect(getDevServerOrigins({ KANBAN_WEB_UI_PORT: "22791" })).toEqual(
+			new Set(["http://localhost:22791", "http://127.0.0.1:22791"]),
+		);
+	});
+
+	it("falls back to the default development port for invalid configuration", () => {
+		expect(getDevServerOrigins({ KANBAN_WEB_UI_PORT: "invalid" })).toEqual(
+			new Set(["http://localhost:4173", "http://127.0.0.1:4173"]),
+		);
+	});
+
 	it("allows requests with no Origin header", () => {
 		const decision = evaluateCors({
 			method: "GET",

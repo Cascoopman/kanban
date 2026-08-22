@@ -209,21 +209,29 @@ function hasCodexStartupUiRendered(text: string): boolean {
 	return stripped.includes("openai codex (v");
 }
 
+function hasClaudeInteractivePrompt(text: string): boolean {
+	const stripped = stripAnsi(text);
+	return /(?:^|[\n\r])\s*❯\s/u.test(stripped);
+}
+
 export class TerminalSessionManager implements TerminalSessionService {
 	private readonly entries = new Map<string, SessionEntry>();
 	private readonly summaryListeners = new Set<(summary: RuntimeTaskSessionSummary) => void>();
 
-	private trySendDeferredCodexStartupInput(taskId: string): boolean {
+	private trySendDeferredAgentStartupInput(taskId: string): boolean {
 		const entry = this.entries.get(taskId);
 		const active = entry?.active;
-		if (!entry || !active || entry.summary.agentId !== "codex") {
+		if (!entry || !active) {
 			return false;
 		}
 		if (active.deferredStartupInput === null) {
 			return false;
 		}
 		const trustPromptVisible =
-			active.workspaceTrustBuffer !== null && hasCodexWorkspaceTrustPrompt(active.workspaceTrustBuffer);
+			active.workspaceTrustBuffer !== null &&
+			(entry.summary.agentId === "claude"
+				? hasClaudeWorkspaceTrustPrompt(active.workspaceTrustBuffer)
+				: hasCodexWorkspaceTrustPrompt(active.workspaceTrustBuffer));
 		if (trustPromptVisible) {
 			return false;
 		}
@@ -392,6 +400,7 @@ export class TerminalSessionManager implements TerminalSessionService {
 					entry.terminalStateMirror?.applyOutput(filteredChunk);
 
 					const needsDecodedOutput =
+						entry.active.deferredStartupInput !== null ||
 						entry.active.workspaceTrustBuffer !== null ||
 						(entry.active.detectOutputTransition !== null &&
 							(entry.active.shouldInspectOutputForTransition?.(entry.summary) ?? true));
@@ -428,19 +437,22 @@ export class TerminalSessionManager implements TerminalSessionService {
 					}
 					updateSummary(entry, { lastOutputAt: now() });
 
-					// Codex plan-mode startup input is deferred until we know the TUI rendered.
-					// Trigger on either the interactive prompt marker or the startup header text.
+					// Submit initial prompts through the live TUI so native slash commands and
+					// normal interactive behavior work exactly as if the user typed them.
 					if (
-						entry.summary.agentId === "codex" &&
 						entry.active.deferredStartupInput !== null &&
 						data.length > 0 &&
-						(hasCodexInteractivePrompt(data) ||
-							hasCodexStartupUiRendered(data) ||
-							(entry.active.workspaceTrustBuffer !== null &&
-								(hasCodexInteractivePrompt(entry.active.workspaceTrustBuffer) ||
-									hasCodexStartupUiRendered(entry.active.workspaceTrustBuffer))))
+						(entry.summary.agentId === "claude"
+							? hasClaudeInteractivePrompt(data) ||
+								(entry.active.workspaceTrustBuffer !== null &&
+									hasClaudeInteractivePrompt(entry.active.workspaceTrustBuffer))
+							: hasCodexInteractivePrompt(data) ||
+								hasCodexStartupUiRendered(data) ||
+								(entry.active.workspaceTrustBuffer !== null &&
+									(hasCodexInteractivePrompt(entry.active.workspaceTrustBuffer) ||
+										hasCodexStartupUiRendered(entry.active.workspaceTrustBuffer))))
 					) {
-						this.trySendDeferredCodexStartupInput(request.taskId);
+						this.trySendDeferredAgentStartupInput(request.taskId);
 					}
 
 					const adapterEvent = entry.active.detectOutputTransition?.(data, entry.summary) ?? null;

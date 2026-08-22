@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CreatedTask } from "@/hooks/use-task-editor";
 import { useTaskStartActions } from "@/hooks/use-task-start-actions";
-import type { BoardData, TaskImage } from "@/types";
+import type { BoardData } from "@/types";
 
 type StartActions = ReturnType<typeof useTaskStartActions>;
 
@@ -41,17 +41,9 @@ describe("useTaskStartActions", () => {
 		container.remove();
 	});
 
-	it("starts a newly created in-progress task with its initial prompt and images", async () => {
-		const image: TaskImage = {
-			id: "image-1",
-			data: "aGVsbG8=",
-			mimeType: "image/png",
-			name: "mock.png",
-		};
+	it("starts a newly created in-progress task without injecting a prompt", async () => {
 		const createdTask: CreatedTask = {
 			taskId: "task-1",
-			prompt: "Implement the feature",
-			images: [image],
 		};
 		const board: BoardData = {
 			columns: [
@@ -97,9 +89,6 @@ describe("useTaskStartActions", () => {
 		});
 
 		expect(setSelectedTaskId).toHaveBeenCalledWith(createdTask.taskId);
-		expect(handleStartTask).toHaveBeenCalledWith(createdTask.taskId, {
-			initialPrompt: createdTask.prompt,
-			images: createdTask.images,
-		});
+		expect(handleStartTask).toHaveBeenCalledWith(createdTask.taskId);
 	});
 });

@@ -177,7 +177,8 @@ describe("prepareAgentLaunch", () => {
 			join(homedir(), ".kanban", "hooks", "claude", "instructions", "task-claude-global-instructions.md"),
 		);
 		expect(readFileSync(instructionsPath, "utf8")).toBe("# Shared rules\n");
-		expect(launch.args.indexOf("--append-system-prompt-file")).toBeLessThan(launch.args.indexOf("Fix the bug"));
+		expect(launch.args).not.toContain("Fix the bug");
+		expect(launch.deferredStartupInput).toBe("\u001b[200~Fix the bug\u001b[201~\r");
 	});
 
 	it("uses project instructions from the source workspace when the task worktree does not contain them", async () => {
@@ -308,6 +309,31 @@ describe("prepareAgentLaunch", () => {
 		expect(launch.args).not.toContain("Audit the deployment pipeline");
 		expect(launch.deferredStartupInput).toContain("/plan Audit the deployment pipeline");
 		expect(launch.deferredStartupInput?.endsWith("\r")).toBe(true);
+	});
+
+	it("submits new Codex and Claude prompts through their interactive terminals", async () => {
+		setupTempHome();
+		const codexLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-prompt",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp",
+			prompt: "/review inspect the current changes",
+		});
+		expect(codexLaunch.args).not.toContain("/review inspect the current changes");
+		expect(codexLaunch.deferredStartupInput).toBe("\u001b[200~/review inspect the current changes\u001b[201~\r");
+
+		const claudeLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-prompt",
+			agentId: "claude",
+			binary: "claude",
+			args: [],
+			cwd: "/tmp",
+			prompt: "/review inspect the current changes",
+		});
+		expect(claudeLaunch.args).not.toContain("/review inspect the current changes");
+		expect(claudeLaunch.deferredStartupInput).toBe("\u001b[200~/review inspect the current changes\u001b[201~\r");
 	});
 
 	it("adds resume flags for Claude and Codex", async () => {

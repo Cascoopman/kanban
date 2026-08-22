@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createInitialBoardData } from "@/data/board-data";
 import { type CreatedTask, useTaskEditor } from "@/hooks/use-task-editor";
-import type { BoardData, TaskImage } from "@/types";
+import type { BoardData } from "@/types";
 
 type EditorResult = ReturnType<typeof useTaskEditor>;
 
@@ -24,8 +24,6 @@ function Harness({ onSnapshot }: { onSnapshot: (snapshot: HookSnapshot) => void 
 	const editor = useTaskEditor({
 		board,
 		setBoard,
-		currentProjectId: "project",
-		createTaskBranchOptions: [{ value: "main", label: "main" }],
 		defaultTaskBranchRef: "main",
 		selectedAgentId: "codex",
 	});
@@ -52,77 +50,53 @@ describe("useTaskEditor", () => {
 		container.remove();
 	});
 
-	it("requires a prompt before creating a task", async () => {
+	it("creates an in-progress placeholder task immediately", async () => {
 		let snapshot: HookSnapshot | null = null;
 		const onSnapshot = (next: HookSnapshot) => {
 			snapshot = next;
 		};
 		await act(async () => root.render(<Harness onSnapshot={onSnapshot} />));
 
-		act(() => requireSnapshot(snapshot).handleOpenCreateTask());
 		const createdTask = { current: null as CreatedTask | null };
 		act(() => {
-			createdTask.current = requireSnapshot(snapshot).handleCreateTask();
-		});
-
-		expect(createdTask.current).toBeNull();
-		expect(requireSnapshot(snapshot).isInlineTaskCreateOpen).toBe(true);
-		expect(requireSnapshot(snapshot).board.columns.every((column) => column.cards.length === 0)).toBe(true);
-	});
-
-	it("creates an in-progress task with a derived title and returns its kickoff prompt", async () => {
-		let snapshot: HookSnapshot | null = null;
-		const onSnapshot = (next: HookSnapshot) => {
-			snapshot = next;
-		};
-		await act(async () => root.render(<Harness onSnapshot={onSnapshot} />));
-		await act(async () => {
-			requireSnapshot(snapshot).handleOpenCreateTask();
-			requireSnapshot(snapshot).setNewTaskPrompt("Implement prompt-first task creation. Keep it focused.");
-		});
-
-		const createdTask = { current: null as CreatedTask | null };
-		await act(async () => {
 			createdTask.current = requireSnapshot(snapshot).handleCreateTask();
 		});
 
 		const createdCard = requireSnapshot(snapshot).board.columns.find((column) => column.id === "in_progress")
 			?.cards[0];
 		expect(createdTask.current?.taskId).toBe(createdCard?.id);
-		expect(createdTask.current?.prompt).toBe("Implement prompt-first task creation. Keep it focused.");
 		expect(createdCard).toMatchObject({
-			title: "Implement prompt-first task creation.",
+			title: "New task",
 			agentId: "codex",
 			baseRef: "main",
 		});
-		expect(requireSnapshot(snapshot).isInlineTaskCreateOpen).toBe(false);
-		expect(requireSnapshot(snapshot).newTaskPrompt).toBe("");
 	});
 
-	it("returns attached images for the initial agent turn", async () => {
+	it("does not create a task until a base ref is available", async () => {
+		function NoBaseRefHarness({ onSnapshot }: { onSnapshot: (snapshot: HookSnapshot) => void }): null {
+			const [board, setBoard] = useState(createInitialBoardData);
+			const editor = useTaskEditor({
+				board,
+				setBoard,
+				defaultTaskBranchRef: "",
+				selectedAgentId: "codex",
+			});
+			useEffect(() => onSnapshot({ ...editor, board }), [board, editor, onSnapshot]);
+			return null;
+		}
+
 		let snapshot: HookSnapshot | null = null;
-		const onSnapshot = (next: HookSnapshot) => {
-			snapshot = next;
-		};
-		const image: TaskImage = {
-			id: "image-1",
-			data: "aGVsbG8=",
-			mimeType: "image/png",
-			name: "mock.png",
-		};
-		await act(async () => root.render(<Harness onSnapshot={onSnapshot} />));
-		await act(async () => {
-			requireSnapshot(snapshot).handleOpenCreateTask();
-			requireSnapshot(snapshot).setNewTaskPrompt("Inspect this screenshot");
-			requireSnapshot(snapshot).setNewTaskImages([image]);
-		});
+		await act(async () =>
+			root.render(
+				<NoBaseRefHarness
+					onSnapshot={(next) => {
+						snapshot = next;
+					}}
+				/>,
+			),
+		);
 
-		const createdTask = { current: null as CreatedTask | null };
-		await act(async () => {
-			createdTask.current = requireSnapshot(snapshot).handleCreateTask();
-		});
-
-		expect(createdTask.current?.images).toEqual([image]);
-		expect(requireSnapshot(snapshot).newTaskImages).toEqual([]);
+		expect(requireSnapshot(snapshot).handleCreateTask()).toBeNull();
+		expect(requireSnapshot(snapshot).board.columns.every((column) => column.cards.length === 0)).toBe(true);
 	});
 });

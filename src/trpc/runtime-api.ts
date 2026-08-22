@@ -4,8 +4,6 @@
 // should stay in focused services instead of accumulating here.
 
 import { rm } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import type { RuntimeConfigState } from "../config/runtime-config";
 import { updateGlobalRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config";
@@ -22,6 +20,7 @@ import {
 	parseTaskSessionStartRequest,
 	parseTaskSessionStopRequest,
 } from "../core/api-validation";
+import { getRuntimeHomePath } from "../core/runtime-home";
 import { openInBrowser } from "../server/browser";
 import type { VsCodeWebManager } from "../server/vscode-web-manager";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
@@ -69,7 +68,7 @@ async function resolveExistingTaskCwdOrEnsure(options: {
 }
 
 export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrpcContext["runtimeApi"] {
-	const debugResetTargetPaths = [join(homedir(), ".kanban")] as const;
+	const debugResetTargetPaths = [getRuntimeHomePath()] as const;
 
 	const buildConfigResponse = (runtimeConfig: RuntimeConfigState) => buildRuntimeConfigResponse(runtimeConfig);
 
