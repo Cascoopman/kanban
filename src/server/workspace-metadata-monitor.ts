@@ -58,10 +58,10 @@ export interface WorkspaceMetadataMonitor {
 function collectTrackedTasks(board: RuntimeBoardData): TrackedTaskWorkspace[] {
 	const tracked: TrackedTaskWorkspace[] = [];
 	for (const column of board.columns) {
-		// Backlog and trash cards do not need git metadata polling. Tracking only
+		// Done cards do not need git metadata polling. Tracking only
 		// active columns avoids unnecessary work, and trash paths are reconstructed
 		// from task id on the web-ui side.
-		if (column.id === "backlog" || column.id === "trash") {
+		if (column.id === "trash") {
 			continue;
 		}
 		for (const card of column.cards) {

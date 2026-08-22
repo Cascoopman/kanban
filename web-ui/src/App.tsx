@@ -19,7 +19,6 @@ import { RuntimeSettingsDialog, type RuntimeSettingsSection } from "@/components
 import { StartupOnboardingDialog } from "@/components/startup-onboarding-dialog";
 import { TaskBranchDialog } from "@/components/task-branch-dialog";
 import { TaskCreateDialog } from "@/components/task-create-dialog";
-import { TaskInlineCreateCard } from "@/components/task-inline-create-card";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,14 +90,12 @@ export default function App(): ReactElement {
 	const [pendingUnifiedBoardMove, setPendingUnifiedBoardMove] = useState<ProjectBoardMove | null>(null);
 	const [isClearTrashDialogOpen, setIsClearTrashDialogOpen] = useState(false);
 	const [isGitHistoryOpen, setIsGitHistoryOpen] = useState(false);
-	const [pendingTaskStartAfterEditId, setPendingTaskStartAfterEditId] = useState<string | null>(null);
 	const taskEditorResetRef = useRef<() => void>(() => {});
 	const lastStreamErrorRef = useRef<string | null>(null);
 	const knownProjectIdsRef = useRef<Set<string>>(new Set());
 	const handleProjectSwitchStart = useCallback(() => {
 		setCanPersistWorkspaceState(false);
 		setIsGitHistoryOpen(false);
-		setPendingTaskStartAfterEditId(null);
 		taskEditorResetRef.current();
 	}, []);
 	const {
@@ -311,10 +308,6 @@ export default function App(): ReactElement {
 	});
 
 	const { createTaskBranchOptions, defaultTaskBranchRef } = useTaskBranchOptions({ workspaceGit });
-	const queueTaskStartAfterEdit = useCallback((taskId: string) => {
-		setPendingTaskStartAfterEditId(taskId);
-	}, []);
-
 	const {
 		isInlineTaskCreateOpen,
 		newTaskPrompt,
@@ -322,20 +315,8 @@ export default function App(): ReactElement {
 		newTaskImages,
 		setNewTaskImages,
 		newTaskBranchRef,
-		editingTaskId,
-		editTaskStartInPlanMode,
-		setEditTaskStartInPlanMode,
-		isEditTaskStartInPlanModeDisabled,
-		editTaskBranchRef,
-		setEditTaskBranchRef,
-		editTaskAgentId,
-		setEditTaskAgentId,
 		handleOpenCreateTask,
 		handleCancelCreateTask,
-		handleOpenEditTask,
-		handleCancelEditTask,
-		handleSaveEditedTask,
-		handleSaveAndStartEditedTask,
 		handleSaveTaskTitle,
 		handleCreateTask,
 		resetTaskEditorState,
@@ -346,8 +327,6 @@ export default function App(): ReactElement {
 		createTaskBranchOptions,
 		defaultTaskBranchRef,
 		selectedAgentId: runtimeProjectConfig?.selectedAgentId ?? null,
-		setSelectedTaskId,
-		queueTaskStartAfterEdit,
 	});
 	const handleCreateTaskForProject = useCallback(
 		(projectId: string) => {
@@ -582,7 +561,6 @@ export default function App(): ReactElement {
 	const {
 		handleDragEnd,
 		handleStartTask,
-		handleStartAllBacklogTasks,
 		handleDetailTaskDragEnd,
 		handleCardSelect,
 		handleMoveToTrash,
@@ -684,19 +662,17 @@ export default function App(): ReactElement {
 		pendingUnifiedBoardMove,
 	]);
 
-	const { handleCreateStartAndOpenTask, handleStartTaskFromBoard, handleStartAllBacklogTasksFromBoard } =
-		useTaskStartActions({
-			board,
-			handleCreateTask,
-			handleStartTask,
-			handleStartAllBacklogTasks,
-			setSelectedTaskId,
-		});
+	const { handleCreateStartAndOpenTask } = useTaskStartActions({
+		board,
+		handleCreateTask,
+		handleStartTask,
+		setSelectedTaskId,
+	});
 	const taskBranching = useTaskBranching({
 		board,
 		setBoard,
 		currentProjectId,
-		onStartTask: handleStartTaskFromBoard,
+		onStartTask: handleStartTask,
 	});
 
 	useAppHotkeys({
@@ -713,20 +689,7 @@ export default function App(): ReactElement {
 		handleOpenSettings,
 		handleToggleGitHistory,
 		handleCloseGitHistory,
-		onStartAllTasks: handleStartAllBacklogTasksFromBoard,
 	});
-
-	useEffect(() => {
-		if (!pendingTaskStartAfterEditId) {
-			return;
-		}
-		const selection = findCardSelection(board, pendingTaskStartAfterEditId);
-		if (!selection || selection.column.id !== "backlog") {
-			return;
-		}
-		handleStartTaskFromBoard(pendingTaskStartAfterEditId);
-		setPendingTaskStartAfterEditId(null);
-	}, [board, handleStartTaskFromBoard, pendingTaskStartAfterEditId]);
 
 	const detailSession = selectedCard
 		? (sessions[selectedCard.card.id] ?? createIdleTaskSession(selectedCard.card.id))
@@ -797,24 +760,6 @@ export default function App(): ReactElement {
 		},
 		[handleCancelCreateTask],
 	);
-
-	const inlineTaskEditor = editingTaskId ? (
-		<TaskInlineCreateCard
-			onCreate={handleSaveEditedTask}
-			onCreateAndStart={handleSaveAndStartEditedTask}
-			onCancel={handleCancelEditTask}
-			startInPlanMode={editTaskStartInPlanMode}
-			onStartInPlanModeChange={setEditTaskStartInPlanMode}
-			startInPlanModeDisabled={isEditTaskStartInPlanModeDisabled}
-			branchRef={editTaskBranchRef}
-			branchOptions={createTaskBranchOptions}
-			onBranchRefChange={setEditTaskBranchRef}
-			agentId={editTaskAgentId}
-			onAgentIdChange={setEditTaskAgentId}
-			defaultAgentId={runtimeProjectConfig?.selectedAgentId ?? null}
-			idPrefix={`inline-edit-task-${editingTaskId}`}
-		/>
-	) : undefined;
 
 	if (isRuntimeDisconnected) {
 		return <RuntimeDisconnectedFallback />;
@@ -901,7 +846,6 @@ export default function App(): ReactElement {
 											data={unifiedProjectBoard.board}
 											taskSessions={unifiedProjectBoard.sessions}
 											onCardSelect={handleUnifiedCardSelect}
-											dependencies={unifiedProjectBoard.board.dependencies}
 											hideCardActions
 											onDragEnd={handleUnifiedBoardDragEnd}
 										/>
@@ -961,15 +905,8 @@ export default function App(): ReactElement {
 									onCardSelect={handleCardSelect}
 									onTaskDragEnd={handleDetailTaskDragEnd}
 									onCreateTask={handleOpenCreateTask}
-									onStartTask={handleStartTaskFromBoard}
 									onBranchTask={taskBranching.handleOpenBranchTask}
-									onStartAllTasks={handleStartAllBacklogTasksFromBoard}
 									onClearTrash={handleOpenClearTrash}
-									editingTaskId={editingTaskId}
-									inlineTaskEditor={inlineTaskEditor}
-									onEditTask={(task) => {
-										handleOpenEditTask(task, { preserveDetailSelection: true });
-									}}
 									onSaveTaskTitle={handleSaveTaskTitle}
 									onCommitTask={handleCommitTask}
 									onOpenPrTask={handleOpenPrTask}
@@ -1057,7 +994,6 @@ export default function App(): ReactElement {
 					isPending={taskBranching.isPending}
 					onOpenChange={taskBranching.handleOpenChange}
 					onCreate={() => void taskBranching.handleCreateBranch()}
-					onCreateAndStart={() => void taskBranching.handleCreateBranch({ start: true })}
 				/>
 				<ClearTrashDialog
 					open={isClearTrashDialogOpen}

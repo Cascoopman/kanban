@@ -6,24 +6,18 @@ export const TASK_START_IN_PLAN_MODE_STORAGE_KEY = LocalStorageKey.TaskStartInPl
 const DETAIL_TASK_QUERY_PARAM = "task";
 
 export function countTasksByColumn(board: BoardData): {
-	backlog: number;
 	in_progress: number;
 	review: number;
 	on_hold: number;
 	trash: number;
 } {
 	const counts = {
-		backlog: 0,
 		in_progress: 0,
 		review: 0,
 		on_hold: 0,
 		trash: 0,
 	};
 	for (const column of board.columns) {
-		if (column.id === "backlog") {
-			counts.backlog += column.cards.length;
-			continue;
-		}
 		if (column.id === "in_progress") {
 			counts.in_progress += column.cards.length;
 			continue;

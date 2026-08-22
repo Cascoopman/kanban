@@ -59,7 +59,6 @@ export function ProjectBoardToolbar({
 		}
 		return (
 			total +
-			project.taskCounts.backlog +
 			project.taskCounts.in_progress +
 			project.taskCounts.review +
 			project.taskCounts.on_hold +

@@ -1,10 +1,4 @@
-import type {
-	RuntimeAgentId,
-	RuntimeBoardCard,
-	RuntimeBoardColumnId,
-	RuntimeBoardData,
-	RuntimeBoardDependency,
-} from "./api-contract";
+import type { RuntimeAgentId, RuntimeBoardCard, RuntimeBoardColumnId, RuntimeBoardData } from "./api-contract";
 import { createUniqueTaskId } from "./task-id";
 
 export interface RuntimeCreateTaskInput {
@@ -41,22 +35,6 @@ export interface RuntimeUpdateTaskResult {
 	updated: boolean;
 }
 
-export interface RuntimeAddTaskDependencyResult {
-	board: RuntimeBoardData;
-	added: boolean;
-	reason?: "missing_task" | "same_task" | "duplicate" | "trash_task" | "non_backlog";
-	dependency?: RuntimeBoardDependency;
-}
-
-export interface RuntimeRemoveTaskDependencyResult {
-	board: RuntimeBoardData;
-	removed: boolean;
-}
-
-export interface RuntimeTrashTaskResult extends RuntimeMoveTaskResult {
-	readyTaskIds: string[];
-}
-
 export interface RuntimeDeleteTasksResult {
 	board: RuntimeBoardData;
 	deleted: boolean;
@@ -71,38 +49,6 @@ function collectExistingTaskIds(board: RuntimeBoardData): Set<string> {
 		}
 	}
 	return existingIds;
-}
-
-function collectTaskIds(board: RuntimeBoardData): Set<string> {
-	const taskIds = new Set<string>();
-	for (const column of board.columns) {
-		for (const card of column.cards) {
-			taskIds.add(card.id);
-		}
-	}
-	return taskIds;
-}
-
-function createDependencyId(): string {
-	return crypto.randomUUID().replaceAll("-", "").slice(0, 8);
-}
-
-function createDependencyPairKey(backlogTaskId: string, linkedTaskId: string): string {
-	return `${backlogTaskId}::${linkedTaskId}`;
-}
-
-function hasDependencyPair(board: RuntimeBoardData, backlogTaskId: string, linkedTaskId: string): boolean {
-	const pairKey = createDependencyPairKey(backlogTaskId, linkedTaskId);
-	for (const dependency of board.dependencies) {
-		const existing = resolveDependencyEndpoints(board, dependency.fromTaskId, dependency.toTaskId);
-		if ("reason" in existing) {
-			continue;
-		}
-		if (createDependencyPairKey(existing.backlogTaskId, existing.linkedTaskId) === pairKey) {
-			return true;
-		}
-	}
-	return false;
 }
 
 function findTaskLocation(
@@ -131,114 +77,6 @@ function findTaskLocation(
 		};
 	}
 	return null;
-}
-
-function resolveDependencyEndpoints(
-	board: RuntimeBoardData,
-	firstTaskId: string,
-	secondTaskId: string,
-):
-	| {
-			backlogTaskId: string;
-			linkedTaskId: string;
-	  }
-	| { reason: RuntimeAddTaskDependencyResult["reason"] } {
-	const firstColumnId = getTaskColumnId(board, firstTaskId);
-	const secondColumnId = getTaskColumnId(board, secondTaskId);
-	if (!firstColumnId || !secondColumnId) {
-		return { reason: "missing_task" };
-	}
-	if (firstColumnId === "trash" || secondColumnId === "trash") {
-		return { reason: "trash_task" };
-	}
-	const firstIsBacklog = firstColumnId === "backlog";
-	const secondIsBacklog = secondColumnId === "backlog";
-	if (firstIsBacklog && secondIsBacklog) {
-		return {
-			backlogTaskId: firstTaskId,
-			linkedTaskId: secondTaskId,
-		};
-	}
-	if (!firstIsBacklog && !secondIsBacklog) {
-		return { reason: "non_backlog" };
-	}
-	return firstIsBacklog
-		? { backlogTaskId: firstTaskId, linkedTaskId: secondTaskId }
-		: { backlogTaskId: secondTaskId, linkedTaskId: firstTaskId };
-}
-
-function getLinkedBacklogTaskIdsReadyAfterTaskTrashed(
-	board: RuntimeBoardData,
-	taskId: string,
-	fromColumnId: RuntimeBoardColumnId | null,
-): string[] {
-	if (!taskId || board.dependencies.length === 0 || (fromColumnId !== "review" && fromColumnId !== "on_hold")) {
-		return [];
-	}
-	const readyTaskIds = new Set<string>();
-	for (const dependency of board.dependencies) {
-		if (dependency.toTaskId !== taskId) {
-			continue;
-		}
-		if (getTaskColumnId(board, dependency.fromTaskId) !== "backlog") {
-			continue;
-		}
-		readyTaskIds.add(dependency.fromTaskId);
-	}
-	return [...readyTaskIds];
-}
-
-export function updateTaskDependencies(board: RuntimeBoardData): RuntimeBoardData {
-	if (board.dependencies.length === 0) {
-		return board;
-	}
-	const taskIds = collectTaskIds(board);
-	const dependencies: RuntimeBoardDependency[] = [];
-	const existingPairs = new Set<string>();
-	for (const dependency of board.dependencies) {
-		const firstTaskId = dependency.fromTaskId.trim();
-		const secondTaskId = dependency.toTaskId.trim();
-		if (!firstTaskId || !secondTaskId || firstTaskId === secondTaskId) {
-			continue;
-		}
-		if (!taskIds.has(firstTaskId) || !taskIds.has(secondTaskId)) {
-			continue;
-		}
-		const resolved = resolveDependencyEndpoints(board, firstTaskId, secondTaskId);
-		if ("reason" in resolved) {
-			continue;
-		}
-		const pairKey = createDependencyPairKey(resolved.backlogTaskId, resolved.linkedTaskId);
-		if (existingPairs.has(pairKey)) {
-			continue;
-		}
-		existingPairs.add(pairKey);
-		dependencies.push({
-			id: dependency.id,
-			fromTaskId: resolved.backlogTaskId,
-			toTaskId: resolved.linkedTaskId,
-			createdAt: dependency.createdAt,
-		});
-	}
-	if (
-		dependencies.length === board.dependencies.length &&
-		dependencies.every((dependency, index) => {
-			const current = board.dependencies[index];
-			return (
-				current &&
-				current.id === dependency.id &&
-				current.fromTaskId === dependency.fromTaskId &&
-				current.toTaskId === dependency.toTaskId &&
-				current.createdAt === dependency.createdAt
-			);
-		})
-	) {
-		return board;
-	}
-	return {
-		...board,
-		dependencies,
-	};
 }
 
 export function addTaskToColumn(
@@ -305,81 +143,8 @@ export function getTaskColumnId(board: RuntimeBoardData, taskId: string): Runtim
 	return found ? found.columnId : null;
 }
 
-export function addTaskDependency(
-	board: RuntimeBoardData,
-	firstTaskId: string,
-	secondTaskId: string,
-): RuntimeAddTaskDependencyResult {
-	const normalizedFirstTaskId = firstTaskId.trim();
-	const normalizedSecondTaskId = secondTaskId.trim();
-	if (!normalizedFirstTaskId || !normalizedSecondTaskId) {
-		return { board, added: false, reason: "missing_task" };
-	}
-	if (normalizedFirstTaskId === normalizedSecondTaskId) {
-		return { board, added: false, reason: "same_task" };
-	}
-	const resolved = resolveDependencyEndpoints(board, normalizedFirstTaskId, normalizedSecondTaskId);
-	if ("reason" in resolved) {
-		return { board, added: false, reason: resolved.reason };
-	}
-	if (hasDependencyPair(board, resolved.backlogTaskId, resolved.linkedTaskId)) {
-		return { board, added: false, reason: "duplicate" };
-	}
-	const dependency: RuntimeBoardDependency = {
-		id: createDependencyId(),
-		fromTaskId: resolved.backlogTaskId,
-		toTaskId: resolved.linkedTaskId,
-		createdAt: Date.now(),
-	};
-	return {
-		board: {
-			...board,
-			dependencies: [...board.dependencies, dependency],
-		},
-		added: true,
-		dependency,
-	};
-}
-
-export function canAddTaskDependency(board: RuntimeBoardData, firstTaskId: string, secondTaskId: string): boolean {
-	const normalizedFirstTaskId = firstTaskId.trim();
-	const normalizedSecondTaskId = secondTaskId.trim();
-	if (!normalizedFirstTaskId || !normalizedSecondTaskId || normalizedFirstTaskId === normalizedSecondTaskId) {
-		return false;
-	}
-	const resolved = resolveDependencyEndpoints(board, normalizedFirstTaskId, normalizedSecondTaskId);
-	if ("reason" in resolved) {
-		return false;
-	}
-	return !hasDependencyPair(board, resolved.backlogTaskId, resolved.linkedTaskId);
-}
-
-export function removeTaskDependency(board: RuntimeBoardData, dependencyId: string): RuntimeRemoveTaskDependencyResult {
-	const dependencies = board.dependencies.filter((dependency) => dependency.id !== dependencyId);
-	if (dependencies.length === board.dependencies.length) {
-		return { board, removed: false };
-	}
-	return {
-		board: {
-			...board,
-			dependencies,
-		},
-		removed: true,
-	};
-}
-
-export function trashTaskAndGetReadyLinkedTaskIds(
-	board: RuntimeBoardData,
-	taskId: string,
-	now: number = Date.now(),
-): RuntimeTrashTaskResult {
-	const fromColumnId = getTaskColumnId(board, taskId);
-	const readyTaskIds = getLinkedBacklogTaskIdsReadyAfterTaskTrashed(board, taskId, fromColumnId);
-	const movedToTrash = moveTaskToColumn(board, taskId, "trash", now);
-	return {
-		...movedToTrash,
-		readyTaskIds: movedToTrash.moved ? readyTaskIds : [],
-	};
+export function trashTask(board: RuntimeBoardData, taskId: string, now: number = Date.now()): RuntimeMoveTaskResult {
+	return moveTaskToColumn(board, taskId, "trash", now);
 }
 
 export function deleteTasksFromBoard(board: RuntimeBoardData, taskIds: Iterable<string>): RuntimeDeleteTasksResult {
@@ -414,16 +179,10 @@ export function deleteTasksFromBoard(board: RuntimeBoardData, taskIds: Iterable<
 		};
 	}
 
-	const deletedTaskIdSet = new Set(deletedTaskIds);
-	const dependencies = board.dependencies.filter(
-		(dependency) => !deletedTaskIdSet.has(dependency.fromTaskId) && !deletedTaskIdSet.has(dependency.toTaskId),
-	);
-
 	return {
 		board: {
 			...board,
 			columns,
-			dependencies,
 		},
 		deleted: true,
 		deletedTaskIds,
@@ -519,10 +278,10 @@ export function moveTaskToColumn(
 
 	return {
 		moved: true,
-		board: updateTaskDependencies({
+		board: {
 			...board,
 			columns,
-		}),
+		},
 		task: movedTask,
 		fromColumnId: found.columnId,
 	};

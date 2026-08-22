@@ -1,5 +1,5 @@
 import { DEFAULT_TASK_TITLE_MAX_CHARS } from "@runtime-task-title";
-import { ArrowBigUp, Command, Copy, CornerDownLeft, Play } from "lucide-react";
+import { ArrowBigUp, Command, Copy, CornerDownLeft } from "lucide-react";
 import { type FormEvent, type ReactElement, useEffect, useRef } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -8,11 +8,11 @@ import { Dialog, DialogBody, DialogFooter, DialogHeader } from "@/components/ui/
 import { Spinner } from "@/components/ui/spinner";
 import type { BoardCard } from "@/types";
 
-function ButtonShortcut({ includeShift = false }: { includeShift?: boolean }): ReactElement {
+function ButtonShortcut(): ReactElement {
 	return (
 		<span className="ml-1.5 inline-flex items-center gap-0.5" aria-hidden>
 			<Command size={12} />
-			{includeShift ? <ArrowBigUp size={12} /> : null}
+			<ArrowBigUp size={12} />
 			<CornerDownLeft size={12} />
 		</span>
 	);
@@ -26,7 +26,6 @@ export function TaskBranchDialog({
 	isPending,
 	onOpenChange,
 	onCreate,
-	onCreateAndStart,
 }: {
 	open: boolean;
 	sourceTask: BoardCard | null;
@@ -35,7 +34,6 @@ export function TaskBranchDialog({
 	isPending: boolean;
 	onOpenChange: (open: boolean) => void;
 	onCreate: () => void;
-	onCreateAndStart: () => void;
 }): React.ReactElement {
 	const titleInputRef = useRef<HTMLInputElement | null>(null);
 	useEffect(() => {
@@ -57,13 +55,9 @@ export function TaskBranchDialog({
 	};
 
 	useHotkeys(
-		"mod+enter, mod+shift+enter",
-		(event) => {
+		"mod+shift+enter",
+		() => {
 			if (isPending || !title.trim()) {
-				return;
-			}
-			if (event.shiftKey) {
-				onCreateAndStart();
 				return;
 			}
 			onCreate();
@@ -75,7 +69,7 @@ export function TaskBranchDialog({
 			ignoreEventWhen: (event) => event.defaultPrevented,
 			preventDefault: true,
 		},
-		[open, isPending, onCreate, onCreateAndStart, title],
+		[open, isPending, onCreate, title],
 	);
 
 	return (
@@ -104,30 +98,17 @@ export function TaskBranchDialog({
 					<Button type="button" variant="default" disabled={isPending} onClick={() => onOpenChange(false)}>
 						Cancel
 					</Button>
-					<div className="flex gap-2">
-						<Button
-							type="submit"
-							disabled={isPending || !title.trim()}
-							icon={isPending ? <Spinner size={14} /> : <Copy size={14} />}
-						>
-							<span className="inline-flex items-center">
-								Create task
-								<ButtonShortcut />
-							</span>
-						</Button>
-						<Button
-							type="button"
-							variant="primary"
-							disabled={isPending || !title.trim()}
-							icon={isPending ? <Spinner size={14} /> : <Play size={14} />}
-							onClick={onCreateAndStart}
-						>
-							<span className="inline-flex items-center">
-								Create &amp; start
-								<ButtonShortcut includeShift />
-							</span>
-						</Button>
-					</div>
+					<Button
+						type="submit"
+						variant="primary"
+						disabled={isPending || !title.trim()}
+						icon={isPending ? <Spinner size={14} /> : <Copy size={14} />}
+					>
+						<span className="inline-flex items-center">
+							Create and open terminal
+							<ButtonShortcut />
+						</span>
+					</Button>
 				</DialogFooter>
 			</form>
 		</Dialog>

@@ -229,13 +229,8 @@ export function CardDetailView({
 	onCardSelect,
 	onTaskDragEnd,
 	onCreateTask,
-	onStartTask,
 	onBranchTask,
-	onStartAllTasks,
 	onClearTrash,
-	editingTaskId,
-	inlineTaskEditor,
-	onEditTask,
 	onSaveTaskTitle,
 	onCommitTask,
 	onOpenPrTask,
@@ -278,13 +273,8 @@ export function CardDetailView({
 	onCardSelect: (taskId: string) => void;
 	onTaskDragEnd: (result: DropResult) => void;
 	onCreateTask?: () => void;
-	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCard) => void;
-	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
-	editingTaskId?: string | null;
-	inlineTaskEditor?: ReactNode;
-	onEditTask?: (card: BoardCard) => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onCommitTask?: (taskId: string) => void;
 	onOpenPrTask?: (taskId: string) => void;
@@ -662,13 +652,8 @@ export function CardDetailView({
 							taskSessions={taskSessions}
 							onTaskDragEnd={onTaskDragEnd}
 							onCreateTask={onCreateTask}
-							onStartTask={onStartTask}
 							onBranchTask={onBranchTask}
-							onStartAllTasks={onStartAllTasks}
 							onClearTrash={onClearTrash}
-							editingTaskId={editingTaskId}
-							inlineTaskEditor={inlineTaskEditor}
-							onEditTask={onEditTask}
 							onSaveTaskTitle={onSaveTaskTitle}
 							onCommitTask={onCommitTask}
 							onOpenPrTask={onOpenPrTask}

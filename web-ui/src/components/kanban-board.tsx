@@ -8,26 +8,16 @@ import {
 	type SensorAPI,
 	type SnapDragActions,
 } from "@hello-pangea/dnd";
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BoardColumn } from "@/components/board-column";
-import { DependencyOverlay } from "@/components/dependencies/dependency-overlay";
-import { useDependencyLinking } from "@/components/dependencies/use-dependency-linking";
 import { HiddenBoardColumn } from "@/components/hidden-board-column";
 import { useBoardColumnVisibility } from "@/hooks/use-board-column-visibility";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
-import { canCreateTaskDependency } from "@/state/board-state";
 import { findCardColumnId, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import {
-	type BoardCard,
-	type BoardColumnId,
-	type BoardData,
-	type BoardDependency,
-	isReviewLikeColumnId,
-} from "@/types";
+import { type BoardCard, type BoardColumnId, type BoardData, isReviewLikeColumnId } from "@/types";
 
-const BOARD_COLUMN_ORDER: BoardColumnId[] = ["backlog", "in_progress", "review", "on_hold", "trash"];
+const BOARD_COLUMN_ORDER: BoardColumnId[] = ["in_progress", "review", "on_hold", "trash"];
 
 export type RequestProgrammaticCardMove = (move: ProgrammaticCardMoveInFlight) => boolean;
 
@@ -40,13 +30,8 @@ export function KanbanBoard({
 	taskSessions,
 	onCardSelect,
 	onCreateTask,
-	onStartTask,
 	onBranchTask,
-	onStartAllTasks,
 	onClearTrash,
-	editingTaskId,
-	inlineTaskEditor,
-	onEditTask,
 	onSaveTaskTitle,
 	onCommitTask,
 	onOpenPrTask,
@@ -55,9 +40,6 @@ export function KanbanBoard({
 	commitTaskLoadingById,
 	openPrTaskLoadingById,
 	moveToTrashLoadingById,
-	dependencies,
-	onCreateDependency,
-	onDeleteDependency,
 	onDragEnd,
 	onRequestProgrammaticCardMoveReady,
 	workspacePath,
@@ -68,13 +50,8 @@ export function KanbanBoard({
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onCardSelect: (taskId: string) => void;
 	onCreateTask?: () => void;
-	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCard) => void;
-	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
-	editingTaskId?: string | null;
-	inlineTaskEditor?: ReactNode;
-	onEditTask?: (card: BoardCard) => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onCommitTask?: (taskId: string) => void;
 	onOpenPrTask?: (taskId: string) => void;
@@ -83,9 +60,6 @@ export function KanbanBoard({
 	commitTaskLoadingById?: Record<string, boolean>;
 	openPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
-	dependencies: BoardDependency[];
-	onCreateDependency?: (fromTaskId: string, toTaskId: string) => void;
-	onDeleteDependency?: (dependencyId: string) => void;
 	onDragEnd?: (result: DropResult) => void;
 	onRequestProgrammaticCardMoveReady?: (requestMove: RequestProgrammaticCardMove | null) => void;
 	workspacePath?: string | null;
@@ -103,10 +77,6 @@ export function KanbanBoard({
 	const [programmaticCardMoveInFlight, setProgrammaticCardMoveInFlight] =
 		useState<ProgrammaticCardMoveInFlight | null>(null);
 	const { isColumnHidden, hideColumn, showColumn } = useBoardColumnVisibility();
-	const dependencyLinking = useDependencyLinking({
-		canLinkTasks: (fromTaskId, toTaskId) => canCreateTaskDependency(data, fromTaskId, toTaskId),
-		onCreateDependency,
-	});
 
 	useEffect(() => {
 		latestDataRef.current = data;
@@ -377,13 +347,6 @@ export function KanbanBoard({
 		[clearProgrammaticCardMoveInFlight, onDragEnd],
 	);
 
-	// Dependency links should reroute as soon as motion starts, not only after drop.
-	// Treat the active card as already belonging to its destination/effective column
-	// so the edge transition can animate alongside the move.
-	const activeTaskEffectiveColumnId =
-		programmaticCardMoveInFlight?.toColumnId ??
-		(activeDragTaskId !== null && activeDragSourceColumnId === "backlog" ? "in_progress" : null);
-
 	return (
 		<DragDropContext
 			onBeforeCapture={handleBeforeCapture}
@@ -393,7 +356,7 @@ export function KanbanBoard({
 		>
 			<section
 				ref={boardRef}
-				className="kb-board kb-dependency-surface"
+				className="kb-board"
 				data-programmatic-card-move={programmaticCardMoveInFlight ? "true" : undefined}
 			>
 				{data.columns.map((column) =>
@@ -404,15 +367,10 @@ export function KanbanBoard({
 							key={column.id}
 							column={column}
 							taskSessions={taskSessions}
-							onCreateTask={column.id === "backlog" ? onCreateTask : undefined}
-							onStartTask={column.id === "backlog" ? onStartTask : undefined}
+							onCreateTask={column.id === "in_progress" ? onCreateTask : undefined}
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
-							onStartAllTasks={column.id === "backlog" ? onStartAllTasks : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
 							onHide={() => hideColumn(column.id)}
-							editingTaskId={column.id === "backlog" ? editingTaskId : null}
-							inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
-							onEditTask={column.id === "backlog" ? onEditTask : undefined}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
 							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
 							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
@@ -424,11 +382,6 @@ export function KanbanBoard({
 							activeDragTaskId={activeDragTaskId}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							programmaticCardMoveInFlight={programmaticCardMoveInFlight}
-							onDependencyPointerDown={dependencyLinking.onDependencyPointerDown}
-							onDependencyPointerEnter={dependencyLinking.onDependencyPointerEnter}
-							dependencySourceTaskId={dependencyLinking.draft?.sourceTaskId ?? null}
-							dependencyTargetTaskId={dependencyLinking.draft?.targetTaskId ?? null}
-							isDependencyLinking={dependencyLinking.draft !== null}
 							workspacePath={workspacePath}
 							isDragDisabled={isDragDisabled}
 							hideCardActions={hideCardActions}
@@ -440,15 +393,6 @@ export function KanbanBoard({
 						/>
 					),
 				)}
-				<DependencyOverlay
-					containerRef={boardRef}
-					dependencies={dependencies}
-					draft={dependencyLinking.draft}
-					activeTaskId={activeDragTaskId ?? programmaticCardMoveInFlight?.taskId ?? null}
-					activeTaskEffectiveColumnId={activeTaskEffectiveColumnId}
-					isMotionActive={activeDragTaskId !== null || programmaticCardMoveInFlight !== null}
-					onDeleteDependency={onDeleteDependency}
-				/>
 			</section>
 		</DragDropContext>
 	);

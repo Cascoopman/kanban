@@ -24,8 +24,8 @@ function createBoard(title: string): RuntimeBoardData {
 	return {
 		columns: [
 			{
-				id: "backlog",
-				title: "Backlog",
+				id: "in_progress",
+				title: "In Progress",
 				cards: [
 					{
 						id: "task-1",
@@ -37,11 +37,10 @@ function createBoard(title: string): RuntimeBoardData {
 					},
 				],
 			},
-			{ id: "in_progress", title: "In Progress", cards: [] },
 			{ id: "review", title: "Review", cards: [] },
+			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
@@ -154,7 +153,6 @@ describe.sequential("workspace-state integration", () => {
 				const initial = await loadWorkspaceState(workspacePath);
 				expect(initial.revision).toBe(0);
 				expect(initial.board.columns.map((column) => column.id)).toEqual([
-					"backlog",
 					"in_progress",
 					"review",
 					"on_hold",
@@ -316,6 +314,55 @@ describe.sequential("workspace-state integration", () => {
 		});
 	});
 
+	it("migrates legacy backlog cards into in progress", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-legacy-board-");
+			try {
+				const workspacePath = join(sandboxRoot, "project-legacy-board");
+				mkdirSync(workspacePath, { recursive: true });
+				initGitRepository(workspacePath);
+
+				const context = await loadWorkspaceContext(workspacePath);
+				mkdirSync(context.statePath, { recursive: true });
+				writeFileSync(
+					join(context.statePath, "board.json"),
+					JSON.stringify({
+						columns: [
+							{
+								id: "backlog",
+								title: "Backlog",
+								cards: [
+									{
+										id: "legacy-task",
+										title: "Legacy task",
+										startInPlanMode: false,
+										baseRef: "main",
+										createdAt: 1,
+										updatedAt: 1,
+									},
+								],
+							},
+						],
+						dependencies: [{ id: "legacy-link", fromTaskId: "legacy-task", toTaskId: "other", createdAt: 1 }],
+					}),
+					"utf8",
+				);
+
+				const state = await loadWorkspaceState(workspacePath);
+				expect(state.board.columns.map((column) => column.id)).toEqual([
+					"in_progress",
+					"review",
+					"on_hold",
+					"trash",
+				]);
+				expect(state.board.columns[0]?.cards[0]?.id).toBe("legacy-task");
+				expect(state.board).not.toHaveProperty("dependencies");
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
 	it("fails loudly when persisted board data is malformed", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-malformed-board-");
@@ -332,8 +379,8 @@ describe.sequential("workspace-state integration", () => {
 						{
 							columns: [
 								{
-									id: "backlog",
-									title: "Backlog",
+									id: "in_progress",
+									title: "In Progress",
 									cards: [
 										{
 											title: "Missing ID and baseRef",
@@ -343,8 +390,8 @@ describe.sequential("workspace-state integration", () => {
 										},
 									],
 								},
-								{ id: "in_progress", title: "In Progress", cards: [] },
 								{ id: "review", title: "Review", cards: [] },
+								{ id: "on_hold", title: "On Hold", cards: [] },
 								{ id: "trash", title: "Done", cards: [] },
 							],
 						},

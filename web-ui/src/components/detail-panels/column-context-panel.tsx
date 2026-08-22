@@ -1,5 +1,5 @@
 import { type BeforeCapture, DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { ChevronDown, ChevronRight, Play, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -23,13 +23,8 @@ function ColumnSection({
 	onCardClick,
 	taskSessions,
 	onCreateTask,
-	onStartTask,
 	onBranchTask,
-	onStartAllTasks,
 	onClearTrash,
-	editingTaskId,
-	inlineTaskEditor,
-	onEditTask,
 	onSaveTitle,
 	onCommitTask,
 	onOpenPrTask,
@@ -47,13 +42,8 @@ function ColumnSection({
 	onCardClick: (card: BoardCardModel) => void;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onCreateTask?: () => void;
-	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCardModel) => void;
-	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
-	editingTaskId?: string | null;
-	inlineTaskEditor?: ReactNode;
-	onEditTask?: (card: BoardCardModel) => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
 	onCommitTask?: (taskId: string) => void;
 	onOpenPrTask?: (taskId: string) => void;
@@ -66,8 +56,7 @@ function ColumnSection({
 	workspacePath?: string | null;
 }): React.ReactElement {
 	const [open, setOpen] = useState(defaultOpen);
-	const canCreate = column.id === "backlog" && onCreateTask;
-	const canStartAllTasks = column.id === "backlog" && onStartAllTasks;
+	const canCreate = column.id === "in_progress" && onCreateTask;
 	const canClearTrash = column.id === "trash" && onClearTrash;
 	const cardDropType = "CARD";
 	const isDropDisabled = isCardDropDisabled(column.id, activeDragSourceColumnId ?? null);
@@ -121,18 +110,6 @@ function ColumnSection({
 						</span>
 					</span>
 				</button>
-				{canStartAllTasks ? (
-					<Button
-						icon={<Play size={14} />}
-						variant="ghost"
-						size="sm"
-						onClick={onStartAllTasks}
-						disabled={column.cards.length === 0}
-						aria-label="Start all backlog tasks"
-						title={column.cards.length > 0 ? "Start all backlog tasks" : "Backlog is empty"}
-						style={{ marginRight: 4 }}
-					/>
-				) : null}
 				{canClearTrash ? (
 					<Button
 						icon={<Trash2 size={14} />}
@@ -180,14 +157,6 @@ function ColumnSection({
 									const items: ReactNode[] = [];
 									let draggableIndex = 0;
 									for (const card of column.cards) {
-										if (column.id === "backlog" && editingTaskId === card.id) {
-											items.push(
-												<div key={card.id} style={{ marginBottom: 8 }}>
-													{inlineTaskEditor}
-												</div>,
-											);
-											continue;
-										}
 										items.push(
 											<BoardCard
 												key={card.id}
@@ -196,7 +165,6 @@ function ColumnSection({
 												columnId={column.id}
 												sessionSummary={taskSessions[card.id]}
 												selected={card.id === selectedCardId}
-												onStart={onStartTask}
 												onBranch={onBranchTask}
 												onMoveToTrash={onMoveToTrashTask}
 												onRestoreFromTrash={onRestoreFromTrashTask}
@@ -207,13 +175,7 @@ function ColumnSection({
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 												workspacePath={workspacePath}
 												onSaveTitle={onSaveTitle}
-												onClick={() => {
-													if (column.id === "backlog") {
-														onEditTask?.(card);
-														return;
-													}
-													onCardClick(card);
-												}}
+												onClick={() => onCardClick(card)}
 											/>,
 										);
 										draggableIndex += 1;
@@ -240,13 +202,8 @@ export function ColumnContextPanel({
 	taskSessions,
 	onTaskDragEnd,
 	onCreateTask,
-	onStartTask,
 	onBranchTask,
-	onStartAllTasks,
 	onClearTrash,
-	editingTaskId,
-	inlineTaskEditor,
-	onEditTask,
 	onSaveTaskTitle,
 	onCommitTask,
 	onOpenPrTask,
@@ -263,13 +220,8 @@ export function ColumnContextPanel({
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onTaskDragEnd: (result: DropResult) => void;
 	onCreateTask?: () => void;
-	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCardModel) => void;
-	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
-	editingTaskId?: string | null;
-	inlineTaskEditor?: ReactNode;
-	onEditTask?: (card: BoardCardModel) => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onCommitTask?: (taskId: string) => void;
 	onOpenPrTask?: (taskId: string) => void;
@@ -351,14 +303,9 @@ export function ColumnContextPanel({
 							defaultOpen={column.id !== "trash"}
 							onCardClick={(card) => onCardSelect(card.id)}
 							taskSessions={taskSessions}
-							onCreateTask={column.id === "backlog" ? onCreateTask : undefined}
-							onStartTask={column.id === "backlog" ? onStartTask : undefined}
+							onCreateTask={column.id === "in_progress" ? onCreateTask : undefined}
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
-							onStartAllTasks={column.id === "backlog" ? onStartAllTasks : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
-							editingTaskId={column.id === "backlog" ? editingTaskId : null}
-							inlineTaskEditor={column.id === "backlog" ? inlineTaskEditor : undefined}
-							onEditTask={column.id === "backlog" ? onEditTask : undefined}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
 							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
 							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}

@@ -1,6 +1,6 @@
 import { Droppable } from "@hello-pangea/dnd";
-import { EyeOff, Play, Plus, Trash2 } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { EyeOff, Plus, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { BoardCard } from "@/components/board-card";
 import { Button } from "@/components/ui/button";
@@ -13,14 +13,9 @@ export function BoardColumn({
 	column,
 	taskSessions,
 	onCreateTask,
-	onStartTask,
 	onBranchTask,
-	onStartAllTasks,
 	onClearTrash,
 	onHide,
-	editingTaskId,
-	inlineTaskEditor,
-	onEditTask,
 	onSaveTitle,
 	onCommitTask,
 	onOpenPrTask,
@@ -33,11 +28,6 @@ export function BoardColumn({
 	activeDragTaskId,
 	activeDragSourceColumnId,
 	programmaticCardMoveInFlight,
-	onDependencyPointerDown,
-	onDependencyPointerEnter,
-	dependencySourceTaskId,
-	dependencyTargetTaskId,
-	isDependencyLinking,
 	workspacePath,
 	isDragDisabled = false,
 	hideCardActions = false,
@@ -45,14 +35,9 @@ export function BoardColumn({
 	column: BoardColumnModel;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onCreateTask?: () => void;
-	onStartTask?: (taskId: string) => void;
 	onBranchTask?: (task: BoardCardModel) => void;
-	onStartAllTasks?: () => void;
 	onClearTrash?: () => void;
 	onHide?: () => void;
-	editingTaskId?: string | null;
-	inlineTaskEditor?: ReactNode;
-	onEditTask?: (card: BoardCardModel) => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
 	onCommitTask?: (taskId: string) => void;
 	onOpenPrTask?: (taskId: string) => void;
@@ -65,17 +50,11 @@ export function BoardColumn({
 	activeDragTaskId?: string | null;
 	activeDragSourceColumnId?: BoardColumnId | null;
 	programmaticCardMoveInFlight?: ProgrammaticCardMoveInFlight | null;
-	onDependencyPointerDown?: (taskId: string, event: ReactMouseEvent<HTMLElement>) => void;
-	onDependencyPointerEnter?: (taskId: string) => void;
-	dependencySourceTaskId?: string | null;
-	dependencyTargetTaskId?: string | null;
-	isDependencyLinking?: boolean;
 	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideCardActions?: boolean;
 }): React.ReactElement {
-	const canCreate = column.id === "backlog" && onCreateTask;
-	const canStartAllTasks = column.id === "backlog" && onStartAllTasks;
+	const canCreate = column.id === "in_progress" && onCreateTask;
 	const canClearTrash = column.id === "trash" && onClearTrash;
 	const cardDropType = "CARD";
 	const isDropDisabled = isCardDropDisabled(column.id, activeDragSourceColumnId ?? null, {
@@ -113,17 +92,6 @@ export function BoardColumn({
 						<span className="text-text-secondary text-xs">{column.cards.length}</span>
 					</div>
 					<div className="flex items-center gap-0.5">
-						{canStartAllTasks ? (
-							<Button
-								icon={<Play size={14} />}
-								variant="ghost"
-								size="sm"
-								onClick={onStartAllTasks}
-								disabled={column.cards.length === 0}
-								aria-label="Start all backlog tasks"
-								title={column.cards.length > 0 ? "Start all backlog tasks" : "Backlog is empty"}
-							/>
-						) : null}
 						{canClearTrash ? (
 							<Button
 								icon={<Trash2 size={14} />}
@@ -168,19 +136,6 @@ export function BoardColumn({
 								const items: ReactNode[] = [];
 								let draggableIndex = 0;
 								for (const card of column.cards) {
-									if (column.id === "backlog" && editingTaskId === card.id) {
-										items.push(
-											<div
-												key={card.id}
-												data-task-id={card.id}
-												data-column-id={column.id}
-												style={{ marginBottom: 6 }}
-											>
-												{inlineTaskEditor}
-											</div>,
-										);
-										continue;
-									}
 									items.push(
 										<BoardCard
 											key={card.id}
@@ -188,7 +143,6 @@ export function BoardColumn({
 											index={draggableIndex}
 											columnId={column.id}
 											sessionSummary={taskSessions[card.id]}
-											onStart={onStartTask}
 											onBranch={onBranchTask}
 											onMoveToTrash={onMoveToTrashTask}
 											onRestoreFromTrash={onRestoreFromTrashTask}
@@ -197,22 +151,11 @@ export function BoardColumn({
 											isCommitLoading={commitTaskLoadingById?.[card.id] ?? false}
 											isOpenPrLoading={openPrTaskLoadingById?.[card.id] ?? false}
 											isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
-											onDependencyPointerDown={onDependencyPointerDown}
-											onDependencyPointerEnter={onDependencyPointerEnter}
-											isDependencySource={dependencySourceTaskId === card.id}
-											isDependencyTarget={dependencyTargetTaskId === card.id}
-											isDependencyLinking={isDependencyLinking}
 											workspacePath={workspacePath}
 											isDragDisabled={isDragDisabled}
 											hideActions={hideCardActions}
 											onSaveTitle={onSaveTitle}
-											onClick={() => {
-												if (column.id === "backlog" && onEditTask) {
-													onEditTask(card);
-													return;
-												}
-												onCardClick?.(card);
-											}}
+											onClick={() => onCardClick?.(card)}
 										/>,
 									);
 									draggableIndex += 1;

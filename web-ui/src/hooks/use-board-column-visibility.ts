@@ -5,7 +5,7 @@ import { LocalStorageKey } from "@/storage/local-storage-store";
 import type { BoardColumnId } from "@/types";
 import { useRawLocalStorageValue } from "@/utils/react-use";
 
-const BOARD_COLUMN_IDS: readonly BoardColumnId[] = ["backlog", "in_progress", "review", "on_hold", "trash"];
+const BOARD_COLUMN_IDS: readonly BoardColumnId[] = ["in_progress", "review", "on_hold", "trash"];
 
 function isBoardColumnId(value: string): value is BoardColumnId {
 	return BOARD_COLUMN_IDS.some((columnId) => columnId === value);

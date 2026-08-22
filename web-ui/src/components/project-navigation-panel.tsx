@@ -65,8 +65,7 @@ export function ProjectNavigationPanel({
 	const [pendingProjectRemoval, setPendingProjectRemoval] = useState<RuntimeProjectSummary | null>(null);
 	const isProjectRemovalPending = pendingProjectRemoval !== null && removingProjectId === pendingProjectRemoval.id;
 	const pendingProjectTaskCount = pendingProjectRemoval
-		? pendingProjectRemoval.taskCounts.backlog +
-			pendingProjectRemoval.taskCounts.in_progress +
+		? pendingProjectRemoval.taskCounts.in_progress +
 			pendingProjectRemoval.taskCounts.review +
 			pendingProjectRemoval.taskCounts.on_hold +
 			pendingProjectRemoval.taskCounts.trash
@@ -406,9 +405,7 @@ const ALT = isMacPlatform ? "⌥" : "Alt";
 
 const ESSENTIAL_SHORTCUTS = [
 	{ keys: ["C"], label: "New task" },
-	{ keys: [MOD, "B"], label: "Start backlog tasks" },
 	{ keys: [MOD, "Shift", "S"], label: "Settings" },
-	{ keys: ["Click", MOD], label: "Hold to link tasks" },
 	{ keys: [MOD, "G"], label: "Toggle git view" },
 	{ keys: [MOD, "J"], label: "Toggle terminal" },
 ];
@@ -522,13 +519,6 @@ function ProjectRow({
 	const hasAnyProjectRemoval = removingProjectId !== null;
 	const [isMenuOpen, setIsMenuOpen] = useState(false);
 	const taskCountBadges: TaskCountBadge[] = [
-		{
-			id: "backlog",
-			title: "Backlog",
-			shortLabel: "B",
-			toneClassName: "bg-text-primary/15 text-text-primary",
-			count: project.taskCounts.backlog,
-		},
 		{
 			id: "in_progress",
 			title: "In Progress",

@@ -34,7 +34,7 @@ export function useTaskBranching({
 			return;
 		}
 		const selection = findCardSelection(board, pendingStartTaskId);
-		if (selection?.column.id !== "backlog") {
+		if (selection?.column.id !== "in_progress") {
 			return;
 		}
 		onStartTask(pendingStartTaskId);
@@ -53,58 +53,55 @@ export function useTaskBranching({
 		}
 	}, []);
 
-	const handleCreateBranch = useCallback(
-		async (options: { start?: boolean } = {}) => {
-			const normalizedTitle = title.trim();
-			if (!sourceTask || !currentProjectId || !normalizedTitle || isPending) {
+	const handleCreateBranch = useCallback(async () => {
+		const normalizedTitle = title.trim();
+		if (!sourceTask || !currentProjectId || !normalizedTitle || isPending) {
+			return;
+		}
+		const draft: TaskDraft = {
+			title: normalizedTitle,
+			startInPlanMode: sourceTask.startInPlanMode,
+			agentId: sourceTask.agentId,
+			branchedFromTaskId: sourceTask.id,
+			baseRef: sourceTask.baseRef,
+		};
+		const created = addTaskToColumnWithResult(board, "in_progress", draft);
+		setIsPending(true);
+		try {
+			const response = await getRuntimeTrpcClient(currentProjectId).workspace.branchTaskWorkspace.mutate({
+				sourceTaskId: sourceTask.id,
+				targetTaskId: created.task.id,
+				baseRef: sourceTask.baseRef,
+			});
+			if (!response.ok) {
+				notifyError(response.error ?? "Could not branch the task workspace.");
 				return;
 			}
-			const draft: TaskDraft = {
-				title: normalizedTitle,
-				startInPlanMode: sourceTask.startInPlanMode,
-				agentId: sourceTask.agentId,
-				branchedFromTaskId: sourceTask.id,
-				baseRef: sourceTask.baseRef,
-			};
-			const created = addTaskToColumnWithResult(board, "backlog", draft);
-			setIsPending(true);
-			try {
-				const response = await getRuntimeTrpcClient(currentProjectId).workspace.branchTaskWorkspace.mutate({
-					sourceTaskId: sourceTask.id,
-					targetTaskId: created.task.id,
-					baseRef: sourceTask.baseRef,
-				});
-				if (!response.ok) {
-					notifyError(response.error ?? "Could not branch the task workspace.");
-					return;
+			setBoard((currentBoard) => {
+				if (findCardSelection(currentBoard, created.task.id)) {
+					return currentBoard;
 				}
-				setBoard((currentBoard) => {
-					if (findCardSelection(currentBoard, created.task.id)) {
-						return currentBoard;
-					}
-					return addTaskToColumnWithResult(currentBoard, "backlog", {
-						...draft,
-						taskId: created.task.id,
-					}).board;
-				});
-				if (options.start && onStartTask) {
-					setPendingStartTaskId(created.task.id);
-				}
-				if (response.warning) {
-					showAppToast({ intent: "warning", message: response.warning, timeout: 7000 });
-				} else {
-					showAppToast({ intent: "success", message: "Task created." });
-				}
-				setSourceTask(null);
-				setTitle("");
-			} catch (error) {
-				notifyError(error instanceof Error ? error.message : String(error));
-			} finally {
-				setIsPending(false);
+				return addTaskToColumnWithResult(currentBoard, "in_progress", {
+					...draft,
+					taskId: created.task.id,
+				}).board;
+			});
+			if (onStartTask) {
+				setPendingStartTaskId(created.task.id);
 			}
-		},
-		[board, currentProjectId, isPending, onStartTask, setBoard, sourceTask, title],
-	);
+			if (response.warning) {
+				showAppToast({ intent: "warning", message: response.warning, timeout: 7000 });
+			} else {
+				showAppToast({ intent: "success", message: "Task created." });
+			}
+			setSourceTask(null);
+			setTitle("");
+		} catch (error) {
+			notifyError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setIsPending(false);
+		}
+	}, [board, currentProjectId, isPending, onStartTask, setBoard, sourceTask, title]);
 
 	return {
 		sourceTask,

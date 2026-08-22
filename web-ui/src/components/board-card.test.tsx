@@ -126,7 +126,7 @@ describe("BoardCard", () => {
 					<BoardCard
 						card={card}
 						index={0}
-						columnId="backlog"
+						columnId="in_progress"
 						sessionSummary={createSummary("running")}
 						onBranch={onBranch}
 					/>
@@ -146,7 +146,7 @@ describe("BoardCard", () => {
 
 	it("does not render the stored prompt as a card description", async () => {
 		await act(async () => {
-			root.render(<BoardCard card={createCard({ title: "Visible title" })} index={0} columnId="backlog" />);
+			root.render(<BoardCard card={createCard({ title: "Visible title" })} index={0} columnId="in_progress" />);
 		});
 
 		expect(container.textContent).toContain("Visible title");

@@ -93,7 +93,7 @@ describe("ColumnContextPanel", () => {
 
 	it("centers the selected detail card when the selection changes", async () => {
 		const columns: BoardColumn[] = [
-			{ id: "backlog", title: "Backlog", cards: [createCard("task-1", "Backlog task")] },
+			{ id: "in_progress", title: "In Progress", cards: [createCard("task-1", "In Progress task")] },
 			{ id: "in_progress", title: "In Progress", cards: [createCard("task-2", "In progress task")] },
 			{ id: "review", title: "Review", cards: [createCard("task-3", "Review task")] },
 			{ id: "trash", title: "Done", cards: [] },

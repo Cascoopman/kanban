@@ -30,9 +30,6 @@ export function isAllowedCrossColumnCardMove(
 		programmaticCardMoveInFlight?: ProgrammaticCardMoveInFlight | null;
 	},
 ): boolean {
-	if (fromColumnId === "backlog" && toColumnId === "in_progress") {
-		return true;
-	}
 	if (toColumnId === "trash" && fromColumnId !== "trash") {
 		return true;
 	}
@@ -85,11 +82,8 @@ export function isCardDropDisabled(
 			programmaticCardMoveInFlight: options?.programmaticCardMoveInFlight,
 		});
 	}
-	if (columnId === "backlog") {
-		return activeDragSourceColumnId !== "backlog";
-	}
 	if (columnId === "in_progress") {
-		if (activeDragSourceColumnId === "backlog" || activeDragSourceColumnId === "in_progress") {
+		if (activeDragSourceColumnId === "in_progress") {
 			return false;
 		}
 		return !isAllowedCrossColumnCardMove(activeDragSourceColumnId, columnId, {

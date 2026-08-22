@@ -11,7 +11,7 @@ const MAX_CODEX_ROLLOUT_FILES_TO_SCAN = 250;
 const CODEX_ROLLOUT_FILE_FRESH_WINDOW_MS = 10 * 60 * 1000;
 const CODEX_ROLLOUT_MATCH_SCAN_BYTES = 256 * 1024;
 const CODEX_ROLLOUT_TAIL_SCAN_BYTES = 2 * 1024 * 1024;
-const CODEX_ROLLOUT_INITIAL_BACKLOG_BYTES = 256 * 1024;
+const CODEX_ROLLOUT_INITIAL_TAIL_BYTES = 256 * 1024;
 const CODEX_USER_INPUT_TOOL_NAMES = new Set(["AskUserQuestion", "ask_user_question", "request_user_input"]);
 
 interface CodexWatcherState {
@@ -897,7 +897,7 @@ export async function startCodexSessionWatcher(
 			rolloutLogPath = resolvedRolloutPath;
 			try {
 				const initialStat = await stat(rolloutLogPath);
-				rolloutOffset = Math.max(0, initialStat.size - CODEX_ROLLOUT_INITIAL_BACKLOG_BYTES);
+				rolloutOffset = Math.max(0, initialStat.size - CODEX_ROLLOUT_INITIAL_TAIL_BYTES);
 			} catch {
 				rolloutOffset = 0;
 			}

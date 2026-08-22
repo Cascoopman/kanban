@@ -68,7 +68,7 @@ describe("useTaskBranching", () => {
 		container.remove();
 	});
 
-	it("creates a backlog task linked to the source task", async () => {
+	it("creates an in-progress task branched from the source task", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "review", {
 			title: "Source task",
 			startInPlanMode: true,
@@ -89,7 +89,7 @@ describe("useTaskBranching", () => {
 		expect(branchTaskWorkspaceMock).toHaveBeenCalledWith(
 			expect.objectContaining({ sourceTaskId: source.task.id, baseRef: "main" }),
 		);
-		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
+		const branch = latestSnapshot?.board.columns.find((column) => column.id === "in_progress")?.cards[0];
 		expect(branch).toEqual(
 			expect.objectContaining({
 				title: "Try the alternative design",
@@ -118,7 +118,7 @@ describe("useTaskBranching", () => {
 			await latestSnapshot?.handleCreateBranch();
 		});
 
-		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
+		const branch = latestSnapshot?.board.columns.find((column) => column.id === "in_progress")?.cards[0];
 		expect(branch).toBeUndefined();
 		expect(branchTaskWorkspaceMock).not.toHaveBeenCalled();
 	});
@@ -143,7 +143,7 @@ describe("useTaskBranching", () => {
 		expect(latestSnapshot?.title).toBe("Custom branch title");
 	});
 
-	it("starts the branched task after adding it to the backlog", async () => {
+	it("starts the branched task after adding it to in progress", async () => {
 		const source = addTaskToColumnWithResult(createInitialBoardData(), "in_progress", {
 			title: "Source task",
 			startInPlanMode: false,
@@ -158,10 +158,10 @@ describe("useTaskBranching", () => {
 			latestSnapshot?.onTitleChange("Continue in another direction");
 		});
 		await act(async () => {
-			await latestSnapshot?.handleCreateBranch({ start: true });
+			await latestSnapshot?.handleCreateBranch();
 		});
 
-		const branch = latestSnapshot?.board.columns.find((column) => column.id === "backlog")?.cards[0];
+		const branch = latestSnapshot?.board.columns.find((column) => column.id === "in_progress")?.cards[0];
 		expect(branch).toBeDefined();
 		expect(startTaskMock).toHaveBeenCalledWith(branch?.id);
 	});

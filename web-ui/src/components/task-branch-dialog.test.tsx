@@ -29,9 +29,8 @@ describe("TaskBranchDialog", () => {
 		container.remove();
 	});
 
-	it("offers create and create-and-start actions with keyboard shortcuts", async () => {
+	it("offers one create-and-open action with its keyboard shortcut", async () => {
 		const onCreate = vi.fn();
-		const onCreateAndStart = vi.fn();
 		await act(async () => {
 			root.render(
 				<TaskBranchDialog
@@ -42,26 +41,19 @@ describe("TaskBranchDialog", () => {
 					isPending={false}
 					onOpenChange={() => {}}
 					onCreate={onCreate}
-					onCreateAndStart={onCreateAndStart}
 				/>,
 			);
 		});
 
-		expect(document.body.textContent).toContain("Create task");
-		expect(document.body.textContent).toContain("Create & start");
-		const buttons = Array.from(document.body.querySelectorAll("button"));
-		const createButton = buttons.find((button) => button.textContent?.includes("Create task"));
-		const createAndStartButton = buttons.find((button) => button.textContent?.includes("Create & start"));
+		const createButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("Create and open terminal"),
+		);
 		expect(createButton?.querySelector(".lucide-command")).not.toBeNull();
+		expect(createButton?.querySelector(".lucide-arrow-big-up")).not.toBeNull();
 		expect(createButton?.querySelector(".lucide-corner-down-left")).not.toBeNull();
-		expect(createAndStartButton?.querySelector(".lucide-command")).not.toBeNull();
-		expect(createAndStartButton?.querySelector(".lucide-arrow-big-up")).not.toBeNull();
-		expect(createAndStartButton?.querySelector(".lucide-corner-down-left")).not.toBeNull();
 		await act(async () => createButton?.click());
-		await act(async () => createAndStartButton?.click());
 
 		expect(onCreate).toHaveBeenCalledOnce();
-		expect(onCreateAndStart).toHaveBeenCalledOnce();
 	});
 
 	it("opens with the title focused and selected", async () => {
@@ -75,7 +67,6 @@ describe("TaskBranchDialog", () => {
 					isPending={false}
 					onOpenChange={() => {}}
 					onCreate={() => {}}
-					onCreateAndStart={() => {}}
 				/>,
 			);
 		});
@@ -84,8 +75,6 @@ describe("TaskBranchDialog", () => {
 		});
 
 		const titleInput = document.body.querySelector<HTMLInputElement>('input[value="New task"]');
-		expect(titleInput).not.toBeNull();
-		expect(document.body.querySelector("textarea")).toBeNull();
 		if (!titleInput) {
 			throw new Error("Expected the title field to render.");
 		}

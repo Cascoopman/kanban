@@ -65,7 +65,7 @@ function createBoard(taskIds: {
 }): RuntimeBoardData {
 	return {
 		columns: [
-			{ id: "backlog", title: "Backlog", cards: [] },
+			{ id: "in_progress", title: "In Progress", cards: [] },
 			{
 				id: "in_progress",
 				title: "In Progress",
@@ -87,7 +87,6 @@ function createBoard(taskIds: {
 				cards: (taskIds.trash ?? []).map((taskId) => createCard(taskId)),
 			},
 		],
-		dependencies: [],
 	};
 }
 

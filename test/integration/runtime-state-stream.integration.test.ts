@@ -46,8 +46,8 @@ function createBoard(title: string): RuntimeBoardData {
 	return {
 		columns: [
 			{
-				id: "backlog",
-				title: "Backlog",
+				id: "in_progress",
+				title: "In Progress",
 				cards: [
 					{
 						id: "task-1",
@@ -63,7 +63,6 @@ function createBoard(title: string): RuntimeBoardData {
 			{ id: "review", title: "Review", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
@@ -83,7 +82,7 @@ function createReviewBoard(taskId: string, title: string, existingTrashTaskId?: 
 		: [];
 	return {
 		columns: [
-			{ id: "backlog", title: "Backlog", cards: [] },
+			{ id: "in_progress", title: "In Progress", cards: [] },
 			{ id: "in_progress", title: "In Progress", cards: [] },
 			{
 				id: "review",
@@ -101,7 +100,6 @@ function createReviewBoard(taskId: string, title: string, existingTrashTaskId?: 
 			},
 			{ id: "trash", title: "Done", cards: trashCards },
 		],
-		dependencies: [],
 	};
 }
 
@@ -109,7 +107,7 @@ function createInProgressBoard(taskId: string, title: string): RuntimeBoardData 
 	const now = Date.now();
 	return {
 		columns: [
-			{ id: "backlog", title: "Backlog", cards: [] },
+			{ id: "in_progress", title: "In Progress", cards: [] },
 			{
 				id: "in_progress",
 				title: "In Progress",
@@ -128,7 +126,6 @@ function createInProgressBoard(taskId: string, title: string): RuntimeBoardData 
 			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
@@ -826,7 +823,7 @@ describe.sequential("runtime state stream integration", () => {
 			});
 			expect(projectsAfterUpdate.status).toBe(200);
 			const projectB = projectsAfterUpdate.payload.projects.find((project) => project.id === workspaceBId) ?? null;
-			expect(projectB?.taskCounts.backlog).toBe(1);
+			expect(projectB?.taskCounts.in_progress).toBe(1);
 		} finally {
 			if (streamA) {
 				await streamA.close();
@@ -1241,12 +1238,12 @@ describe.sequential("runtime state stream integration", () => {
 
 			const taskId = "preserve-worktree-task";
 			const board = createBoard("Preserve existing worktree");
-			const backlogColumn = board.columns.find((column) => column.id === "backlog");
-			if (!backlogColumn || !backlogColumn.cards[0]) {
-				throw new Error("Expected a backlog card for seed board.");
+			const inProgressColumn = board.columns.find((column) => column.id === "in_progress");
+			if (!inProgressColumn || !inProgressColumn.cards[0]) {
+				throw new Error("Expected an in-progress card for seed board.");
 			}
-			backlogColumn.cards[0].id = taskId;
-			backlogColumn.cards[0].baseRef = baseRef;
+			inProgressColumn.cards[0].id = taskId;
+			inProgressColumn.cards[0].baseRef = baseRef;
 
 			const saveResponse = await requestJson<RuntimeWorkspaceStateResponse>({
 				baseUrl: `http://127.0.0.1:${port}`,

@@ -100,7 +100,6 @@ export interface WorkspaceRegistry {
 
 function createEmptyProjectTaskCounts(): RuntimeProjectTaskCounts {
 	return {
-		backlog: 0,
 		in_progress: 0,
 		review: 0,
 		on_hold: 0,
@@ -113,9 +112,6 @@ function countTasksByColumn(board: RuntimeBoardData): RuntimeProjectTaskCounts {
 	for (const column of board.columns) {
 		const count = column.cards.length;
 		switch (column.id) {
-			case "backlog":
-				counts.backlog += count;
-				break;
 			case "in_progress":
 				counts.in_progress += count;
 				break;
@@ -136,7 +132,7 @@ function countTasksByColumn(board: RuntimeBoardData): RuntimeProjectTaskCounts {
 export function collectProjectWorktreeTaskIdsForRemoval(board: RuntimeBoardData): Set<string> {
 	const taskIds = new Set<string>();
 	for (const column of board.columns) {
-		if (column.id === "backlog" || column.id === "trash") {
+		if (column.id === "trash") {
 			continue;
 		}
 		for (const card of column.cards) {

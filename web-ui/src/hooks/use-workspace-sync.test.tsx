@@ -16,8 +16,8 @@ function createBoard(taskId: string): BoardData {
 	return {
 		columns: [
 			{
-				id: "backlog",
-				title: "Backlog",
+				id: "in_progress",
+				title: "In Progress",
 				cards: [
 					{
 						id: taskId,
@@ -33,7 +33,6 @@ function createBoard(taskId: string): BoardData {
 			{ id: "review", title: "Review", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
