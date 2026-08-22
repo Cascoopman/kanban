@@ -11,7 +11,7 @@ import {
 import { createTempDir } from "../utilities/temp-dir";
 
 function successfulRunner(): NotificationCommandRunner {
-	return vi.fn(() => ({ status: 0, stderr: "" }));
+	return vi.fn(() => ({ status: 0, stdout: "button returned:Dismiss, gave up:false", stderr: "" }));
 }
 
 describe("sendMacOsNotification", () => {
@@ -50,12 +50,15 @@ describe("sendMacOsNotification", () => {
 			"Pay within 5 minutes",
 			"Complete payment now; total is $120.",
 			"",
+			"true",
 		]);
 		expect(result).toEqual({
 			title: 'Reservation "La Plage"',
 			subtitle: "Pay within 5 minutes",
 			message: "Complete payment now; total is $120.",
 			sound: null,
+			modal: true,
+			acknowledged: true,
 		});
 	});
 
@@ -69,7 +72,21 @@ describe("sendMacOsNotification", () => {
 			subtitle: "Action needed",
 			message: "Approve the payment now.",
 			sound: "Basso",
+			modal: true,
+			acknowledged: true,
 		});
+	});
+
+	it("can send a banner without a modal dialog", () => {
+		const runCommand = successfulRunner();
+
+		expect(
+			sendMacOsNotification({ message: "Build finished.", modal: false }, { platform: "darwin", runCommand }),
+		).toMatchObject({ modal: false, acknowledged: null });
+		expect(runCommand).toHaveBeenCalledWith(
+			"osascript",
+			expect.arrayContaining(["Build finished.", "Basso", "false"]),
+		);
 	});
 
 	it("rejects empty messages before launching osascript", () => {
@@ -91,7 +108,7 @@ describe("sendMacOsNotification", () => {
 	});
 
 	it("reports osascript failures", () => {
-		const runCommand = vi.fn(() => ({ status: 1, stderr: "notifications are disabled" }));
+		const runCommand = vi.fn(() => ({ status: 1, stdout: "", stderr: "notifications are disabled" }));
 
 		expect(() => sendMacOsNotification({ message: "Act now." }, { platform: "darwin", runCommand })).toThrow(
 			"Could not send macOS notification: notifications are disabled",

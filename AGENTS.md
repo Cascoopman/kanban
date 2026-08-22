@@ -66,7 +66,7 @@ When closing issues via commit:
 Kanban task sessions
 - When `KANBAN_TASK_ID` is present, begin by running `kanban task current` to identify the card and confirm its current title and state.
 - Treat the task title as agent-owned metadata. If it is generic, unclear, or no longer reflects the work, update it early with `kanban task update --title "<concise outcome-oriented title>"`; inside a task session the CLI infers the task and workspace automatically.
-- When the user must act within a few minutes, immediately run `kanban task notify --title "<urgent item>" --subtitle "<deadline>" --message "<concrete action>"` to send a macOS alert. Also report the issue in the conversation, and do not use notifications for routine progress or completion updates.
+- When the user must act within a few minutes, immediately run `kanban task notify --title "<urgent item>" --subtitle "<deadline>" --message "<concrete action>"`. It sends both a Notification Center entry and a modal alert that remains visible under Focus modes. Also report the issue in the conversation, and do not use notifications for routine progress or completion updates.
 - Keep the title concise and useful on the board. Do not change the prompt, base ref, agent, or workflow mode unless the user requests it or the task requires it.
 
 web-ui Stack

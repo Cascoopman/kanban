@@ -894,6 +894,7 @@ function sendUrgentTaskNotification(input: {
 	title?: string;
 	subtitle?: string;
 	sound?: string;
+	modal?: boolean;
 }): JsonRecord {
 	return {
 		ok: true,
@@ -1030,18 +1031,22 @@ export function registerTaskCommand(program: Command): void {
 		.option("--title <text>", 'Notification title. Defaults to "Urgent Kanban alert".')
 		.option("--subtitle <text>", 'Notification subtitle. Defaults to "Action needed".')
 		.option("--sound <name>", 'macOS alert sound. Defaults to "Basso"; use "none" to mute.')
-		.action(async (options: { message: string; title?: string; subtitle?: string; sound?: string }) => {
-			await runTaskCommand(
-				async () =>
-					sendUrgentTaskNotification({
-						message: options.message,
-						title: options.title,
-						subtitle: options.subtitle,
-						sound: options.sound,
-					}),
-				{ includeRuntimeOrigin: false },
-			);
-		});
+		.option("--no-modal", "Do not show the Focus-resistant modal alert.")
+		.action(
+			async (options: { message: string; title?: string; subtitle?: string; sound?: string; modal: boolean }) => {
+				await runTaskCommand(
+					async () =>
+						sendUrgentTaskNotification({
+							message: options.message,
+							title: options.title,
+							subtitle: options.subtitle,
+							sound: options.sound,
+							modal: options.modal,
+						}),
+					{ includeRuntimeOrigin: false },
+				);
+			},
+		);
 
 	task
 		.command("trash")
