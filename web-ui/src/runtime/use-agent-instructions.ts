@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
-import { fetchAgentInstructions, saveAgentInstructions } from "@/runtime/agent-instructions-query";
+import { fetchGlobalAgentInstructions, saveGlobalAgentInstructions } from "@/runtime/agent-instructions-query";
 import type { RuntimeAgentInstructionsResponse } from "@/runtime/types";
 import { useTrpcQuery } from "@/runtime/use-trpc-query";
 
@@ -12,50 +12,32 @@ export interface UseAgentInstructionsResult {
 	save: (content: string) => Promise<RuntimeAgentInstructionsResponse>;
 }
 
-export function useAgentInstructions(open: boolean, workspaceId: string | null): UseAgentInstructionsResult {
+export function useGlobalAgentInstructions(open: boolean): UseAgentInstructionsResult {
 	const [isSaving, setIsSaving] = useState(false);
-	const previousWorkspaceIdRef = useRef<string | null>(workspaceId);
-	const queryFn = useCallback(async () => {
-		if (!workspaceId) {
-			throw new Error("Select a project to edit AGENTS.md.");
-		}
-		return await fetchAgentInstructions(workspaceId);
-	}, [workspaceId]);
 	const query = useTrpcQuery<RuntimeAgentInstructionsResponse>({
-		enabled: open && workspaceId !== null,
-		queryFn,
+		enabled: open,
+		queryFn: fetchGlobalAgentInstructions,
 		retainDataOnError: true,
 	});
 	const setData = query.setData;
 
-	useEffect(() => {
-		if (previousWorkspaceIdRef.current === workspaceId) {
-			return;
-		}
-		previousWorkspaceIdRef.current = workspaceId;
-		setData(null);
-	}, [setData, workspaceId]);
-
 	const save = useCallback(
 		async (content: string): Promise<RuntimeAgentInstructionsResponse> => {
-			if (!workspaceId) {
-				throw new Error("Select a project to edit AGENTS.md.");
-			}
 			setIsSaving(true);
 			try {
-				const saved = await saveAgentInstructions(workspaceId, content);
+				const saved = await saveGlobalAgentInstructions(content);
 				setData(saved);
 				return saved;
 			} finally {
 				setIsSaving(false);
 			}
 		},
-		[setData, workspaceId],
+		[setData],
 	);
 
 	return {
 		instructions: query.data,
-		isLoading: open && workspaceId !== null && query.isLoading,
+		isLoading: open && query.isLoading,
 		isSaving,
 		loadError: query.error,
 		save,

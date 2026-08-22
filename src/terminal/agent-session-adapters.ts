@@ -10,6 +10,7 @@ import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
 import { getRuntimeHomePath } from "../state/workspace-state";
+import { loadAgentInstructionsFile, loadGlobalAgentInstructionsFile } from "../workspace/agent-instructions";
 import { configureCodexHooks, hasCodexConfigOverride } from "./codex-hook-config";
 import { createHookRuntimeEnv } from "./hook-runtime-context";
 import { stripAnsi } from "./output-utils";
@@ -23,6 +24,7 @@ export interface AgentAdapterLaunchInput {
 	args: string[];
 	autonomousModeEnabled?: boolean;
 	cwd: string;
+	projectCwd?: string;
 	prompt: string;
 	images?: RuntimeTaskImage[];
 	startInPlanMode?: boolean;
@@ -34,6 +36,7 @@ export interface AgentAdapterLaunchInput {
 	codexForkSessionId?: string;
 	env?: Record<string, string | undefined>;
 	workspaceId?: string;
+	agentInstructions?: string;
 }
 
 export type AgentOutputTransitionDetector = (
@@ -171,6 +174,38 @@ function withPrompt(args: string[], prompt: string): PreparedAgentLaunch {
 	};
 }
 
+function formatCodexConfigString(value: string): string {
+	return JSON.stringify(value);
+}
+
+function joinAgentInstructions(...contents: Array<string | undefined>): string | undefined {
+	const sections = contents.map((content) => content?.trim()).filter((content): content is string => Boolean(content));
+	return sections.length > 0 ? `${sections.join("\n\n")}\n` : undefined;
+}
+
+async function resolveAgentInstructions(input: AgentAdapterLaunchInput): Promise<string | undefined> {
+	const [globalInstructions, taskProjectInstructions] = await Promise.all([
+		loadGlobalAgentInstructionsFile(),
+		loadAgentInstructionsFile(input.cwd),
+	]);
+	const sourceProjectInstructions =
+		!taskProjectInstructions.exists && input.projectCwd && input.projectCwd !== input.cwd
+			? await loadAgentInstructionsFile(input.projectCwd)
+			: null;
+	const projectInstructions = taskProjectInstructions.exists ? taskProjectInstructions : sourceProjectInstructions;
+
+	if (input.agentId === "codex" && taskProjectInstructions.exists) {
+		return joinAgentInstructions(globalInstructions.content);
+	}
+	return joinAgentInstructions(globalInstructions.content, projectInstructions?.content);
+}
+
+async function writeClaudeAgentInstructions(taskId: string, content: string): Promise<string> {
+	const path = join(getHookAgentDirectory("claude"), "instructions", `${encodeURIComponent(taskId)}.md`);
+	await ensureTextFile(path, content);
+	return path;
+}
+
 function toBracketedPasteSubmission(command: string): string {
 	return `\u001b[200~${command}\u001b[201~\r`;
 }
@@ -230,6 +265,12 @@ const claudeAdapter: AgentSessionAdapter = {
 			const withoutImmediateBypass = args.filter((arg) => arg !== "--dangerously-skip-permissions");
 			args.length = 0;
 			args.push(...withoutImmediateBypass, "--permission-mode", "plan");
+		}
+		if (input.agentInstructions) {
+			args.push(
+				"--append-system-prompt-file",
+				await writeClaudeAgentInstructions(input.taskId, input.agentInstructions),
+			);
 		}
 
 		const hooks = resolveHookContext(input);
@@ -332,6 +373,9 @@ const codexAdapter: AgentSessionAdapter = {
 		if (input.autonomousModeEnabled && !hasCliOption(codexArgs, "--dangerously-bypass-approvals-and-sandbox")) {
 			codexArgs.push("--dangerously-bypass-approvals-and-sandbox");
 		}
+		if (input.agentInstructions) {
+			codexArgs.push("-c", `developer_instructions=${formatCodexConfigString(input.agentInstructions)}`);
+		}
 
 		if (input.codexResumeSessionId) {
 			codexArgs.push("resume", input.codexResumeSessionId);
@@ -385,8 +429,10 @@ export async function prepareAgentLaunch(input: AgentAdapterLaunchInput): Promis
 		prompt: input.prompt,
 		images: input.images,
 	});
+	const agentInstructions = await resolveAgentInstructions(input);
 	return await adapter.prepare({
 		...input,
 		prompt: preparedPrompt,
+		agentInstructions,
 	});
 }
