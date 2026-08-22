@@ -9,7 +9,11 @@ import { join } from "node:path";
 import { TRPCError } from "@trpc/server";
 import type { RuntimeConfigState } from "../config/runtime-config";
 import { updateGlobalRuntimeConfig, updateRuntimeConfig } from "../config/runtime-config";
-import type { RuntimeCommandRunResponse } from "../core/api-contract";
+import type {
+	RuntimeCommandRunResponse,
+	RuntimeVsCodeWebRequest,
+	RuntimeVsCodeWebResponse,
+} from "../core/api-contract";
 import {
 	parseCommandRunRequest,
 	parseRuntimeConfigSaveRequest,
@@ -19,6 +23,7 @@ import {
 	parseTaskSessionStopRequest,
 } from "../core/api-validation";
 import { openInBrowser } from "../server/browser";
+import type { VsCodeWebManager } from "../server/vscode-web-manager";
 import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/agent-registry";
 import { resolveCodexSessionIdForCwd } from "../terminal/codex-session-resolver";
 import type { TerminalSessionManager } from "../terminal/session-manager";
@@ -36,6 +41,8 @@ export interface CreateRuntimeApiDependencies {
 	resolveInteractiveShellCommand: () => { binary: string; args: string[] };
 	runCommand: (command: string, cwd: string) => Promise<RuntimeCommandRunResponse>;
 	prepareForStateReset?: () => Promise<void>;
+	vsCodeWebManager?: VsCodeWebManager;
+	vsCodeWebSupported?: boolean;
 }
 
 async function resolveExistingTaskCwdOrEnsure(options: {
@@ -321,6 +328,28 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 			}
 			openInBrowser(filePath);
 			return { ok: true };
+		},
+		getVsCodeWebStatus: async (workspaceScope, input: RuntimeVsCodeWebRequest): Promise<RuntimeVsCodeWebResponse> => {
+			if (!deps.vsCodeWebSupported || !deps.vsCodeWebManager) {
+				return {
+					status: "unavailable",
+					url: null,
+					workspacePath: null,
+					error: "Inline VS Code is currently available only when Kanban runs locally.",
+				};
+			}
+			return await deps.vsCodeWebManager.getStatus(workspaceScope, input);
+		},
+		startVsCodeWeb: async (workspaceScope, input: RuntimeVsCodeWebRequest): Promise<RuntimeVsCodeWebResponse> => {
+			if (!deps.vsCodeWebSupported || !deps.vsCodeWebManager) {
+				return {
+					status: "unavailable",
+					url: null,
+					workspacePath: null,
+					error: "Inline VS Code is currently available only when Kanban runs locally.",
+				};
+			}
+			return await deps.vsCodeWebManager.start(workspaceScope, input);
 		},
 	};
 }

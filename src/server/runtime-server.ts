@@ -36,6 +36,7 @@ import { createWorkspaceApi } from "../trpc/workspace-api";
 import { getWebUiDir, normalizeRequestPath, readAsset } from "./assets";
 import { handleHttpRequest, handleSocketUpgrade } from "./middleware";
 import type { RuntimeStateHub } from "./runtime-state-hub";
+import { VsCodeWebManager } from "./vscode-web-manager";
 import type { WorkspaceRegistry } from "./workspace-registry";
 
 interface DisposeTrackedWorkspaceResult {
@@ -89,6 +90,7 @@ function readWorkspaceIdFromRequest(request: IncomingMessage, requestUrl: URL): 
 
 export async function createRuntimeServer(deps: CreateRuntimeServerDependencies): Promise<RuntimeServer> {
 	const webUiDir = getWebUiDir();
+	const vsCodeWebManager = new VsCodeWebManager({ warn: deps.warn });
 
 	try {
 		await readFile(join(webUiDir, "index.html"));
@@ -160,6 +162,8 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				resolveInteractiveShellCommand: deps.resolveInteractiveShellCommand,
 				runCommand: deps.runCommand,
 				prepareForStateReset,
+				vsCodeWebManager,
+				vsCodeWebSupported: !isKanbanRemoteHost(),
 			}),
 			workspaceApi: createWorkspaceApi({
 				ensureTerminalManagerForWorkspace: deps.ensureTerminalManagerForWorkspace,
@@ -338,7 +342,6 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				}
 			}
 			// ── End passcode gate ──────────────────────────────────────────────
-
 			if (pathname.startsWith("/api/trpc")) {
 				await trpcHttpHandler(req, res);
 				return;
@@ -437,6 +440,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 	return {
 		url,
 		close: async () => {
+			await vsCodeWebManager.stop();
 			await deps.runtimeStateHub.close();
 			await terminalWebSocketBridge.close();
 			await new Promise<void>((resolveClose, rejectClose) => {

@@ -568,8 +568,6 @@ export default function App(): ReactElement {
 		handleRestoreTaskFromTrash,
 		handleOpenClearTrash,
 		handleConfirmClearTrash,
-		handleAddReviewComments,
-		handleSendReviewComments,
 		moveToTrashLoadingById,
 		trashTaskCount,
 	} = useBoardInteractions({
@@ -587,7 +585,6 @@ export default function App(): ReactElement {
 		ensureTaskWorkspace,
 		startTaskSession,
 		fetchTaskWorkspaceInfo,
-		sendTaskSessionInput,
 		readyForReviewNotificationsEnabled,
 	});
 
@@ -919,12 +916,6 @@ export default function App(): ReactElement {
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
-									onAddReviewComments={(taskId: string, text: string) => {
-										void handleAddReviewComments(taskId, text);
-									}}
-									onSendReviewComments={(taskId: string, text: string) => {
-										void handleSendReviewComments(taskId, text);
-									}}
 									onMoveToTrash={handleMoveToTrash}
 									isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
 									gitHistoryPanel={
@@ -946,7 +937,6 @@ export default function App(): ReactElement {
 									onBottomTerminalSendAgentCommand={handleSendAgentCommandToDetailTerminal}
 									isBottomTerminalExpanded={isDetailTerminalExpanded}
 									onBottomTerminalToggleExpand={handleToggleExpandDetailTerminal}
-									isDocumentVisible={isDocumentVisible}
 								/>
 							</div>
 						) : null}

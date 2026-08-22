@@ -5,36 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CardDetailView } from "@/components/card-detail-view";
 import type { CardSelection } from "@/types";
 
-const useRuntimeWorkspaceChangesMock = vi.hoisted(() =>
-	vi.fn((taskId: string | null) => {
-		void taskId;
-		return {
-			changes: null,
-			isLoading: false,
-			isRuntimeAvailable: true,
-			refresh: async () => {},
-		};
-	}),
-);
+let latestAgentConnectionReady: ((taskId: string) => void) | undefined;
 
 vi.mock("react-hotkeys-hook", () => ({
 	useHotkeys: () => {},
 }));
 
 vi.mock("@/components/detail-panels/agent-terminal-panel", () => ({
-	AgentTerminalPanel: () => <div>Agent</div>,
+	AgentTerminalPanel: ({ onConnectionReady }: { onConnectionReady?: (taskId: string) => void }) => {
+		latestAgentConnectionReady = onConnectionReady;
+		return <div>Agent</div>;
+	},
 }));
 
 vi.mock("@/components/detail-panels/column-context-panel", () => ({
 	ColumnContextPanel: () => <div>Cards</div>,
 }));
 
-vi.mock("@/components/detail-panels/diff-viewer-panel", () => ({
-	DiffViewerPanel: () => <div>Diff</div>,
-}));
-
-vi.mock("@/components/detail-panels/file-tree-panel", () => ({
-	FileTreePanel: () => <div>Files</div>,
+vi.mock("@/components/detail-panels/vscode-inline-panel", () => ({
+	VscodeInlinePanel: ({ taskId }: { taskId: string }) => <div data-testid="vscode-panel">VS Code {taskId}</div>,
 }));
 
 vi.mock("@/hooks/use-is-mobile", () => ({
@@ -47,21 +36,11 @@ vi.mock("@/resize/use-card-detail-layout", () => ({
 		setTaskCardsPanelRatio: () => {},
 		agentPanelRatio: 0.4,
 		setAgentPanelRatio: () => {},
-		detailDiffFileTreeRatio: 0.33,
-		setDetailDiffFileTreeRatio: () => {},
 	}),
 }));
 
 vi.mock("@/resize/use-resize-drag", () => ({
 	useResizeDrag: () => ({ startDrag: () => {} }),
-}));
-
-vi.mock("@/runtime/use-runtime-workspace-changes", () => ({
-	useRuntimeWorkspaceChanges: useRuntimeWorkspaceChangesMock,
-}));
-
-vi.mock("@/stores/workspace-metadata-store", () => ({
-	useTaskWorkspaceStateVersionValue: () => 0,
 }));
 
 vi.mock("@/terminal/theme-colors", () => ({
@@ -92,13 +71,14 @@ function createSelection(taskId: string): CardSelection {
 	return { card, column, allColumns: [column] };
 }
 
-describe("CardDetailView diff visibility", () => {
+describe("CardDetailView VS Code visibility", () => {
 	let container: HTMLDivElement;
 	let root: Root;
 	let previousActEnvironment: boolean | undefined;
 
 	beforeEach(() => {
-		useRuntimeWorkspaceChangesMock.mockClear();
+		vi.useFakeTimers();
+		latestAgentConnectionReady = undefined;
 		previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
 			.IS_REACT_ACT_ENVIRONMENT;
 		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -112,6 +92,7 @@ describe("CardDetailView diff visibility", () => {
 			root.unmount();
 		});
 		container.remove();
+		vi.useRealTimers();
 		if (previousActEnvironment === undefined) {
 			delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
 		} else {
@@ -141,43 +122,94 @@ describe("CardDetailView diff visibility", () => {
 		});
 	}
 
-	it("keeps diff calculation disabled until opened and disables it again when collapsed", () => {
+	function signalMainTerminalReady(taskId: string): void {
+		act(() => {
+			latestAgentConnectionReady?.(taskId);
+		});
+		act(() => {
+			vi.runOnlyPendingTimers();
+		});
+	}
+
+	it("preloads VS Code after the main terminal is ready and preserves it while collapsed", () => {
 		render(createSelection("task-1"));
 
-		expect(useRuntimeWorkspaceChangesMock.mock.lastCall?.[0]).toBeNull();
-		const expandButton = container.querySelector('button[aria-label="Expand diff viewer (All Changes)"]');
-		if (!(expandButton instanceof HTMLButtonElement)) {
-			throw new Error("Collapsed diff control was not rendered.");
-		}
+		expect(container.textContent).not.toContain("VS Code task-1");
+		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeInstanceOf(HTMLButtonElement);
 
+		signalMainTerminalReady("task-1");
+
+		const preloadedPanel = container.querySelector('[data-testid="vscode-panel"]');
+		expect(preloadedPanel).toBeInstanceOf(HTMLElement);
+		expect(preloadedPanel?.parentElement?.getAttribute("aria-hidden")).toBe("true");
+
+		const expandButton = container.querySelector('button[aria-label="Open VS Code"]');
+		if (!(expandButton instanceof HTMLButtonElement)) {
+			throw new Error("Collapsed VS Code control was not rendered.");
+		}
 		act(() => {
 			expandButton.click();
 		});
-		expect(useRuntimeWorkspaceChangesMock.mock.lastCall?.[0]).toBe("task-1");
+		expect(preloadedPanel?.parentElement?.hasAttribute("aria-hidden")).toBe(false);
 
-		const collapseButton = container.querySelector('button[aria-label="Collapse diff viewer"]');
+		const collapseButton = container.querySelector('button[aria-label="Collapse VS Code"]');
 		if (!(collapseButton instanceof HTMLButtonElement)) {
-			throw new Error("Expanded diff collapse control was not rendered.");
+			throw new Error("Expanded VS Code collapse control was not rendered.");
 		}
 
 		act(() => {
 			collapseButton.click();
 		});
-		expect(useRuntimeWorkspaceChangesMock.mock.lastCall?.[0]).toBeNull();
+		expect(container.querySelector('[data-testid="vscode-panel"]')).toBe(preloadedPanel);
+		expect(preloadedPanel?.parentElement?.getAttribute("aria-hidden")).toBe("true");
 	});
 
-	it("starts each newly selected task with its diff calculation disabled", () => {
+	it("starts each newly selected task collapsed and schedules a fresh preload", () => {
 		render(createSelection("task-1"));
-		const expandButton = container.querySelector('button[aria-label="Expand diff viewer (All Changes)"]');
+		signalMainTerminalReady("task-1");
+		expect(container.textContent).toContain("VS Code task-1");
+
+		render(createSelection("task-2"));
+		expect(container.textContent).not.toContain("VS Code task-1");
+		expect(container.textContent).not.toContain("VS Code task-2");
+		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeInstanceOf(HTMLButtonElement);
+
+		signalMainTerminalReady("task-2");
+		expect(container.textContent).toContain("VS Code task-2");
+	});
+
+	it("mounts VS Code immediately when the collapsed control is opened", () => {
+		render(createSelection("task-1"));
+
+		const expandButton = container.querySelector('button[aria-label="Open VS Code"]');
 		if (!(expandButton instanceof HTMLButtonElement)) {
-			throw new Error("Collapsed diff control was not rendered.");
+			throw new Error("Collapsed VS Code control was not rendered.");
 		}
 		act(() => {
 			expandButton.click();
 		});
-		expect(useRuntimeWorkspaceChangesMock.mock.lastCall?.[0]).toBe("task-1");
 
-		render(createSelection("task-2"));
-		expect(useRuntimeWorkspaceChangesMock.mock.lastCall?.[0]).toBeNull();
+		expect(container.textContent).toContain("VS Code task-1");
+		expect(container.querySelector('[data-testid="vscode-panel"]')?.parentElement?.hasAttribute("aria-hidden")).toBe(
+			false,
+		);
+	});
+
+	it("eventually preloads VS Code when the terminal does not report readiness", () => {
+		render(createSelection("task-1"));
+
+		act(() => {
+			vi.advanceTimersByTime(4_999);
+		});
+		expect(container.textContent).not.toContain("VS Code task-1");
+
+		act(() => {
+			vi.advanceTimersByTime(1);
+			vi.runOnlyPendingTimers();
+		});
+		expect(container.textContent).toContain("VS Code task-1");
+		expect(container.querySelector('[data-testid="vscode-panel"]')?.parentElement?.getAttribute("aria-hidden")).toBe(
+			"true",
+		);
 	});
 });
