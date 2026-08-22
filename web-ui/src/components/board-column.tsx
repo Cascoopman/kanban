@@ -16,7 +16,6 @@ export function BoardColumn({
 	onBranchTask,
 	onClearTrash,
 	onHide,
-	onSaveTitle,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
@@ -34,7 +33,6 @@ export function BoardColumn({
 	onBranchTask?: (task: BoardCardModel) => void;
 	onClearTrash?: () => void;
 	onHide?: () => void;
-	onSaveTitle?: (taskId: string, title: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
@@ -142,7 +140,6 @@ export function BoardColumn({
 											workspacePath={workspacePath}
 											isDragDisabled={isDragDisabled}
 											hideActions={hideCardActions}
-											onSaveTitle={onSaveTitle}
 											onClick={() => onCardClick?.(card)}
 										/>,
 									);

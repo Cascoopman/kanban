@@ -32,7 +32,6 @@ export function KanbanBoard({
 	onCreateTask,
 	onBranchTask,
 	onClearTrash,
-	onSaveTaskTitle,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
@@ -48,7 +47,6 @@ export function KanbanBoard({
 	onCreateTask?: () => void;
 	onBranchTask?: (task: BoardCard) => void;
 	onClearTrash?: () => void;
-	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
@@ -363,7 +361,6 @@ export function KanbanBoard({
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
 							onHide={() => hideColumn(column.id)}
-							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
 							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
 							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
 							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}

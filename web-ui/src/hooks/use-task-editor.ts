@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { useCallback } from "react";
 
 import type { RuntimeAgentId } from "@/runtime/types";
-import { addTaskToColumnWithResult, updateTaskTitle } from "@/state/board-state";
+import { addTaskToColumnWithResult } from "@/state/board-state";
 import { toTelemetrySelectedAgentId, trackTaskCreated } from "@/telemetry/events";
 import type { BoardData } from "@/types";
 
@@ -18,7 +18,6 @@ export interface CreatedTask {
 }
 
 export interface UseTaskEditorResult {
-	handleSaveTaskTitle: (taskId: string, title: string) => void;
 	handleCreateTask: () => CreatedTask | null;
 }
 
@@ -28,16 +27,6 @@ export function useTaskEditor({
 	defaultTaskBranchRef,
 	selectedAgentId,
 }: UseTaskEditorInput): UseTaskEditorResult {
-	const handleSaveTaskTitle = useCallback(
-		(taskId: string, title: string) => {
-			setBoard((currentBoard) => {
-				const updated = updateTaskTitle(currentBoard, taskId, title);
-				return updated.updated ? updated.board : currentBoard;
-			});
-		},
-		[setBoard],
-	);
-
 	const handleCreateTask = useCallback((): CreatedTask | null => {
 		if (!defaultTaskBranchRef) {
 			return null;
@@ -57,7 +46,6 @@ export function useTaskEditor({
 	}, [board, defaultTaskBranchRef, selectedAgentId, setBoard]);
 
 	return {
-		handleSaveTaskTitle,
 		handleCreateTask,
 	};
 }

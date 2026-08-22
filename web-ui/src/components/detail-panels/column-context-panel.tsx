@@ -25,7 +25,6 @@ function ColumnSection({
 	onCreateTask,
 	onBranchTask,
 	onClearTrash,
-	onSaveTitle,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
@@ -41,7 +40,6 @@ function ColumnSection({
 	onCreateTask?: () => void;
 	onBranchTask?: (task: BoardCardModel) => void;
 	onClearTrash?: () => void;
-	onSaveTitle?: (taskId: string, title: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
@@ -151,7 +149,8 @@ function ColumnSection({
 									const items: ReactNode[] = [];
 									let draggableIndex = 0;
 									for (const card of column.cards) {
-										const isCardMutable = mutableProjectId === undefined || card.projectId === mutableProjectId;
+										const isCardMutable =
+											mutableProjectId === undefined || card.projectId === mutableProjectId;
 										items.push(
 											<BoardCard
 												key={card.id}
@@ -165,8 +164,8 @@ function ColumnSection({
 												onRestoreFromTrash={isCardMutable ? onRestoreFromTrashTask : undefined}
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 												workspacePath={card.projectPath ?? workspacePath}
-												onSaveTitle={isCardMutable ? onSaveTitle : undefined}
 												isDragDisabled={!isCardMutable}
+												wrapTitle
 												onClick={() => onCardClick(card)}
 											/>,
 										);
@@ -196,7 +195,6 @@ export function ColumnContextPanel({
 	onCreateTask,
 	onBranchTask,
 	onClearTrash,
-	onSaveTaskTitle,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
 	moveToTrashLoadingById,
@@ -211,7 +209,6 @@ export function ColumnContextPanel({
 	onCreateTask?: () => void;
 	onBranchTask?: (task: BoardCardModel) => void;
 	onClearTrash?: () => void;
-	onSaveTaskTitle?: (taskId: string, title: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
 	moveToTrashLoadingById?: Record<string, boolean>;
@@ -292,7 +289,6 @@ export function ColumnContextPanel({
 							onCreateTask={column.id === "in_progress" ? onCreateTask : undefined}
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
-							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
 							onMoveToTrashTask={
 								column.id === "in_progress" || isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined
 							}

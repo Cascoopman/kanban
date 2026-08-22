@@ -534,7 +534,7 @@ describe("source task commands", () => {
 						"task",
 						"create",
 						"--title",
-						"Add a demo banner component to the homepage that displays a welcome message and current weather summary",
+						"Add a demo banner to the homepage that displays a welcome message and weather summary",
 						"--agent-id",
 						"codex",
 						"--project-path",
