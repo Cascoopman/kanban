@@ -5,6 +5,7 @@ import App from "@/App";
 import { AppErrorBoundary } from "@/components/app-error-boundary";
 import { PasscodeGateProvider } from "@/components/passcode-gate";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UiReviewOverlay } from "@/components/ui-review-overlay";
 import { isThemeId } from "@/hooks/use-theme";
 import { TelemetryProvider } from "@/telemetry/posthog-provider";
 import { initializeSentry } from "@/telemetry/sentry";
@@ -33,6 +34,7 @@ ReactDOM.createRoot(root).render(
 			<AppErrorBoundary>
 				<TooltipProvider>
 					<App />
+					{import.meta.env.DEV ? <UiReviewOverlay /> : null}
 					<Toaster
 						theme="dark"
 						position="bottom-right"

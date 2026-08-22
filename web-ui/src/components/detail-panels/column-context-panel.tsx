@@ -272,7 +272,7 @@ export function ColumnContextPanel({
 			<DragDropContext onBeforeCapture={handleBeforeCapture} onDragEnd={handleDragEnd}>
 				<div
 					ref={scrollContainerRef}
-					className="flex flex-col gap-2 p-2 pt-12"
+					className="flex flex-col gap-2 p-2"
 					style={{
 						flex: "1 1 0",
 						minHeight: 0,
@@ -293,9 +293,15 @@ export function ColumnContextPanel({
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
-							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
+							onMoveToTrashTask={
+								column.id === "in_progress" || isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined
+							}
 							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
-							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
+							moveToTrashLoadingById={
+								column.id === "in_progress" || isReviewLikeColumnId(column.id)
+									? moveToTrashLoadingById
+									: undefined
+							}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							workspacePath={workspacePath}
 							mutableProjectId={mutableProjectId}

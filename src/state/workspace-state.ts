@@ -35,7 +35,7 @@ const WORKSPACE_ID_COLLISION_SUFFIX_LENGTH = 4;
 
 const BOARD_COLUMNS: Array<{ id: RuntimeBoardColumnId; title: string }> = [
 	{ id: "in_progress", title: "In Progress" },
-	{ id: "review", title: "Review" },
+	{ id: "review", title: "In Review / Blocked" },
 	{ id: "on_hold", title: "On Hold" },
 	{ id: "trash", title: "Done" },
 ];

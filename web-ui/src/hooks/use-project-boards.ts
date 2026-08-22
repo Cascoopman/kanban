@@ -1,6 +1,7 @@
 import type { DropResult } from "@hello-pangea/dnd";
 import { useMemo } from "react";
 
+import { BOARD_COLUMN_TITLES } from "@/data/board-data";
 import type { RuntimeProjectBoardSnapshot, RuntimeProjectSummary, RuntimeTaskSessionSummary } from "@/runtime/types";
 import type { BoardColumnId, BoardData } from "@/types";
 
@@ -83,7 +84,7 @@ export function buildUnifiedProjectBoard(
 		for (const column of snapshot.board.columns) {
 			const existing = columnsById.get(column.id) ?? {
 				id: column.id,
-				title: column.title,
+				title: BOARD_COLUMN_TITLES[column.id],
 				cards: [],
 			};
 			existing.cards.push(
@@ -106,14 +107,7 @@ export function buildUnifiedProjectBoard(
 				(columnId) =>
 					columnsById.get(columnId) ?? {
 						id: columnId,
-						title:
-							columnId === "in_progress"
-								? "In Progress"
-								: columnId === "on_hold"
-									? "On Hold"
-									: columnId === "trash"
-										? "Done"
-										: columnId.charAt(0).toUpperCase() + columnId.slice(1),
+						title: BOARD_COLUMN_TITLES[columnId],
 						cards: [],
 					},
 			),

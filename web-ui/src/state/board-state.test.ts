@@ -42,6 +42,7 @@ describe("board state", () => {
 		});
 
 		expect(normalized?.columns.map((column) => column.id)).toEqual(["in_progress", "review", "on_hold", "trash"]);
+		expect(normalized?.columns.find((column) => column.id === "review")?.title).toBe("In Review / Blocked");
 		expect(findCardSelection(normalized!, "legacy")?.column.id).toBe("in_progress");
 		expect(normalized).not.toHaveProperty("dependencies");
 	});

@@ -307,7 +307,7 @@ export function BoardCard({
 			if (sessionSummary?.state === "failed") {
 				return <AlertCircle size={12} className="text-status-red" />;
 			}
-			return <Spinner size={12} />;
+			return null;
 		}
 		return null;
 	};
@@ -433,11 +433,12 @@ export function BoardCard({
 										/>
 									</Tooltip>
 								) : null}
-								{!hideActions && isReviewLikeColumnId(columnId) ? (
+								{!hideActions && onMoveToTrash ? (
 									<Button
 										icon={isMoveToTrashLoading ? <Spinner size={13} /> : <Trash2 size={13} />}
-										variant="ghost"
+										variant="danger"
 										size="sm"
+										className="h-7 w-7 p-0"
 										disabled={isMoveToTrashLoading}
 										aria-label="Move task to done"
 										onMouseDown={stopEvent}

@@ -15,7 +15,7 @@ import {
 	moveTaskToColumn,
 } from "@/state/board-state";
 import { clearTaskWorkspaceInfo, setTaskWorkspaceInfo } from "@/stores/workspace-metadata-store";
-import type { BoardCard, BoardColumnId, BoardData } from "@/types";
+import type { BoardCard, BoardData } from "@/types";
 import {
 	getBrowserNotificationPermission,
 	hasPromptedForBrowserNotificationPermission,
@@ -29,18 +29,10 @@ import {
 // shared repo, which can freeze or crash the runtime. Bound the fan-out instead.
 const CLEAR_TRASH_CLEANUP_CONCURRENCY = 4;
 
-interface SelectedBoardCard {
-	card: BoardCard;
-	column: {
-		id: BoardColumnId;
-	};
-}
-
 interface UseBoardInteractionsInput {
 	board: BoardData;
 	setBoard: Dispatch<SetStateAction<BoardData>>;
 	setSessions: Dispatch<SetStateAction<Record<string, RuntimeTaskSessionSummary>>>;
-	selectedCard: SelectedBoardCard | null;
 	selectedTaskId: string | null;
 	currentProjectId: string | null;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
@@ -60,8 +52,7 @@ export interface UseBoardInteractionsResult {
 	handleStartTask: (taskId: string, options?: StartTaskSessionOptions) => void;
 	handleDetailTaskDragEnd: (result: DropResult) => void;
 	handleCardSelect: (taskId: string) => void;
-	handleMoveToTrash: () => void;
-	handleMoveReviewCardToTrash: (taskId: string) => void;
+	handleMoveCardToTrash: (taskId: string) => void;
 	handleRestoreTaskFromTrash: (taskId: string) => void;
 	handleOpenClearTrash: () => void;
 	handleConfirmClearTrash: () => void;
@@ -73,7 +64,6 @@ export function useBoardInteractions({
 	board,
 	setBoard,
 	setSessions,
-	selectedCard,
 	selectedTaskId,
 	currentProjectId,
 	setSelectedTaskId,
@@ -334,30 +324,21 @@ export function useBoardInteractions({
 		[board, setSelectedTaskId],
 	);
 
-	const handleMoveToTrash = useCallback(() => {
-		if (!selectedCard) {
-			return;
-		}
-		if (moveToTrashLoadingByIdRef.current[selectedCard.card.id]) {
-			return;
-		}
-		setTaskMoveToTrashLoading(selectedCard.card.id, true);
-		void requestMoveTaskToTrashWithAnimation(selectedCard.card.id, selectedCard.column.id).finally(() => {
-			setTaskMoveToTrashLoading(selectedCard.card.id, false);
-		});
-	}, [requestMoveTaskToTrashWithAnimation, selectedCard, setTaskMoveToTrashLoading]);
-
-	const handleMoveReviewCardToTrash = useCallback(
+	const handleMoveCardToTrash = useCallback(
 		(taskId: string) => {
 			if (moveToTrashLoadingByIdRef.current[taskId]) {
 				return;
 			}
+			const selection = findCardSelection(board, taskId);
+			if (!selection || selection.column.id === "trash") {
+				return;
+			}
 			setTaskMoveToTrashLoading(taskId, true);
-			void requestMoveTaskToTrashWithAnimation(taskId, "review").finally(() => {
+			void requestMoveTaskToTrashWithAnimation(taskId, selection.column.id).finally(() => {
 				setTaskMoveToTrashLoading(taskId, false);
 			});
 		},
-		[requestMoveTaskToTrashWithAnimation, setTaskMoveToTrashLoading],
+		[board, requestMoveTaskToTrashWithAnimation, setTaskMoveToTrashLoading],
 	);
 
 	const handleRestoreTaskFromTrash = useCallback(
@@ -453,8 +434,7 @@ export function useBoardInteractions({
 		handleStartTask,
 		handleDetailTaskDragEnd,
 		handleCardSelect,
-		handleMoveToTrash,
-		handleMoveReviewCardToTrash,
+		handleMoveCardToTrash,
 		handleRestoreTaskFromTrash,
 		handleOpenClearTrash,
 		handleConfirmClearTrash,

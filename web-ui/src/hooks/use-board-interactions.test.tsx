@@ -47,6 +47,7 @@ const NOOP_CLEANUP_WORKSPACE = async (): Promise<null> => null;
 const NOOP_FETCH_WORKSPACE_INFO = async (): Promise<null> => null;
 
 interface HookSnapshot {
+	handleMoveCardToTrash: (taskId: string) => void;
 	handleRestoreTaskFromTrash: (taskId: string) => void;
 	handleStartTask: (taskId: string) => void;
 	handleCardSelect: (taskId: string) => void;
@@ -79,7 +80,6 @@ function HookHarness({
 		board,
 		setBoard,
 		setSessions,
-		selectedCard: null,
 		selectedTaskId: null,
 		currentProjectId: "project-1",
 		setSelectedTaskId: setSelectedTaskIdOverride ?? setSelectedTaskId,
@@ -94,6 +94,7 @@ function HookHarness({
 
 	useEffect(() => {
 		onSnapshot({
+			handleMoveCardToTrash: actions.handleMoveCardToTrash,
 			handleRestoreTaskFromTrash: actions.handleRestoreTaskFromTrash,
 			handleStartTask: actions.handleStartTask,
 			handleCardSelect: actions.handleCardSelect,
@@ -102,6 +103,7 @@ function HookHarness({
 	}, [
 		actions.handleCardSelect,
 		actions.handleConfirmClearTrash,
+		actions.handleMoveCardToTrash,
 		actions.handleRestoreTaskFromTrash,
 		actions.handleStartTask,
 		onSnapshot,
@@ -164,6 +166,42 @@ describe("useBoardInteractions", () => {
 
 		expect(ensureTaskWorkspace).toHaveBeenCalledWith(task);
 		expect(startTaskSession).toHaveBeenCalledWith(task);
+	});
+
+	it("moves an in-progress card to done using its actual source column", async () => {
+		const task = createTask("task-1", "Active task", 1);
+		const board = createBoard({ inProgress: [task] });
+		const requestMoveTaskToTrashWithAnimation = vi.fn(async () => {});
+		useProgrammaticCardMovesMock.mockReturnValue({
+			handleProgrammaticCardMoveReady: () => {},
+			setRequestMoveTaskToTrashHandler: () => {},
+			tryProgrammaticCardMove: () => "unavailable",
+			consumeProgrammaticCardMove: () => ({}),
+			resolvePendingProgrammaticTrashMove: () => {},
+			resetProgrammaticCardMoves: () => {},
+			requestMoveTaskToTrashWithAnimation,
+		});
+		let snapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					board={board}
+					setBoard={() => board}
+					ensureTaskWorkspace={async () => ({ ok: true as const })}
+					startTaskSession={async () => ({ ok: true as const })}
+					onSnapshot={(next) => {
+						snapshot = next;
+					}}
+				/>,
+			);
+		});
+		await act(async () => {
+			snapshot?.handleMoveCardToTrash(task.id);
+			await Promise.resolve();
+		});
+
+		expect(requestMoveTaskToTrashWithAnimation).toHaveBeenCalledWith(task.id, "in_progress");
 	});
 
 	it("shows a warning when restoring a task whose saved patch cannot be fully reapplied", async () => {
