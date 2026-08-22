@@ -8,6 +8,25 @@ import { WorkspaceStateConflictError } from "@/runtime/workspace-state-query";
 import type { BoardData } from "@/types";
 
 const WORKSPACE_STATE_PERSIST_DEBOUNCE_MS = 120;
+const WORKSPACE_STATE_CONFLICT_RETRY_LIMIT = 3;
+
+function areBoardsEqual(left: BoardData, right: BoardData): boolean {
+	return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function mergeSessionSummaries(
+	currentSessions: Record<string, RuntimeTaskSessionSummary>,
+	localSessions: Record<string, RuntimeTaskSessionSummary>,
+): Record<string, RuntimeTaskSessionSummary> {
+	const mergedSessions = { ...currentSessions };
+	for (const [taskId, localSummary] of Object.entries(localSessions)) {
+		const currentSummary = mergedSessions[taskId];
+		if (!currentSummary || localSummary.updatedAt >= currentSummary.updatedAt) {
+			mergedSessions[taskId] = localSummary;
+		}
+	}
+	return mergedSessions;
+}
 
 export interface UseWorkspacePersistenceParams {
 	board: BoardData;
@@ -22,6 +41,7 @@ export interface UseWorkspacePersistenceParams {
 		workspaceId: string;
 		payload: RuntimeWorkspaceStateSaveRequest;
 	}) => Promise<RuntimeWorkspaceStateResponse>;
+	loadWorkspaceState: (workspaceId: string) => Promise<RuntimeWorkspaceStateResponse>;
 	refetchWorkspaceState: () => Promise<unknown>;
 	onWorkspaceRevisionChange: (revision: number) => void;
 	onWorkspaceStateConflict?: (input: { workspaceId: string; currentRevision: number }) => void;
@@ -37,6 +57,7 @@ export function useWorkspacePersistence({
 	isDocumentVisible,
 	isWorkspaceStateRefreshing,
 	persistWorkspaceState,
+	loadWorkspaceState,
 	refetchWorkspaceState,
 	onWorkspaceRevisionChange,
 	onWorkspaceStateConflict,
@@ -105,13 +126,53 @@ export function useWorkspacePersistence({
 				sessions: sessionsRef.current,
 				expectedRevision: workspaceRevision,
 			};
+			const baseBoard = lastPersistedBoardRef.current;
 			void (async () => {
 				persistInFlightRef.current = true;
 				try {
-					const saved = await persistWorkspaceState({
-						workspaceId: persistWorkspaceId,
-						payload,
-					});
+					let pendingPayload = payload;
+					let conflictRetryCount = 0;
+					let saved: RuntimeWorkspaceStateResponse | null = null;
+					while (!saved) {
+						try {
+							saved = await persistWorkspaceState({
+								workspaceId: persistWorkspaceId,
+								payload: pendingPayload,
+							});
+						} catch (error) {
+							if (!(error instanceof WorkspaceStateConflictError)) {
+								throw error;
+							}
+							if (currentProjectIdRef.current !== persistWorkspaceId) {
+								return;
+							}
+
+							const currentWorkspaceState = await loadWorkspaceState(persistWorkspaceId);
+							if (currentProjectIdRef.current !== persistWorkspaceId) {
+								return;
+							}
+							const canRetryWithoutOverwritingBoardChanges =
+								baseBoard !== null && areBoardsEqual(currentWorkspaceState.board, baseBoard);
+							if (
+								!canRetryWithoutOverwritingBoardChanges ||
+								conflictRetryCount >= WORKSPACE_STATE_CONFLICT_RETRY_LIMIT
+							) {
+								onWorkspaceStateConflict?.({
+									workspaceId: persistWorkspaceId,
+									currentRevision: currentWorkspaceState.revision,
+								});
+								await refetchWorkspaceState();
+								return;
+							}
+
+							conflictRetryCount += 1;
+							pendingPayload = {
+								...payload,
+								sessions: mergeSessionSummaries(currentWorkspaceState.sessions, sessionsRef.current),
+								expectedRevision: currentWorkspaceState.revision,
+							};
+						}
+					}
 					if (
 						requestId !== latestPersistRequestIdRef.current ||
 						currentProjectIdRef.current !== persistWorkspaceId
@@ -121,24 +182,7 @@ export function useWorkspacePersistence({
 					lastPersistedWorkspaceIdRef.current = persistWorkspaceId;
 					lastPersistedBoardRef.current = board;
 					onWorkspaceRevisionChange(saved.revision);
-				} catch (error) {
-					if (error instanceof WorkspaceStateConflictError) {
-						if (
-							requestId === latestPersistRequestIdRef.current &&
-							currentProjectIdRef.current === persistWorkspaceId
-						) {
-							onWorkspaceRevisionChange(error.currentRevision);
-							onWorkspaceStateConflict?.({
-								workspaceId: persistWorkspaceId,
-								currentRevision: error.currentRevision,
-							});
-						}
-						if (currentProjectIdRef.current !== persistWorkspaceId) {
-							return;
-						}
-						await refetchWorkspaceState();
-						return;
-					}
+				} catch {
 					// Keep the UI usable even if persistence is temporarily unavailable.
 				} finally {
 					persistInFlightRef.current = false;
@@ -158,6 +202,7 @@ export function useWorkspacePersistence({
 		currentProjectId,
 		isDocumentVisible,
 		isWorkspaceStateRefreshing,
+		loadWorkspaceState,
 		onWorkspaceRevisionChange,
 		persistCycle,
 		persistWorkspaceState,
