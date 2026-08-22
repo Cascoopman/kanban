@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { VscodeInlinePanel } from "@/components/detail-panels/vscode-inline-panel";
+import { buildThemedVsCodeWebUrl, VscodeInlinePanel } from "@/components/detail-panels/vscode-inline-panel";
 
 const mocks = vi.hoisted(() => ({
 	startVsCodeWeb: vi.fn(),
@@ -54,6 +54,17 @@ describe("VscodeInlinePanel", () => {
 			acceptLicenseTerms: true,
 		});
 		expect(container.textContent).not.toContain("Accept and start VS Code");
-		expect(container.querySelector("iframe")?.getAttribute("src")).toBe("http://127.0.0.1:41001/vscode/");
+		expect(container.querySelector("iframe")?.getAttribute("src")).toBe(
+			"http://127.0.0.1:41001/vscode/?kanban-vscode-theme=Dark+Modern",
+		);
+	});
+
+	it("maps Kanban themes to the closest built-in VS Code theme", () => {
+		expect(buildThemedVsCodeWebUrl("http://127.0.0.1:41001/vscode/?tkn=secret", "solarized-dark")).toBe(
+			"http://127.0.0.1:41001/vscode/?tkn=secret&kanban-vscode-theme=Solarized+Dark",
+		);
+		expect(buildThemedVsCodeWebUrl("http://127.0.0.1:41001/vscode/", "high-contrast-light")).toBe(
+			"http://127.0.0.1:41001/vscode/?kanban-vscode-theme=Default+High+Contrast+Light",
+		);
 	});
 });
