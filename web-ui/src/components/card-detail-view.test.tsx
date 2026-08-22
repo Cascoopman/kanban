@@ -106,7 +106,7 @@ describe("CardDetailView VS Code visibility", () => {
 			root.render(
 				<CardDetailView
 					selection={selection}
-					currentProjectId="project-1"
+					workspaceId="project-1"
 					sessionSummary={null}
 					taskSessions={{}}
 					onSessionSummary={() => {}}

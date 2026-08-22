@@ -211,7 +211,7 @@ function MobileDetailTabBar({
 
 export function CardDetailView({
 	selection,
-	currentProjectId,
+	workspaceId,
 	workspacePath,
 	sessionSummary,
 	taskSessions,
@@ -245,9 +245,10 @@ export function CardDetailView({
 	onBottomTerminalSendAgentCommand,
 	isBottomTerminalExpanded,
 	onBottomTerminalToggleExpand,
+	canMutateTasks = true,
 }: {
 	selection: CardSelection;
-	currentProjectId: string | null;
+	workspaceId: string | null;
 	workspacePath?: string | null;
 	sessionSummary: RuntimeTaskSessionSummary | null;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
@@ -281,6 +282,7 @@ export function CardDetailView({
 	onBottomTerminalSendAgentCommand?: () => void;
 	isBottomTerminalExpanded?: boolean;
 	onBottomTerminalToggleExpand?: () => void;
+	canMutateTasks?: boolean;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
 	const [mobileTabState, setMobileTabState] = useState<{ taskId: string; tab: MobileTab }>(() => ({
@@ -329,7 +331,8 @@ export function CardDetailView({
 		startAgentPanelResize,
 	);
 	const terminalThemeColors = useTerminalThemeColors();
-	const showMoveToTrashActions = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
+	const showMoveToTrashActions =
+		canMutateTasks && (selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id));
 	const isTaskTerminalEnabled = selection.column.id === "in_progress" || isReviewLikeColumnId(selection.column.id);
 	const taskCardsPanelPercent = `${(taskCardsPanelRatio * 100).toFixed(1)}%`;
 	const detailContentPanelPercent = `${((1 - taskCardsPanelRatio) * 100).toFixed(1)}%`;
@@ -417,12 +420,12 @@ export function CardDetailView({
 	);
 	const showBottomTerminal = bottomTerminalOpen && !!bottomTerminalTaskId;
 	const vscodePanel = (
-		<VscodeInlinePanel taskId={selection.card.id} baseRef={selection.card.baseRef} workspaceId={currentProjectId} />
+		<VscodeInlinePanel taskId={selection.card.id} baseRef={selection.card.baseRef} workspaceId={workspaceId} />
 	);
 	const agentChatPanel = (
 		<AgentTerminalPanel
 			taskId={selection.card.id}
-			workspaceId={currentProjectId}
+			workspaceId={workspaceId}
 			terminalEnabled={isTaskTerminalEnabled}
 			summary={sessionSummary}
 			onSummary={onSessionSummary}
@@ -471,7 +474,7 @@ export function CardDetailView({
 						<div className="absolute right-0 bottom-0 left-0 z-20">
 							<BottomTerminalSection
 								taskId={bottomTerminalTaskId}
-								workspaceId={currentProjectId}
+								workspaceId={workspaceId}
 								summary={bottomTerminalSummary}
 								onSummary={onSessionSummary}
 								onClose={onBottomTerminalClose}
@@ -504,14 +507,15 @@ export function CardDetailView({
 							onCardSelect={onCardSelect}
 							taskSessions={taskSessions}
 							onTaskDragEnd={onTaskDragEnd}
-							onCreateTask={onCreateTask}
-							onBranchTask={onBranchTask}
-							onClearTrash={onClearTrash}
-							onSaveTaskTitle={onSaveTaskTitle}
-							onMoveToTrashTask={onMoveReviewCardToTrash}
-							onRestoreFromTrashTask={onRestoreTaskFromTrash}
+							onCreateTask={canMutateTasks ? onCreateTask : undefined}
+							onBranchTask={canMutateTasks ? onBranchTask : undefined}
+							onClearTrash={canMutateTasks ? onClearTrash : undefined}
+							onSaveTaskTitle={canMutateTasks ? onSaveTaskTitle : undefined}
+							onMoveToTrashTask={canMutateTasks ? onMoveReviewCardToTrash : undefined}
+							onRestoreFromTrashTask={canMutateTasks ? onRestoreTaskFromTrash : undefined}
 							moveToTrashLoadingById={moveToTrashLoadingById}
 							panelWidth="100%"
+							mutableProjectId={canMutateTasks ? workspaceId : null}
 						/>
 					</div>
 					<ResizeHandle
@@ -583,7 +587,7 @@ export function CardDetailView({
 					{bottomTerminalOpen && bottomTerminalTaskId ? (
 						<BottomTerminalSection
 							taskId={bottomTerminalTaskId}
-							workspaceId={currentProjectId}
+							workspaceId={workspaceId}
 							summary={bottomTerminalSummary}
 							onSummary={onSessionSummary}
 							onClose={onBottomTerminalClose}

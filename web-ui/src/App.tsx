@@ -108,15 +108,14 @@ export default function App(): ReactElement {
 	});
 	const activeNotificationWorkspaceId = navigationCurrentProjectId;
 	const isDocumentVisible = useDocumentVisibility();
-	const isInitialRuntimeLoad =
-		!hasReceivedSnapshot && currentProjectId === null && projects.length === 0 && !streamError;
 	const isAwaitingWorkspaceSnapshot = currentProjectId !== null && streamedWorkspaceState === null;
+	const activeProjectConfigWorkspaceId = navigationCurrentProjectId ?? currentProjectId;
 	const {
 		config: runtimeProjectConfig,
 		isLoading: isRuntimeProjectConfigLoading,
 		refresh: refreshRuntimeProjectConfig,
-	} = useRuntimeProjectConfig(currentProjectId);
-	const settingsWorkspaceId = navigationCurrentProjectId ?? currentProjectId;
+	} = useRuntimeProjectConfig(activeProjectConfigWorkspaceId);
+	const settingsWorkspaceId = activeProjectConfigWorkspaceId;
 	const { config: settingsRuntimeProjectConfig, refresh: refreshSettingsRuntimeProjectConfig } =
 		useRuntimeProjectConfig(settingsWorkspaceId);
 	const {
@@ -132,7 +131,6 @@ export default function App(): ReactElement {
 	});
 	const { markConnectionReady: markTerminalConnectionReady } = useTerminalConnectionReady();
 	const readyForReviewNotificationsEnabled = runtimeProjectConfig?.readyForReviewNotificationsEnabled ?? true;
-	const quickPrompts = runtimeProjectConfig?.quickPrompts ?? [];
 	const {
 		upsertSession,
 		ensureTaskWorkspace,
@@ -173,16 +171,6 @@ export default function App(): ReactElement {
 		hasReceivedSnapshot,
 		startTaskSessionForProject,
 	});
-	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectTaskSelect, handleBack } =
-		useDetailTaskNavigation({
-			board,
-			currentProjectId,
-			isAwaitingWorkspaceSnapshot,
-			isInitialRuntimeLoad,
-			isProjectSwitching,
-			isWorkspaceMetadataPending,
-			onSelectProject: handleSelectProject,
-		});
 
 	useEffect(() => {
 		replaceWorkspaceMetadata(workspaceMetadata);
@@ -201,13 +189,6 @@ export default function App(): ReactElement {
 		currentProjectId,
 		projects,
 		navigationCurrentProjectId,
-		selectedTaskId,
-		streamError,
-		isProjectSwitching,
-		isInitialRuntimeLoad,
-		isAwaitingWorkspaceSnapshot,
-		isWorkspaceMetadataPending,
-		hasReceivedSnapshot,
 	});
 	const projectBoards = useProjectBoards({
 		projects: displayedProjects,
@@ -238,24 +219,48 @@ export default function App(): ReactElement {
 		() => buildUnifiedProjectBoard(projectBoards.snapshots, visibleProjectIds),
 		[projectBoards.snapshots, visibleProjectIds],
 	);
-	const handleUnifiedCardSelect = useCallback(
+	const allProjectIds = useMemo(
+		() => new Set(projectBoards.snapshots.map((snapshot) => snapshot.project.id)),
+		[projectBoards.snapshots],
+	);
+	const allProjectBoard = useMemo(
+		() => buildUnifiedProjectBoard(projectBoards.snapshots, allProjectIds),
+		[allProjectIds, projectBoards.snapshots],
+	);
+	const { selectedTaskId, selectedCard, setSelectedTaskId, handleProjectTaskSelect, handleBack } =
+		useDetailTaskNavigation({
+			board: allProjectBoard.board,
+			currentProjectId,
+			isTaskCatalogReady: hasReceivedSnapshot && !projectBoards.isLoading,
+			onSelectProject: handleSelectProject,
+		});
+	const selectedProjectId = selectedCard?.card.projectId ?? null;
+	const isSelectedProjectReady =
+		selectedProjectId !== null &&
+		selectedProjectId === currentProjectId &&
+		canPersistWorkspaceState &&
+		!isProjectSwitching &&
+		!isAwaitingWorkspaceSnapshot &&
+		!isWorkspaceMetadataPending;
+	const quickPrompts = runtimeProjectConfig?.quickPrompts ?? [];
+	const handleAllProjectsCardSelect = useCallback(
 		(taskId: string) => {
-			const selection = findCardSelection(unifiedProjectBoard.board, taskId);
+			const selection = findCardSelection(allProjectBoard.board, taskId);
 			const projectId = selection?.card.projectId;
 			if (!projectId) {
 				return;
 			}
 			handleProjectTaskSelect(projectId, taskId);
 		},
-		[handleProjectTaskSelect, unifiedProjectBoard.board],
+		[allProjectBoard.board, handleProjectTaskSelect],
 	);
 
 	useReviewReadyNotifications({
 		activeWorkspaceId: activeNotificationWorkspaceId,
-		board: unifiedProjectBoard.board,
+		board: allProjectBoard.board,
 		isDocumentVisible,
 		latestTaskReadyForReview,
-		taskSessions: unifiedProjectBoard.sessions,
+		taskSessions: allProjectBoard.sessions,
 		readyForReviewNotificationsEnabled,
 		workspacePath,
 	});
@@ -356,9 +361,8 @@ export default function App(): ReactElement {
 		collapseDetailTerminal,
 		closeHomeTerminal,
 		closeDetailTerminal,
-		resetTerminalPanelsState,
 	} = useTerminalPanels({
-		currentProjectId,
+		currentProjectId: selectedProjectId ?? currentProjectId,
 		selectedCard,
 		workspaceGit,
 		agentCommand,
@@ -435,8 +439,7 @@ export default function App(): ReactElement {
 		resetTaskEditorState();
 		setIsClearTrashDialogOpen(false);
 		resetProjectNavigationState();
-		resetTerminalPanelsState();
-	}, [currentProjectId, resetProjectNavigationState, resetTaskEditorState, resetTerminalPanelsState]);
+	}, [currentProjectId, resetProjectNavigationState, resetTaskEditorState]);
 
 	useEffect(() => {
 		if (selectedCard) {
@@ -462,12 +465,9 @@ export default function App(): ReactElement {
 	const {
 		handleDragEnd,
 		handleStartTask,
-		handleDetailTaskDragEnd,
-		handleCardSelect,
 		handleMoveToTrash,
 		handleMoveReviewCardToTrash,
 		handleRestoreTaskFromTrash,
-		handleOpenClearTrash,
 		handleConfirmClearTrash,
 		moveToTrashLoadingById,
 		trashTaskCount,
@@ -499,12 +499,8 @@ export default function App(): ReactElement {
 		[board, handleDragEnd],
 	);
 
-	const handleUnifiedBoardDragEnd = useCallback(
-		(result: DropResult) => {
-			const move = createProjectBoardMove(unifiedProjectBoard.board, result);
-			if (!move) {
-				return;
-			}
+	const handleProjectBoardMove = useCallback(
+		(move: ProjectBoardMove) => {
 			if (
 				move.projectId === currentProjectId &&
 				canPersistWorkspaceState &&
@@ -524,8 +520,25 @@ export default function App(): ReactElement {
 			handleSelectProject,
 			isProjectSwitching,
 			isWorkspaceMetadataPending,
-			unifiedProjectBoard.board,
 		],
+	);
+	const handleUnifiedBoardDragEnd = useCallback(
+		(result: DropResult) => {
+			const move = createProjectBoardMove(unifiedProjectBoard.board, result);
+			if (move) {
+				handleProjectBoardMove(move);
+			}
+		},
+		[handleProjectBoardMove, unifiedProjectBoard.board],
+	);
+	const handleAllProjectsBoardDragEnd = useCallback(
+		(result: DropResult) => {
+			const move = createProjectBoardMove(allProjectBoard.board, result);
+			if (move) {
+				handleProjectBoardMove(move);
+			}
+		},
+		[allProjectBoard.board, handleProjectBoardMove],
 	);
 
 	useEffect(() => {
@@ -586,9 +599,9 @@ export default function App(): ReactElement {
 	});
 
 	const detailSession = selectedCard
-		? (sessions[selectedCard.card.id] ?? createIdleTaskSession(selectedCard.card.id))
+		? (allProjectBoard.sessions[selectedCard.card.id] ?? createIdleTaskSession(selectedCard.card.id))
 		: null;
-	const detailTerminalSummary = detailTerminalTaskId ? (sessions[detailTerminalTaskId] ?? null) : null;
+	const detailTerminalSummary = detailTerminalTaskId ? (allProjectBoard.sessions[detailTerminalTaskId] ?? null) : null;
 	const detailTerminalSubtitle = useMemo(() => {
 		if (!selectedCard) {
 			return null;
@@ -671,7 +684,7 @@ export default function App(): ReactElement {
 										<KanbanBoard
 											data={unifiedProjectBoard.board}
 											taskSessions={unifiedProjectBoard.sessions}
-											onCardSelect={handleUnifiedCardSelect}
+											onCardSelect={handleAllProjectsCardSelect}
 											hideCardActions
 											onDragEnd={handleUnifiedBoardDragEnd}
 										/>
@@ -731,16 +744,15 @@ export default function App(): ReactElement {
 								/>
 								<CardDetailView
 									selection={selectedCard}
-									currentProjectId={currentProjectId}
-									workspacePath={workspacePath}
+									workspaceId={selectedProjectId}
+									workspacePath={selectedCard.card.projectPath ?? workspacePath}
 									sessionSummary={detailSession}
-									taskSessions={sessions}
+									taskSessions={allProjectBoard.sessions}
 									onSessionSummary={upsertSession}
-									onCardSelect={handleCardSelect}
-									onTaskDragEnd={handleDetailTaskDragEnd}
+									onCardSelect={handleAllProjectsCardSelect}
+									onTaskDragEnd={handleAllProjectsBoardDragEnd}
 									onCreateTask={handleOpenCreateTask}
 									onBranchTask={taskBranching.handleOpenBranchTask}
-									onClearTrash={handleOpenClearTrash}
 									onSaveTaskTitle={handleSaveTaskTitle}
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
@@ -765,6 +777,7 @@ export default function App(): ReactElement {
 									onBottomTerminalSendAgentCommand={handleSendAgentCommandToDetailTerminal}
 									isBottomTerminalExpanded={isDetailTerminalExpanded}
 									onBottomTerminalToggleExpand={handleToggleExpandDetailTerminal}
+									canMutateTasks={isSelectedProjectReady}
 								/>
 							</div>
 						) : null}

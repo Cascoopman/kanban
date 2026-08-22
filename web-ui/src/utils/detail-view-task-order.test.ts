@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { BoardCard, BoardData } from "@/types";
-import {
-	getNextDetailTaskIdAfterTrashMove,
-	getPreferredTaskIdForProjectSwitch,
-	isDetailViewColumnId,
-} from "@/utils/detail-view-task-order";
+import { getNextDetailTaskIdAfterTrashMove, isDetailViewColumnId } from "@/utils/detail-view-task-order";
 
 function createTask(id: string): BoardCard {
 	return { id, title: id, startInPlanMode: false, baseRef: "main", createdAt: 1, updatedAt: 1 };
@@ -28,15 +24,6 @@ describe("detail task order", () => {
 		expect(isDetailViewColumnId("review")).toBe(true);
 		expect(isDetailViewColumnId("on_hold")).toBe(true);
 		expect(isDetailViewColumnId("trash")).toBe(false);
-	});
-
-	it("prefers review, then in progress, then done when switching projects", () => {
-		const board = createBoard();
-		expect(getPreferredTaskIdForProjectSwitch(board)).toBe("review");
-		board.columns.find((column) => column.id === "review")!.cards = [];
-		expect(getPreferredTaskIdForProjectSwitch(board)).toBe("active");
-		board.columns.find((column) => column.id === "in_progress")!.cards = [];
-		expect(getPreferredTaskIdForProjectSwitch(board)).toBe("done");
 	});
 
 	it("selects the next active detail task after moving one to done", () => {
