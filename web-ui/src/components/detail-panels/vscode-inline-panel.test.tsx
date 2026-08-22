@@ -1,0 +1,59 @@
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { VscodeInlinePanel } from "@/components/detail-panels/vscode-inline-panel";
+
+const mocks = vi.hoisted(() => ({
+	startVsCodeWeb: vi.fn(),
+}));
+
+vi.mock("@/runtime/trpc-client", () => ({
+	getRuntimeTrpcClient: () => ({
+		runtime: {
+			startVsCodeWeb: {
+				mutate: mocks.startVsCodeWeb,
+			},
+		},
+	}),
+}));
+
+describe("VscodeInlinePanel", () => {
+	let container: HTMLDivElement;
+	let root: Root;
+
+	beforeEach(() => {
+		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+		container = document.createElement("div");
+		document.body.appendChild(container);
+		root = createRoot(container);
+		mocks.startVsCodeWeb.mockReset();
+		mocks.startVsCodeWeb.mockResolvedValue({
+			status: "ready",
+			url: "http://127.0.0.1:41001/vscode/",
+			workspacePath: "/tmp/project",
+		});
+	});
+
+	afterEach(() => {
+		act(() => {
+			root.unmount();
+		});
+		container.remove();
+		delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+	});
+
+	it("starts automatically without asking for license confirmation", async () => {
+		await act(async () => {
+			root.render(<VscodeInlinePanel taskId="task-1" baseRef="main" workspaceId="workspace-1" />);
+		});
+
+		expect(mocks.startVsCodeWeb).toHaveBeenCalledWith({
+			taskId: "task-1",
+			baseRef: "main",
+			acceptLicenseTerms: true,
+		});
+		expect(container.textContent).not.toContain("Accept and start VS Code");
+		expect(container.querySelector("iframe")?.getAttribute("src")).toBe("http://127.0.0.1:41001/vscode/");
+	});
+});

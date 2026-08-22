@@ -210,6 +210,12 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 	});
 
 	const isRemoteMode = isKanbanRemoteHost();
+	if (!isRemoteMode) {
+		void vsCodeWebManager.prewarm().catch((error: unknown) => {
+			const message = error instanceof Error ? error.message : String(error);
+			deps.warn(`Could not prepare VS Code Web: ${message}`);
+		});
+	}
 
 	const readRequestBody = (req: IncomingMessage, maxBytes = 4096): Promise<string> =>
 		new Promise((resolve, reject) => {
@@ -440,7 +446,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 	return {
 		url,
 		close: async () => {
-			await vsCodeWebManager.stop();
+			await vsCodeWebManager.dispose();
 			await deps.runtimeStateHub.close();
 			await terminalWebSocketBridge.close();
 			await new Promise<void>((resolveClose, rejectClose) => {

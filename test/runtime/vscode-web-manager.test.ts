@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildVsCodeServerCommand } from "../../src/server/vscode-web-manager";
+import {
+	buildVsCodeServerCommand,
+	getDownloadedVsCodeServerCandidates,
+	parseVsCodeCommitId,
+} from "../../src/server/vscode-web-manager";
 
 const commonOptions = {
 	port: 41001,
@@ -10,6 +14,24 @@ const commonOptions = {
 };
 
 describe("VS Code Web manager", () => {
+	it("extracts the desktop build commit used by the serve-web cache", () => {
+		expect(parseVsCodeCommitId("1.134.0\n110a328ea54b42367b803ec53ee0bf52ef26b419\narm64\n")).toBe(
+			"110a328ea54b42367b803ec53ee0bf52ef26b419",
+		);
+		expect(parseVsCodeCommitId("1.134.0\narm64\n")).toBeNull();
+	});
+
+	it("resolves the downloaded server from VS Code's CLI cache", () => {
+		expect(
+			getDownloadedVsCodeServerCandidates({
+				commitId: "110a328ea54b42367b803ec53ee0bf52ef26b419",
+				homeDirectory: "/Users/example",
+				platform: "darwin",
+				env: {},
+			}),
+		).toEqual(["/Users/example/.vscode/cli/serve-web/110a328ea54b42367b803ec53ee0bf52ef26b419/bin/code-server"]);
+	});
+
 	it("runs the supported VS Code CLI serve-web command without standalone-only flags", () => {
 		const command = buildVsCodeServerCommand({
 			...commonOptions,

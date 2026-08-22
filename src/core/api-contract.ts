@@ -528,7 +528,7 @@ export const runtimeVsCodeWebRequestSchema = z.object({
 export type RuntimeVsCodeWebRequest = z.infer<typeof runtimeVsCodeWebRequestSchema>;
 
 export const runtimeVsCodeWebResponseSchema = z.object({
-	status: z.enum(["unavailable", "consent_required", "ready", "error"]),
+	status: z.enum(["unavailable", "idle", "ready", "error"]),
 	url: z.string().nullable(),
 	workspacePath: z.string().nullable(),
 	error: z.string().optional(),
