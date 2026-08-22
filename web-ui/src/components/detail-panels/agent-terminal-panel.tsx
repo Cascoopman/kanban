@@ -4,13 +4,14 @@ import { Command, Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
 import type { MutableRefObject, ReactElement } from "react";
 import { useMemo } from "react";
 
+import { AgentQuickPromptActions } from "@/components/detail-panels/agent-quick-prompt-actions";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { RuntimeTaskSessionSummary } from "@/runtime/types";
+import type { RuntimeQuickPrompt, RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
 import { usePersistentTerminalSession } from "@/terminal/use-persistent-terminal-session";
-import { isReviewLikeColumnId } from "@/types";
+import { type BoardColumnId, isReviewLikeColumnId } from "@/types";
 import { isMacPlatform } from "@/utils/platform";
 
 interface AgentTerminalSessionControls {
@@ -31,7 +32,10 @@ export interface AgentTerminalPanelProps {
 	onOpenPr?: () => void;
 	isCommitLoading?: boolean;
 	isOpenPrLoading?: boolean;
-	taskColumnId?: string;
+	taskColumnId?: BoardColumnId;
+	quickPrompts?: readonly RuntimeQuickPrompt[];
+	onSendQuickPrompt?: (prompt: string) => Promise<void>;
+	onEditQuickPrompts?: () => void;
 	onMoveToTrash?: () => void;
 	isMoveToTrashLoading?: boolean;
 	showMoveToTrash?: boolean;
@@ -144,12 +148,16 @@ function AgentTerminalReviewActions({
 function AgentTerminalPanelLayout({
 	taskId,
 	summary,
+	terminalEnabled = true,
 	onSummary: _onSummary,
 	onCommit,
 	onOpenPr,
 	isCommitLoading = false,
 	isOpenPrLoading = false,
 	taskColumnId = "in_progress",
+	quickPrompts = [],
+	onSendQuickPrompt,
+	onEditQuickPrompts,
 	onMoveToTrash,
 	isMoveToTrashLoading = false,
 	showMoveToTrash,
@@ -171,6 +179,7 @@ function AgentTerminalPanelLayout({
 }: AgentTerminalPanelProps & { sessionControls: AgentTerminalSessionControls }): ReactElement {
 	const { containerRef, lastError, isStopping, clearTerminal, stopTerminal } = sessionControls;
 	const canStop = summary?.state === "running" || summary?.state === "awaiting_review";
+	const canSendQuickPrompt = summary?.state === "running" || summary?.state === "awaiting_review";
 	const statusLabel = useMemo(() => describeState(summary), [summary]);
 	const statusTagStyle = useMemo(() => getStateTagStyle(summary), [summary]);
 	const agentLabel = useMemo(() => {
@@ -310,6 +319,15 @@ function AgentTerminalPanelLayout({
 				<div className="flex gap-2 rounded-none border-t border-status-red/30 bg-status-red/10 p-3 text-[13px] text-status-red">
 					{lastError}
 				</div>
+			) : null}
+			{terminalEnabled && onSendQuickPrompt && onEditQuickPrompts ? (
+				<AgentQuickPromptActions
+					quickPrompts={quickPrompts}
+					columnId={taskColumnId}
+					disabled={!canSendQuickPrompt}
+					onSend={onSendQuickPrompt}
+					onEdit={onEditQuickPrompts}
+				/>
 			) : null}
 			{showMoveToTrash && onMoveToTrash ? (
 				<div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 12px" }}>

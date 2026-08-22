@@ -49,6 +49,7 @@ import {
 } from "@/hooks/use-project-boards";
 import { parseRemovedProjectPathFromStreamError, useProjectNavigation } from "@/hooks/use-project-navigation";
 import { useProjectUiState } from "@/hooks/use-project-ui-state";
+import { useQuickPromptActions } from "@/hooks/use-quick-prompt-actions";
 import { useResumeInterruptedTaskSessions } from "@/hooks/use-resume-interrupted-task-sessions";
 import { useReviewReadyNotifications } from "@/hooks/use-review-ready-notifications";
 import { useShortcutActions } from "@/hooks/use-shortcut-actions";
@@ -167,6 +168,7 @@ export default function App(): ReactElement {
 	} = useTerminalConnectionReady();
 	const readyForReviewNotificationsEnabled = runtimeProjectConfig?.readyForReviewNotificationsEnabled ?? true;
 	const shortcuts = runtimeProjectConfig?.shortcuts ?? [];
+	const quickPrompts = runtimeProjectConfig?.quickPrompts ?? [];
 	const selectedShortcutLabel = useMemo(() => {
 		if (shortcuts.length === 0) {
 			return null;
@@ -190,6 +192,7 @@ export default function App(): ReactElement {
 		currentProjectId,
 		setSessions,
 	});
+	const { handleSendQuickPrompt } = useQuickPromptActions({ sendTaskSessionInput });
 
 	const {
 		workspacePath,
@@ -916,6 +919,9 @@ export default function App(): ReactElement {
 									moveToTrashLoadingById={moveToTrashLoadingById}
 									onMoveReviewCardToTrash={handleMoveReviewCardToTrash}
 									onRestoreTaskFromTrash={handleRestoreTaskFromTrash}
+									quickPrompts={quickPrompts}
+									onSendQuickPrompt={handleSendQuickPrompt}
+									onEditQuickPrompts={() => handleOpenSettings("quick-prompts")}
 									onMoveToTrash={handleMoveToTrash}
 									isMoveToTrashLoading={moveToTrashLoadingById[selectedCard.card.id] ?? false}
 									gitHistoryPanel={

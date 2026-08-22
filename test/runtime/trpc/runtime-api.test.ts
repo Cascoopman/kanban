@@ -85,6 +85,7 @@ function createRuntimeConfigState(selectedAgentId: "claude" | "codex" = "claude"
 		agentAutonomousModeEnabled: true,
 		readyForReviewNotificationsEnabled: true,
 		shortcuts: [],
+		quickPrompts: [],
 		commitPromptTemplate: "commit",
 		openPrPromptTemplate: "pr",
 		commitPromptTemplateDefault: "commit",

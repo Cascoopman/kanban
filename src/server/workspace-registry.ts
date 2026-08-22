@@ -8,6 +8,7 @@ import type {
 	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import {
+	ensureWorkspaceIndexCompatibility,
 	listWorkspaceIndexEntries,
 	loadWorkspaceBoardById,
 	loadWorkspaceContext,
@@ -186,6 +187,7 @@ function toProjectSummary(project: {
 }
 
 export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDependencies): Promise<WorkspaceRegistry> {
+	await ensureWorkspaceIndexCompatibility();
 	const launchedFromGitRepo = deps.hasGitRepository(deps.cwd);
 	const initialWorkspace = launchedFromGitRepo ? await loadWorkspaceContext(deps.cwd) : null;
 	let indexedWorkspace: RuntimeWorkspaceIndexEntry | null = null;

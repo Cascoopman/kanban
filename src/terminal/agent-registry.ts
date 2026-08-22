@@ -110,6 +110,7 @@ export function buildRuntimeConfigResponse(runtimeConfig: RuntimeConfigState): R
 		detectedCommands,
 		agents,
 		shortcuts: runtimeConfig.shortcuts,
+		quickPrompts: runtimeConfig.quickPrompts,
 		commitPromptTemplate: runtimeConfig.commitPromptTemplate,
 		openPrPromptTemplate: runtimeConfig.openPrPromptTemplate,
 		commitPromptTemplateDefault: runtimeConfig.commitPromptTemplateDefault,

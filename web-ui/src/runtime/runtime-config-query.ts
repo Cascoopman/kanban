@@ -5,6 +5,7 @@ import type {
 	RuntimeConfigResponse,
 	RuntimeDebugResetAllStateResponse,
 	RuntimeProjectShortcut,
+	RuntimeQuickPrompt,
 } from "@/runtime/types";
 
 export async function fetchRuntimeConfig(workspaceId: string | null): Promise<RuntimeConfigResponse> {
@@ -19,6 +20,7 @@ export async function saveRuntimeConfig(
 		selectedShortcutLabel?: string | null;
 		agentAutonomousModeEnabled?: boolean;
 		shortcuts?: RuntimeProjectShortcut[];
+		quickPrompts?: RuntimeQuickPrompt[];
 		readyForReviewNotificationsEnabled?: boolean;
 		commitPromptTemplate?: string;
 		openPrPromptTemplate?: string;

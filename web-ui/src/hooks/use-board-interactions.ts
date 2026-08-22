@@ -125,7 +125,6 @@ export function useBoardInteractions({
 			return next;
 		});
 	}, []);
-
 	const trashTaskIds = useMemo(() => {
 		const trashColumn = board.columns.find((column) => column.id === "trash");
 		return trashColumn ? trashColumn.cards.map((card) => card.id) : [];

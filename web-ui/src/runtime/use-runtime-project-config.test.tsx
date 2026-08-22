@@ -55,6 +55,7 @@ function createRuntimeConfigResponse(
 			},
 		],
 		shortcuts,
+		quickPrompts: [],
 		commitPromptTemplate: "",
 		openPrPromptTemplate: "",
 		commitPromptTemplateDefault: "",

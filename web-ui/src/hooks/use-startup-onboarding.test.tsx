@@ -36,6 +36,7 @@ function createRuntimeConfigResponse(selectedAgentId: RuntimeConfigResponse["sel
 			},
 		],
 		shortcuts: [],
+		quickPrompts: [],
 		commitPromptTemplate: "",
 		openPrPromptTemplate: "",
 		commitPromptTemplateDefault: "",
