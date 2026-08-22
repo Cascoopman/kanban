@@ -84,6 +84,8 @@ describe("prepareAgentLaunch", () => {
 
 		expect(launch.env.KANBAN_HOOK_TASK_ID).toBe("task-1");
 		expect(launch.env.KANBAN_HOOK_WORKSPACE_ID).toBe("workspace-1");
+		expect(launch.env.KANBAN_TASK_ID).toBe("task-1");
+		expect(launch.env.KANBAN_WORKSPACE_ID).toBe("workspace-1");
 		const launchCommand = [launch.binary ?? "", ...launch.args].join(" ");
 		expect(launchCommand).toContain("codex");
 		expect(launchCommand).toContain("codex-hook.js");

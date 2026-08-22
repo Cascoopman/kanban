@@ -2,9 +2,8 @@ import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useTaskEditor } from "@/hooks/use-task-editor";
-import type { RuntimeAgentId } from "@/runtime/types";
-import type { BoardCard, BoardData } from "@/types";
+import { type CreatedTask, useTaskEditor } from "@/hooks/use-task-editor";
+import type { BoardCard, BoardData, TaskImage } from "@/types";
 
 function createTask(taskId: string, title: string, createdAt: number, overrides: Partial<BoardCard> = {}): BoardCard {
 	return {
@@ -33,19 +32,19 @@ function createBoard(tasks: BoardCard[] = []): BoardData {
 interface HookSnapshot {
 	board: BoardData;
 	isInlineTaskCreateOpen: boolean;
-	newTaskTitle: string;
+	newTaskPrompt: string;
+	newTaskImages: TaskImage[];
 	newTaskBranchRef: string;
-	newTaskAgentId: RuntimeAgentId | undefined;
 	editingTaskId: string | null;
 	editTaskStartInPlanMode: boolean;
 	isEditTaskStartInPlanModeDisabled: boolean;
 	handleOpenCreateTask: () => void;
-	handleCreateTask: () => string | null;
-	onNewTaskTitleChange: (value: string) => void;
+	handleCreateTask: () => CreatedTask | null;
+	setNewTaskPrompt: (value: string) => void;
+	setNewTaskImages: (value: TaskImage[]) => void;
 	handleOpenEditTask: (task: BoardCard) => void;
 	handleSaveEditedTask: () => string | null;
 	handleSaveAndStartEditedTask: () => void;
-	setNewTaskAgentId: (value: RuntimeAgentId | undefined) => void;
 }
 
 function requireSnapshot(snapshot: HookSnapshot | null): HookSnapshot {
@@ -81,19 +80,19 @@ function HookHarness({
 		onSnapshot({
 			board,
 			isInlineTaskCreateOpen: editor.isInlineTaskCreateOpen,
-			newTaskTitle: editor.newTaskTitle,
+			newTaskPrompt: editor.newTaskPrompt,
+			newTaskImages: editor.newTaskImages,
 			newTaskBranchRef: editor.newTaskBranchRef,
-			newTaskAgentId: editor.newTaskAgentId,
 			editingTaskId: editor.editingTaskId,
 			editTaskStartInPlanMode: editor.editTaskStartInPlanMode,
 			isEditTaskStartInPlanModeDisabled: editor.isEditTaskStartInPlanModeDisabled,
 			handleOpenCreateTask: editor.handleOpenCreateTask,
 			handleCreateTask: editor.handleCreateTask,
-			onNewTaskTitleChange: editor.onNewTaskTitleChange,
+			setNewTaskPrompt: editor.setNewTaskPrompt,
+			setNewTaskImages: editor.setNewTaskImages,
 			handleOpenEditTask: editor.handleOpenEditTask,
 			handleSaveEditedTask: editor.handleSaveEditedTask,
 			handleSaveAndStartEditedTask: editor.handleSaveAndStartEditedTask,
-			setNewTaskAgentId: editor.setNewTaskAgentId,
 		});
 	}, [
 		board,
@@ -106,10 +105,9 @@ function HookHarness({
 		editor.handleSaveAndStartEditedTask,
 		editor.isEditTaskStartInPlanModeDisabled,
 		editor.isInlineTaskCreateOpen,
-		editor.newTaskTitle,
+		editor.newTaskPrompt,
+		editor.newTaskImages,
 		editor.newTaskBranchRef,
-		editor.newTaskAgentId,
-		editor.onNewTaskTitleChange,
 		onSnapshot,
 	]);
 
@@ -217,7 +215,7 @@ describe("useTaskEditor", () => {
 		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Initial prompt");
 	});
 
-	it("requires a title before creating a task", async () => {
+	it("requires a prompt before creating a task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -235,18 +233,18 @@ describe("useTaskEditor", () => {
 			requireSnapshot(latestSnapshot).handleOpenCreateTask();
 		});
 
-		let createdTaskId: string | null = null;
+		let createdTask: CreatedTask | null = null;
 		await act(async () => {
-			createdTaskId = requireSnapshot(latestSnapshot).handleCreateTask();
+			createdTask = requireSnapshot(latestSnapshot).handleCreateTask();
 		});
 
 		const snapshot = requireSnapshot(latestSnapshot);
-		expect(createdTaskId).toBeNull();
+		expect(createdTask).toBeNull();
 		expect(snapshot.isInlineTaskCreateOpen).toBe(true);
 		expect(snapshot.board.columns[0]?.cards).toEqual([]);
 	});
 
-	it("creates a title-only task", async () => {
+	it("creates a task with a derived title and returns its kickoff prompt", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -262,24 +260,31 @@ describe("useTaskEditor", () => {
 
 		await act(async () => {
 			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-			requireSnapshot(latestSnapshot).onNewTaskTitleChange("Title-first task creation");
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Implement prompt-first task creation. Keep it focused.");
 		});
 
-		let createdTaskId: string | null = null;
+		const created = { current: null as CreatedTask | null };
 		await act(async () => {
-			createdTaskId = requireSnapshot(latestSnapshot).handleCreateTask();
+			created.current = requireSnapshot(latestSnapshot).handleCreateTask();
 		});
 
 		const snapshot = requireSnapshot(latestSnapshot);
 		const createdTask = snapshot.board.columns[0]?.cards[0];
-		expect(createdTaskId).toBe(createdTask?.id);
-		expect(createdTask?.title).toBe("Title-first task creation");
+		expect(created.current?.taskId).toBe(createdTask?.id);
+		expect(created.current?.prompt).toBe("Implement prompt-first task creation. Keep it focused.");
+		expect(createdTask?.title).toBe("Implement prompt-first task creation.");
 		expect(snapshot.isInlineTaskCreateOpen).toBe(false);
-		expect(snapshot.newTaskTitle).toBe("");
+		expect(snapshot.newTaskPrompt).toBe("");
 	});
 
-	it("preserves the selected agent on a title-only task", async () => {
+	it("returns attached images for the initial agent turn", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
+		const image: TaskImage = {
+			id: "image-1",
+			data: "aGVsbG8=",
+			mimeType: "image/png",
+			name: "mock.png",
+		};
 
 		await act(async () => {
 			root.render(
@@ -294,15 +299,16 @@ describe("useTaskEditor", () => {
 
 		await act(async () => {
 			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-			requireSnapshot(latestSnapshot).onNewTaskTitleChange("Use Codex interactively");
-			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
+			requireSnapshot(latestSnapshot).setNewTaskPrompt("Inspect this screenshot");
+			requireSnapshot(latestSnapshot).setNewTaskImages([image]);
 		});
 
+		const created = { current: null as CreatedTask | null };
 		await act(async () => {
-			requireSnapshot(latestSnapshot).handleCreateTask();
+			created.current = requireSnapshot(latestSnapshot).handleCreateTask();
 		});
 
-		const createdTask = requireSnapshot(latestSnapshot).board.columns[0]?.cards[0];
-		expect(createdTask?.agentId).toBe("codex");
+		expect(created.current?.images).toEqual([image]);
+		expect(requireSnapshot(latestSnapshot).newTaskImages).toEqual([]);
 	});
 });

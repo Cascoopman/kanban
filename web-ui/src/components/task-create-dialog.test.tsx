@@ -1,23 +1,22 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TaskCreateDialog } from "@/components/task-create-dialog";
 
-function Harness(): React.ReactElement {
-	const [title, setTitle] = useState("");
+function Harness({ onStart = () => null }: { onStart?: () => string | null }): React.ReactElement {
+	const [prompt, setPrompt] = useState("");
 	return (
 		<TaskCreateDialog
 			open
 			onOpenChange={() => {}}
-			title={title}
-			onTitleChange={setTitle}
-			onCreateAndOpen={() => null}
-			startInPlanMode={false}
-			onStartInPlanModeChange={() => {}}
-			branchRef="main"
-			branchOptions={[{ value: "main", label: "main" }]}
-			onBranchRefChange={() => {}}
+			prompt={prompt}
+			onPromptChange={setPrompt}
+			images={[]}
+			onImagesChange={() => {}}
+			onCreateStartAndOpen={onStart}
+			workspaceId={null}
+			canStart
 		/>
 	);
 }
@@ -37,7 +36,7 @@ describe("TaskCreateDialog", () => {
 		container.remove();
 	});
 
-	it("opens with an empty title focused and no prompt field", async () => {
+	it("opens directly into the prompt without advanced task settings", async () => {
 		await act(async () => {
 			root.render(<Harness />);
 		});
@@ -45,17 +44,38 @@ describe("TaskCreateDialog", () => {
 			await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
 		});
 
-		const titleInput = document.body.querySelector<HTMLInputElement>('input[placeholder="What are you working on?"]');
 		const promptInput = document.body.querySelector<HTMLTextAreaElement>("textarea");
-		expect(titleInput).not.toBeNull();
-		expect(promptInput).toBeNull();
-		if (!titleInput) {
-			throw new Error("Expected the title field to render.");
+		expect(promptInput).not.toBeNull();
+		expect(document.activeElement).toBe(promptInput);
+		expect(document.body.textContent).not.toContain("Start in plan mode");
+		expect(document.body.textContent).not.toContain("Worktree base ref");
+		expect(document.body.textContent).not.toContain("Title");
+	});
+
+	it("starts and opens the task from the primary action", async () => {
+		const onStart = vi.fn(() => "task-1");
+		await act(async () => {
+			root.render(<Harness onStart={onStart} />);
+		});
+
+		const promptInput = document.body.querySelector<HTMLTextAreaElement>("textarea");
+		if (!promptInput) {
+			throw new Error("Expected task prompt input.");
 		}
-		expect(document.activeElement).toBe(titleInput);
-		expect(titleInput.selectionStart).toBe(0);
-		expect(titleInput.selectionEnd).toBe(0);
-		expect(document.body.textContent).toContain("Create and open terminal");
-		expect(document.body.textContent).not.toContain("Create more");
+		await act(async () => {
+			const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+			valueSetter?.call(promptInput, "Implement the prompt-first task flow");
+			promptInput.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		const startButton = Array.from(document.body.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("Start task"),
+		);
+		expect(startButton).toBeDefined();
+		await act(async () => {
+			startButton?.click();
+		});
+
+		expect(onStart).toHaveBeenCalledOnce();
 	});
 });

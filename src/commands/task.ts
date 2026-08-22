@@ -22,7 +22,8 @@ import {
 	updateTask,
 } from "../core/task-board-mutations";
 import { resolveProjectInputPath } from "../projects/project-path";
-import { loadWorkspaceContext, mutateWorkspaceState } from "../state/workspace-state";
+import { loadWorkspaceContext, loadWorkspaceContextById, mutateWorkspaceState } from "../state/workspace-state";
+import { readTaskSessionContextFromEnv } from "../terminal/hook-runtime-context";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
 const LIST_TASK_COLUMNS = ["backlog", "in_progress", "review", "on_hold", "trash"] as const;
@@ -134,10 +135,28 @@ async function resolveRuntimeWorkspace(
 	options: { autoCreateIfMissing?: boolean } = {},
 ) {
 	const normalizedProjectPath = (projectPath ?? "").trim();
+	if (!normalizedProjectPath) {
+		const { workspaceId } = readTaskSessionContextFromEnv();
+		if (workspaceId) {
+			const workspace = await loadWorkspaceContextById(workspaceId);
+			if (!workspace) {
+				throw new Error(`Kanban task session workspace "${workspaceId}" is no longer registered.`);
+			}
+			return workspace;
+		}
+	}
 	const resolvedPath = normalizedProjectPath ? resolveProjectInputPath(normalizedProjectPath, cwd) : cwd;
 	return await loadWorkspaceContext(resolvedPath, {
 		autoCreateIfMissing: options.autoCreateIfMissing ?? true,
 	});
+}
+
+function resolveCurrentTaskId(explicitTaskId: string | undefined, commandName: string): string {
+	const taskId = explicitTaskId?.trim() || readTaskSessionContextFromEnv().taskId;
+	if (!taskId) {
+		throw new Error(`${commandName} requires --task-id outside a Kanban task session.`);
+	}
+	return taskId;
 }
 
 async function resolveWorkspaceRepoPath(
@@ -233,6 +252,25 @@ function formatTaskRecord(
 					exitCode: session.exitCode,
 				}
 			: null,
+	};
+}
+
+async function getCurrentTask(input: { cwd: string; projectPath?: string }): Promise<JsonRecord> {
+	const taskId = resolveCurrentTaskId(undefined, "task current");
+	const workspace = await resolveRuntimeWorkspace(input.projectPath, input.cwd, {
+		autoCreateIfMissing: false,
+	});
+	const runtimeClient = createRuntimeTrpcClient(workspace.workspaceId);
+	const state = await runtimeClient.workspace.getState.query();
+	const taskRecord = findTaskRecord(state, taskId);
+	if (!taskRecord) {
+		throw new Error(`Current task "${taskId}" was not found in workspace ${workspace.repoPath}.`);
+	}
+
+	return {
+		ok: true,
+		workspacePath: workspace.repoPath,
+		task: formatTaskRecord(state, taskRecord.task, taskRecord.columnId),
 	};
 }
 
@@ -946,6 +984,21 @@ export function registerTaskCommand(program: Command): void {
 		});
 
 	task
+		.command("current")
+		.alias("whoami")
+		.description("Show the task associated with the current agent session.")
+		.option("--project-path <path>", "Workspace path. Defaults to the current task workspace.")
+		.action(async (options: { projectPath?: string }) => {
+			await runTaskCommand(
+				async () =>
+					await getCurrentTask({
+						cwd: process.cwd(),
+						projectPath: options.projectPath,
+					}),
+			);
+		});
+
+	task
 		.command("create")
 		.description("Create a task in backlog.")
 		.requiredOption("--title <text>", "Task title.")
@@ -978,7 +1031,7 @@ export function registerTaskCommand(program: Command): void {
 	task
 		.command("update")
 		.description("Update an existing task.")
-		.requiredOption("--task-id <id>", "Task ID.")
+		.option("--task-id <id>", "Task ID. Defaults to the current agent task.")
 		.option("--title <text>", "Replacement task title.")
 		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
 		.option("--base-ref <branch>", "Replacement base branch/ref.")
@@ -986,7 +1039,7 @@ export function registerTaskCommand(program: Command): void {
 		.option("--agent-id <id>", 'Agent override: claude | codex. Use "default" to clear.')
 		.action(
 			async (options: {
-				taskId: string;
+				taskId?: string;
 				title?: string;
 				projectPath?: string;
 				baseRef?: string;
@@ -997,7 +1050,7 @@ export function registerTaskCommand(program: Command): void {
 					async () =>
 						await updateTaskCommand({
 							cwd: process.cwd(),
-							taskId: options.taskId,
+							taskId: resolveCurrentTaskId(options.taskId, "task update"),
 							title: options.title,
 							projectPath: options.projectPath,
 							baseRef: options.baseRef,

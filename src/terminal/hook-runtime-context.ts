@@ -1,3 +1,5 @@
+export const KANBAN_TASK_ID_ENV = "KANBAN_TASK_ID";
+export const KANBAN_WORKSPACE_ID_ENV = "KANBAN_WORKSPACE_ID";
 export const KANBAN_HOOK_TASK_ID_ENV = "KANBAN_HOOK_TASK_ID";
 export const KANBAN_HOOK_WORKSPACE_ID_ENV = "KANBAN_HOOK_WORKSPACE_ID";
 
@@ -16,8 +18,20 @@ function requireTrimmedEnv(env: NodeJS.ProcessEnv, key: string): string {
 
 export function createHookRuntimeEnv(context: HookRuntimeContext): Record<string, string> {
 	return {
+		[KANBAN_TASK_ID_ENV]: context.taskId,
+		[KANBAN_WORKSPACE_ID_ENV]: context.workspaceId,
 		[KANBAN_HOOK_TASK_ID_ENV]: context.taskId,
 		[KANBAN_HOOK_WORKSPACE_ID_ENV]: context.workspaceId,
+	};
+}
+
+export function readTaskSessionContextFromEnv(env: NodeJS.ProcessEnv = process.env): {
+	taskId: string | null;
+	workspaceId: string | null;
+} {
+	return {
+		taskId: env[KANBAN_TASK_ID_ENV]?.trim() || env[KANBAN_HOOK_TASK_ID_ENV]?.trim() || null,
+		workspaceId: env[KANBAN_WORKSPACE_ID_ENV]?.trim() || env[KANBAN_HOOK_WORKSPACE_ID_ENV]?.trim() || null,
 	};
 }
 

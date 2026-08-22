@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { notifyError, showAppToast } from "@/components/app-toaster";
 import { useLinkedBacklogTaskActions } from "@/hooks/use-linked-backlog-task-actions";
 import { useProgrammaticCardMoves } from "@/hooks/use-programmatic-card-moves";
-import type { UseTaskSessionsResult } from "@/hooks/use-task-sessions";
+import type { StartTaskSessionOptions, UseTaskSessionsResult } from "@/hooks/use-task-sessions";
 import type { RuntimeTaskSessionSummary, RuntimeTaskWorkspaceInfoResponse } from "@/runtime/types";
 import {
 	applyDragResult,
@@ -71,7 +71,7 @@ export interface UseBoardInteractionsResult {
 	handleCreateDependency: (fromTaskId: string, toTaskId: string) => void;
 	handleDeleteDependency: (dependencyId: string) => void;
 	handleDragEnd: (result: DropResult, options?: { selectDroppedTask?: boolean }) => void;
-	handleStartTask: (taskId: string) => void;
+	handleStartTask: (taskId: string, options?: StartTaskSessionOptions) => void;
 	handleStartAllBacklogTasks: (taskIds?: string[]) => void;
 	handleDetailTaskDragEnd: (result: DropResult) => void;
 	handleCardSelect: (taskId: string) => void;
@@ -275,7 +275,7 @@ export function useBoardInteractions({
 			task: BoardCard,
 			taskId: string,
 			fromColumnId: BoardColumnId,
-			options?: { optimisticMove?: boolean },
+			options?: { optimisticMove?: boolean; session?: StartTaskSessionOptions },
 		): Promise<boolean> => {
 			const optimisticMove = options?.optimisticMove ?? true;
 			const ensured = await ensureTaskWorkspace(task);
@@ -318,7 +318,9 @@ export function useBoardInteractions({
 					setTaskWorkspaceInfo(infoAfterEnsure);
 				}
 			}
-			const started = await startTaskSession(task);
+			const started = options?.session
+				? await startTaskSession(task, options.session)
+				: await startTaskSession(task);
 			if (!started.ok) {
 				notifyError(started.message ?? "Could not start task session.");
 				if (optimisticMove) {
@@ -349,7 +351,7 @@ export function useBoardInteractions({
 	);
 
 	const startBacklogTaskImmediately = useCallback(
-		async (task: BoardCard): Promise<boolean> => {
+		async (task: BoardCard, sessionOptions?: StartTaskSessionOptions): Promise<boolean> => {
 			const selection = findCardSelection(board, task.id);
 			if (!selection || selection.column.id !== "backlog") {
 				return false;
@@ -366,15 +368,16 @@ export function useBoardInteractions({
 
 			return kickoffTaskInProgress(task, task.id, "backlog", {
 				optimisticMove: true,
+				session: sessionOptions,
 			});
 		},
 		[board, kickoffTaskInProgress, setBoard],
 	);
 
 	const startBacklogTaskWithAnimation = useCallback(
-		async (task: BoardCard): Promise<boolean> => {
-			if (selectedCard) {
-				return startBacklogTaskImmediately(task);
+		async (task: BoardCard, sessionOptions?: StartTaskSessionOptions): Promise<boolean> => {
+			if (selectedCard || sessionOptions) {
+				return startBacklogTaskImmediately(task, sessionOptions);
 			}
 
 			await waitForBacklogCardHeightToSettle(task.id);
@@ -382,7 +385,7 @@ export function useBoardInteractions({
 			const programmaticMoveAttempt = tryProgrammaticCardMove(task.id, "backlog", "in_progress");
 			if (programmaticMoveAttempt === "blocked") {
 				await waitForProgrammaticCardMoveAvailability();
-				return startBacklogTaskWithAnimation(task);
+				return startBacklogTaskWithAnimation(task, sessionOptions);
 			}
 			if (programmaticMoveAttempt === "unavailable") {
 				return kickoffTaskInProgress(task, task.id, "backlog", {
@@ -568,13 +571,13 @@ export function useBoardInteractions({
 	);
 
 	const handleStartTask = useCallback(
-		(taskId: string) => {
+		(taskId: string, options?: StartTaskSessionOptions) => {
 			const selection = findCardSelection(board, taskId);
 			if (!selection || selection.column.id !== "backlog") {
 				return;
 			}
 			maybeRequestNotificationPermissionForTaskStart();
-			void startBacklogTaskWithAnimation(selection.card);
+			void startBacklogTaskWithAnimation(selection.card, options);
 		},
 		[board, maybeRequestNotificationPermissionForTaskStart, startBacklogTaskWithAnimation],
 	);

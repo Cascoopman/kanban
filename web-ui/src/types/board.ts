@@ -1,6 +1,7 @@
-import type { RuntimeAgentId, RuntimeBoardColumnId } from "@/runtime/types";
+import type { RuntimeAgentId, RuntimeBoardColumnId, RuntimeTaskImage } from "@/runtime/types";
 
 export type BoardColumnId = RuntimeBoardColumnId;
+export type TaskImage = RuntimeTaskImage;
 
 export function isReviewLikeColumnId(columnId: BoardColumnId | string): boolean {
 	return columnId === "review" || columnId === "on_hold";

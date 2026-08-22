@@ -8,7 +8,7 @@ kanban \- local orchestration board for coding agents
 .RI [ command ]
 .br
 .B kanban task
-.RI " " list|create|update|link|unlink|start
+.RI " " list|current|create|update|link|unlink|start
 .RI " " [ options ]
 .br
 .B kanban hooks
@@ -46,6 +46,9 @@ Subcommands:
 .RI [ --project-path " " path ]
 .RI [ --column " " backlog|in_progress|review ]
 .br
+.B current|whoami
+.RI [ --project-path " " path ]
+.br
 .B create
 .B --title
 .RI " " text
@@ -54,8 +57,7 @@ Subcommands:
 .RI [ --start-in-plan-mode " " true|false ]
 .br
 .B update
-.B --task-id
-.RI " " id
+.RI [ --task-id " " id ]
 .RI [ --title " " text ]
 .RI [ --project-path " " path ]
 .RI [ --base-ref " " branch ]
@@ -126,6 +128,12 @@ Start server on a custom port:
 .TP
 List tasks for the current workspace:
 .B kanban task list
+.TP
+Show the task associated with the current agent session:
+.B kanban task current
+.TP
+Rename the current agent task:
+.B kanban task update --title "Implement prompt-first task creation"
 .TP
 Create a task manually:
 .B kanban task create --title "Implement API pagination"

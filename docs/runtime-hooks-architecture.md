@@ -101,11 +101,13 @@ Generated hook files are written through idempotent text writes. Files only upda
 
 When hook context is available, launch wiring injects:
 
-1. `KANBAN_HOOK_TASK_ID`
-2. `KANBAN_HOOK_WORKSPACE_ID`
+1. `KANBAN_TASK_ID` and `KANBAN_WORKSPACE_ID` for agent-facing task commands
+2. `KANBAN_HOOK_TASK_ID` and `KANBAN_HOOK_WORKSPACE_ID` for hook compatibility
 3. `KANBAN_HOOK_PORT`
 
-These are required by `kanban hooks ingest` to route a hook event to the correct session and runtime process.
+The hook-specific values and port are required by `kanban hooks ingest` to route an event to the correct session and runtime process.
+The agent-facing aliases allow `kanban task current` and commands such as `kanban task update --title "..."`
+to target the current card without copying an ID or resolving the main worktree path.
 
 ## Command resolution and cross-platform behavior
 

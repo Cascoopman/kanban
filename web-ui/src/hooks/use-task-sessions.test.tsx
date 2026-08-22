@@ -157,6 +157,40 @@ describe("useTaskSessions", () => {
 		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
 	});
 
+	it("forwards the initial prompt and images when starting a newly created task", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+		const image = {
+			id: "image-1",
+			data: "aGVsbG8=",
+			mimeType: "image/png",
+			name: "reference.png",
+		};
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			await latestSnapshot?.startTaskSession(createTask(), {
+				initialPrompt: "Implement the prompt-first task flow",
+				images: [image],
+			});
+		});
+
+		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				prompt: "Implement the prompt-first task flow",
+				images: [image],
+			}),
+		);
+	});
+
 	it("starts a background task session in its owning project", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
