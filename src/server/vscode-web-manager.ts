@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { access, mkdir } from "node:fs/promises";
 import { connect, createServer } from "node:net";
+import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import treeKill from "tree-kill";
 
@@ -15,6 +16,8 @@ import { startVsCodeWebProxy, type VsCodeWebProxy } from "./vscode-web-proxy";
 
 const PROXY_BASE_PATH = "/vscode";
 const START_TIMEOUT_MS = 30_000;
+const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
+const VSCODE_COMMIT_PATTERN = /^[0-9a-f]{40}$/i;
 
 export interface VsCodeServerLaunch {
 	executable: string;
@@ -30,6 +33,12 @@ interface ActiveVsCodeServer {
 	process: ChildProcess;
 	proxy: VsCodeWebProxy;
 	lastError: string | null;
+}
+
+interface PreparedVsCodeWebRuntime {
+	executable: string | null;
+	launch: VsCodeServerLaunch | null;
+	configurationDefaults: Record<string, unknown>;
 }
 
 async function isFileAvailable(path: string): Promise<boolean> {
@@ -63,12 +72,81 @@ async function resolveVsCodeCliPath(): Promise<string | null> {
 	return null;
 }
 
-async function resolveVsCodeServerLaunch(vsCodeCliPath: string): Promise<VsCodeServerLaunch> {
+async function readProcessOutput(executable: string, args: string[]): Promise<string> {
+	return await new Promise<string>((resolve, reject) => {
+		const child = spawn(executable, args, { env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+		let output = "";
+		const capture = (chunk: Buffer) => {
+			output += chunk.toString("utf8");
+		};
+		child.stdout?.on("data", capture);
+		child.stderr?.on("data", capture);
+		child.once("error", reject);
+		child.once("exit", (code) => {
+			if (code === 0) {
+				resolve(output);
+				return;
+			}
+			reject(new Error(`${executable} exited with code ${code ?? "signal"}.`));
+		});
+	});
+}
+
+export function parseVsCodeCommitId(versionOutput: string): string | null {
+	return (
+		versionOutput
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.find((line) => VSCODE_COMMIT_PATTERN.test(line)) ?? null
+	);
+}
+
+export function getDownloadedVsCodeServerCandidates(options: {
+	commitId: string;
+	homeDirectory?: string;
+	platform?: NodeJS.Platform;
+	env?: NodeJS.ProcessEnv;
+}): string[] {
+	const platform = options.platform ?? process.platform;
+	const env = options.env ?? process.env;
+	const cliDataDirectory =
+		env.VSCODE_CLI_DATA_DIR?.trim() || join(options.homeDirectory ?? homedir(), ".vscode", "cli");
+	const binDirectory = join(cliDataDirectory, "serve-web", options.commitId, "bin");
+	return platform === "win32"
+		? [
+				join(binDirectory, "code-server.cmd"),
+				join(binDirectory, "code-server.exe"),
+				join(binDirectory, "code-server"),
+			]
+		: [join(binDirectory, "code-server")];
+}
+
+async function resolveDownloadedVsCodeServerPath(vsCodeCliPath: string): Promise<string | null> {
+	let versionOutput: string;
+	try {
+		versionOutput = await readProcessOutput(vsCodeCliPath, ["--version"]);
+	} catch {
+		return null;
+	}
+	const commitId = parseVsCodeCommitId(versionOutput);
+	if (!commitId) {
+		return null;
+	}
+	for (const candidate of getDownloadedVsCodeServerCandidates({ commitId })) {
+		if (await isFileAvailable(candidate)) {
+			return candidate;
+		}
+	}
+	return null;
+}
+
+async function resolveVsCodeServerLaunch(vsCodeCliPath: string): Promise<VsCodeServerLaunch | null> {
 	const configuredPath = process.env.VSCODE_SERVER_CLI_PATH?.trim();
 	if (configuredPath && (await isFileAvailable(configuredPath))) {
 		return { executable: configuredPath, argumentPrefix: [], standalone: true };
 	}
-	return { executable: vsCodeCliPath, argumentPrefix: ["serve-web"], standalone: false };
+	const downloadedPath = await resolveDownloadedVsCodeServerPath(vsCodeCliPath);
+	return downloadedPath ? { executable: downloadedPath, argumentPrefix: [], standalone: true } : null;
 }
 
 async function reservePort(): Promise<number> {
@@ -88,7 +166,7 @@ async function reservePort(): Promise<number> {
 	});
 }
 
-function waitForPort(port: number, child: ChildProcess): Promise<void> {
+function waitForPort(port: number, child: ChildProcess, timeoutMs = START_TIMEOUT_MS): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const startedAt = Date.now();
 		let settled = false;
@@ -112,8 +190,8 @@ function waitForPort(port: number, child: ChildProcess): Promise<void> {
 				finish();
 			});
 			socket.once("error", () => {
-				if (Date.now() - startedAt >= START_TIMEOUT_MS) {
-					finish(new Error("VS Code Web did not start within 30 seconds."));
+				if (Date.now() - startedAt >= timeoutMs) {
+					finish(new Error(`VS Code Web did not start within ${Math.ceil(timeoutMs / 1_000)} seconds.`));
 					return;
 				}
 				setTimeout(probe, 200);
@@ -122,6 +200,42 @@ function waitForPort(port: number, child: ChildProcess): Promise<void> {
 		child.once("exit", handleExit);
 		probe();
 	});
+}
+
+async function downloadVsCodeServer(
+	vsCodeCliPath: string,
+	serverDataDirectory: string,
+	onProcess: (child: ChildProcess | null) => void,
+): Promise<void> {
+	const port = await reservePort();
+	const command = buildVsCodeServerCommand({
+		launch: { executable: vsCodeCliPath, argumentPrefix: ["serve-web"], standalone: false },
+		port,
+		token: randomBytes(32).toString("base64url"),
+		serverDataDirectory,
+		workspacePath: process.cwd(),
+	});
+	const child = spawn(command.executable, command.args, {
+		cwd: process.cwd(),
+		env: process.env,
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	onProcess(child);
+	let diagnostic = "";
+	const capture = (chunk: Buffer) => {
+		diagnostic = `${diagnostic}${chunk.toString("utf8")}`.slice(-4_000);
+	};
+	child.stdout?.on("data", capture);
+	child.stderr?.on("data", capture);
+	try {
+		await waitForPort(port, child, DOWNLOAD_TIMEOUT_MS);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(diagnostic.trim() || message);
+	} finally {
+		await terminateProcessTree(child);
+		onProcess(null);
+	}
 }
 
 async function terminateProcessTree(child: ChildProcess): Promise<void> {
@@ -195,10 +309,62 @@ function buildResponse(active: ActiveVsCodeServer): RuntimeVsCodeWebResponse {
 
 export class VsCodeWebManager {
 	private active: ActiveVsCodeServer | null = null;
+	private preparation: Promise<PreparedVsCodeWebRuntime> | null = null;
+	private preparationProcess: ChildProcess | null = null;
+	private launchProcess: ChildProcess | null = null;
+	private startOperation: { key: string; promise: Promise<RuntimeVsCodeWebResponse> } | null = null;
+	private disposed = false;
 	private readonly warn: (message: string) => void;
 
 	constructor(options: { warn?: (message: string) => void } = {}) {
 		this.warn = options.warn ?? (() => undefined);
+	}
+
+	private async prepareRuntime(): Promise<PreparedVsCodeWebRuntime> {
+		const executable = await resolveVsCodeCliPath();
+		if (!executable) {
+			return { executable: null, launch: null, configurationDefaults: {} };
+		}
+		const serverDataDirectory = join(getRuntimeHomePath(), "vscode-web");
+		await mkdir(serverDataDirectory, { recursive: true });
+		let configurationDefaults: Record<string, unknown> = {};
+		try {
+			configurationDefaults = (await prepareVsCodeWebProfile({ serverDataDirectory })).configurationDefaults;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			this.warn(`Could not synchronize the local VS Code profile: ${message}`);
+		}
+
+		let launch = await resolveVsCodeServerLaunch(executable);
+		if (!launch && !this.disposed) {
+			try {
+				await downloadVsCodeServer(executable, serverDataDirectory, (child) => {
+					this.preparationProcess = child;
+				});
+				launch = await resolveVsCodeServerLaunch(executable);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				this.warn(`Could not pre-download VS Code Server: ${message}`);
+			}
+		}
+		return {
+			executable,
+			launch: launch ?? { executable, argumentPrefix: ["serve-web"], standalone: false },
+			configurationDefaults,
+		};
+	}
+
+	private async getPreparedRuntime(): Promise<PreparedVsCodeWebRuntime> {
+		this.preparation ??= this.prepareRuntime();
+		const prepared = await this.preparation;
+		if (!prepared.executable) {
+			this.preparation = null;
+		}
+		return prepared;
+	}
+
+	async prewarm(): Promise<void> {
+		await this.getPreparedRuntime();
 	}
 
 	async getStatus(
@@ -212,8 +378,8 @@ export class VsCodeWebManager {
 		if (this.active?.key === key && this.active.lastError) {
 			return buildResponse(this.active);
 		}
-		const executable = await resolveVsCodeCliPath();
-		if (!executable) {
+		const prepared = await this.getPreparedRuntime();
+		if (!prepared.executable) {
 			return {
 				status: "unavailable",
 				url: null,
@@ -221,20 +387,18 @@ export class VsCodeWebManager {
 				error: "Visual Studio Code was not found. Install VS Code or expose its `code` command on PATH.",
 			};
 		}
-		return { status: "consent_required", url: null, workspacePath: null };
+		return { status: "idle", url: null, workspacePath: null };
 	}
 
-	async start(scope: RuntimeTrpcWorkspaceScope, input: RuntimeVsCodeWebRequest): Promise<RuntimeVsCodeWebResponse> {
-		if (!input.acceptLicenseTerms) {
-			return {
-				status: "consent_required",
-				url: null,
-				workspacePath: null,
-				error: "Accept the Visual Studio Code Server license terms before starting.",
-			};
+	private async startPrepared(
+		scope: RuntimeTrpcWorkspaceScope,
+		input: RuntimeVsCodeWebRequest,
+	): Promise<RuntimeVsCodeWebResponse> {
+		if (this.disposed) {
+			return { status: "error", url: null, workspacePath: null, error: "VS Code Web is shutting down." };
 		}
-		const executable = await resolveVsCodeCliPath();
-		if (!executable) {
+		const prepared = await this.getPreparedRuntime();
+		if (!prepared.executable || !prepared.launch) {
 			return await this.getStatus(scope, input);
 		}
 		const key = `${scope.workspaceId}:${input.taskId}`;
@@ -253,17 +417,8 @@ export class VsCodeWebManager {
 		const token = randomBytes(32).toString("base64url");
 		const serverDataDir = join(getRuntimeHomePath(), "vscode-web");
 		await mkdir(serverDataDir, { recursive: true });
-		let profile: Awaited<ReturnType<typeof prepareVsCodeWebProfile>>;
-		try {
-			profile = await prepareVsCodeWebProfile({ serverDataDirectory: serverDataDir });
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			this.warn(`Could not synchronize the local VS Code profile: ${message}`);
-			profile = { configurationDefaults: {} };
-		}
-		const launch = await resolveVsCodeServerLaunch(executable);
 		const command = buildVsCodeServerCommand({
-			launch,
+			launch: prepared.launch,
 			port,
 			token,
 			serverDataDirectory: serverDataDir,
@@ -274,6 +429,7 @@ export class VsCodeWebManager {
 			env: process.env,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
+		this.launchProcess = child;
 		let diagnostic = "";
 		const capture = (chunk: Buffer) => {
 			diagnostic = `${diagnostic}${chunk.toString("utf8")}`.slice(-4_000);
@@ -282,10 +438,17 @@ export class VsCodeWebManager {
 		child.stderr?.on("data", capture);
 		try {
 			await waitForPort(port, child);
+			if (this.disposed) {
+				throw new Error("VS Code Web is shutting down.");
+			}
 			const proxy = await startVsCodeWebProxy({
 				upstreamPort: port,
-				configurationDefaults: profile.configurationDefaults,
+				configurationDefaults: prepared.configurationDefaults,
 			});
+			if (this.disposed) {
+				await proxy.close();
+				throw new Error("VS Code Web is shutting down.");
+			}
 			const active: ActiveVsCodeServer = {
 				key,
 				workspacePath,
@@ -296,6 +459,7 @@ export class VsCodeWebManager {
 				lastError: null,
 			};
 			this.active = active;
+			this.launchProcess = null;
 			child.once("exit", (code) => {
 				if (this.active === active && !active.process.killed) {
 					active.lastError = diagnostic.trim() || `VS Code Web exited (${code ?? "signal"}).`;
@@ -306,7 +470,32 @@ export class VsCodeWebManager {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			await terminateProcessTree(child);
+			if (this.launchProcess === child) {
+				this.launchProcess = null;
+			}
 			return { status: "error", url: null, workspacePath, error: message };
+		}
+	}
+
+	async start(scope: RuntimeTrpcWorkspaceScope, input: RuntimeVsCodeWebRequest): Promise<RuntimeVsCodeWebResponse> {
+		const key = `${scope.workspaceId}:${input.taskId}`;
+		if (this.startOperation?.key === key) {
+			return await this.startOperation.promise;
+		}
+		const previousOperation = this.startOperation?.promise;
+		const promise = (async () => {
+			if (previousOperation) {
+				await previousOperation.catch(() => undefined);
+			}
+			return await this.startPrepared(scope, input);
+		})();
+		this.startOperation = { key, promise };
+		try {
+			return await promise;
+		} finally {
+			if (this.startOperation?.promise === promise) {
+				this.startOperation = null;
+			}
 		}
 	}
 
@@ -319,5 +508,21 @@ export class VsCodeWebManager {
 		}
 		await active.proxy.close();
 		await terminateProcessTree(active.process);
+	}
+
+	async dispose(): Promise<void> {
+		this.disposed = true;
+		const preparationProcess = this.preparationProcess;
+		const launchProcess = this.launchProcess;
+		this.preparationProcess = null;
+		this.launchProcess = null;
+		if (preparationProcess) {
+			await terminateProcessTree(preparationProcess);
+		}
+		if (launchProcess) {
+			await terminateProcessTree(launchProcess);
+		}
+		await this.startOperation?.promise.catch(() => undefined);
+		await this.stop();
 	}
 }

@@ -1,12 +1,12 @@
 import { Code2, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
 
 interface VsCodeWebState {
-	status: "loading" | "unavailable" | "consent_required" | "starting" | "ready" | "error";
+	status: "unavailable" | "idle" | "starting" | "ready" | "error";
 	url: string | null;
 	workspacePath: string | null;
 	error?: string;
@@ -21,37 +21,18 @@ export function VscodeInlinePanel({
 	baseRef: string;
 	workspaceId: string | null;
 }): React.ReactElement {
+	const requestIdRef = useRef(0);
 	const [state, setState] = useState<VsCodeWebState>({
-		status: workspaceId ? "loading" : "unavailable",
+		status: workspaceId ? "starting" : "unavailable",
 		url: null,
 		workspacePath: null,
 		error: workspaceId ? undefined : "No project is selected.",
 	});
 
-	const loadStatus = useCallback(async () => {
-		if (!workspaceId) {
-			return;
-		}
-		setState((current) => ({ ...current, status: "loading", error: undefined }));
-		try {
-			const response = await getRuntimeTrpcClient(workspaceId).runtime.getVsCodeWebStatus.query({ taskId, baseRef });
-			setState(response);
-		} catch (error) {
-			setState({
-				status: "error",
-				url: null,
-				workspacePath: null,
-				error: error instanceof Error ? error.message : String(error),
-			});
-		}
-	}, [baseRef, taskId, workspaceId]);
-
-	useEffect(() => {
-		void loadStatus();
-	}, [loadStatus]);
-
 	const start = useCallback(async () => {
+		const requestId = ++requestIdRef.current;
 		if (!workspaceId) {
+			setState({ status: "unavailable", url: null, workspacePath: null, error: "No project is selected." });
 			return;
 		}
 		setState({ status: "starting", url: null, workspacePath: null });
@@ -61,16 +42,24 @@ export function VscodeInlinePanel({
 				baseRef,
 				acceptLicenseTerms: true,
 			});
-			setState(response);
+			if (requestId === requestIdRef.current) {
+				setState(response);
+			}
 		} catch (error) {
-			setState({
-				status: "error",
-				url: null,
-				workspacePath: null,
-				error: error instanceof Error ? error.message : String(error),
-			});
+			if (requestId === requestIdRef.current) {
+				setState({
+					status: "error",
+					url: null,
+					workspacePath: null,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		}
 	}, [baseRef, taskId, workspaceId]);
+
+	useEffect(() => {
+		void start();
+	}, [start]);
 
 	if (state.status === "ready" && state.url) {
 		return (
@@ -87,27 +76,20 @@ export function VscodeInlinePanel({
 		<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center bg-surface-0 p-6">
 			<div className="flex max-w-md flex-col items-center gap-4 text-center">
 				<div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border-bright bg-surface-2 text-accent">
-					{state.status === "loading" || state.status === "starting" ? <Spinner size={22} /> : <Code2 size={24} />}
+					{state.status === "starting" ? <Spinner size={22} /> : <Code2 size={24} />}
 				</div>
 				<div>
 					<h3 className="text-sm font-semibold text-text-primary">
-						{state.status === "starting" ? "Starting VS Code…" : "VS Code in Kanban"}
+						{state.status === "starting" ? "Preparing VS Code…" : "VS Code in Kanban"}
 					</h3>
 					<p className="mt-1 text-xs leading-5 text-text-secondary">
-						{state.status === "consent_required"
-							? "VS Code Server will run locally and open this task’s worktree. Starting it means you accept Microsoft’s VS Code Server License Terms and Privacy Statement."
-							: state.status === "starting"
-								? "The first launch can take a moment while VS Code prepares its browser server."
-								: (state.error ?? "Checking the local VS Code installation…")}
+						{state.status === "starting"
+							? "Kanban is opening this task’s worktree. The matching server is downloaded automatically when needed."
+							: (state.error ?? "Checking the local VS Code installation…")}
 					</p>
 				</div>
-				{state.status === "consent_required" ? (
-					<Button variant="primary" size="md" icon={<Code2 size={16} />} onClick={() => void start()}>
-						Accept and start VS Code
-					</Button>
-				) : null}
 				{state.status === "error" || state.status === "unavailable" ? (
-					<Button variant="default" size="sm" icon={<RefreshCw size={14} />} onClick={() => void loadStatus()}>
+					<Button variant="default" size="sm" icon={<RefreshCw size={14} />} onClick={() => void start()}>
 						Try again
 					</Button>
 				) : null}
