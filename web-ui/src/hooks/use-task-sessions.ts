@@ -51,6 +51,11 @@ export interface UseTaskSessionsResult {
 	upsertSession: (summary: RuntimeTaskSessionSummary) => void;
 	ensureTaskWorkspace: (task: BoardCard) => Promise<EnsureTaskWorkspaceResult>;
 	startTaskSession: (task: BoardCard, options?: StartTaskSessionOptions) => Promise<StartTaskSessionResult>;
+	startTaskSessionForProject: (
+		projectId: string,
+		task: BoardCard,
+		options?: StartTaskSessionOptions,
+	) => Promise<StartTaskSessionResult>;
 	stopTaskSession: (taskId: string) => Promise<void>;
 	sendTaskSessionInput: (
 		taskId: string,
@@ -125,11 +130,12 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 		[currentProjectId],
 	);
 
-	const startTaskSession = useCallback(
-		async (task: BoardCard, options?: StartTaskSessionOptions): Promise<StartTaskSessionResult> => {
-			if (!currentProjectId) {
-				return { ok: false, message: "No project selected." };
-			}
+	const startTaskSessionForProject = useCallback(
+		async (
+			projectId: string,
+			task: BoardCard,
+			options?: StartTaskSessionOptions,
+		): Promise<StartTaskSessionResult> => {
 			try {
 				const isResumingSession = options?.resumeFromTrash || options?.resumeExistingSession !== undefined;
 				const kickoffPrompt = options?.resumeFromTrash
@@ -137,9 +143,10 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 					: options?.resumeExistingSession
 						? (options.continuationPrompt?.trim() ?? "")
 						: task.prompt.trim();
-				const trpcClient = getRuntimeTrpcClient(currentProjectId);
+				const trpcClient = getRuntimeTrpcClient(projectId);
 				const geometry =
-					getTerminalGeometry(task.id) ?? estimateTaskSessionGeometry(window.innerWidth, window.innerHeight);
+					(projectId === currentProjectId ? getTerminalGeometry(task.id) : null) ??
+					estimateTaskSessionGeometry(window.innerWidth, window.innerHeight);
 				const payload = await trpcClient.runtime.startTaskSession.mutate({
 					taskId: task.id,
 					prompt: kickoffPrompt,
@@ -159,7 +166,9 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 						message: payload.error ?? "Task session start failed.",
 					};
 				}
-				upsertSession(payload.summary);
+				if (projectId === currentProjectId) {
+					upsertSession(payload.summary);
+				}
 				if (options?.resumeFromTrash) {
 					trackTaskResumedFromTrash();
 				}
@@ -170,6 +179,15 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 			}
 		},
 		[currentProjectId, upsertSession],
+	);
+	const startTaskSession = useCallback(
+		async (task: BoardCard, options?: StartTaskSessionOptions): Promise<StartTaskSessionResult> => {
+			if (!currentProjectId) {
+				return { ok: false, message: "No project selected." };
+			}
+			return await startTaskSessionForProject(currentProjectId, task, options);
+		},
+		[currentProjectId, startTaskSessionForProject],
 	);
 
 	const stopTaskSession = useCallback(
@@ -273,6 +291,7 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 		upsertSession,
 		ensureTaskWorkspace,
 		startTaskSession,
+		startTaskSessionForProject,
 		stopTaskSession,
 		sendTaskSessionInput,
 		cleanupTaskWorkspace,

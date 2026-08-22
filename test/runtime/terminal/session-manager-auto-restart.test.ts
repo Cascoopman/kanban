@@ -83,6 +83,40 @@ describe("TerminalSessionManager auto-restart", () => {
 		expect(manager.getSummary("task-1")?.pid).toBe(222);
 	});
 
+	it("restarts an agent session after its terminal UI detaches", async () => {
+		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
+		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {
+			const session = createMockPtySession(spawnedSessions.length === 0 ? 111 : 222, request);
+			spawnedSessions.push(session);
+			return session;
+		});
+
+		const manager = new TerminalSessionManager();
+		const detach = manager.attach("task-1", {
+			onState: vi.fn(),
+			onOutput: vi.fn(),
+			onExit: vi.fn(),
+		});
+
+		await manager.startTaskSession({
+			taskId: "task-1",
+			agentId: "codex",
+			binary: "codex",
+			args: [],
+			cwd: "/tmp/task-1",
+			prompt: "Fix the bug",
+		});
+
+		detach?.();
+		spawnedSessions[0]?.triggerExit(130);
+
+		await vi.waitFor(() => {
+			expect(ptySessionSpawnMock).toHaveBeenCalledTimes(2);
+		});
+		expect(manager.getSummary("task-1")?.state).toBe("running");
+		expect(manager.getSummary("task-1")?.pid).toBe(222);
+	});
+
 	it("does not restart an attached agent session after an explicit stop", async () => {
 		const spawnedSessions: Array<ReturnType<typeof createMockPtySession>> = [];
 		ptySessionSpawnMock.mockImplementation((request: MockSpawnRequest) => {

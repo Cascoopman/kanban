@@ -2,8 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { notifyError } from "@/components/app-toaster";
 import type { UseTaskSessionsResult } from "@/hooks/use-task-sessions";
-import type { RuntimeTaskSessionSummary } from "@/runtime/types";
-import type { BoardData } from "@/types";
+import type { RuntimeProjectBoardSnapshot, RuntimeTaskSessionSummary } from "@/runtime/types";
 
 export const RESTART_CONTINUATION_PROMPT = "Continue working on the task from where you left off.";
 
@@ -16,52 +15,55 @@ function isRestartableCliSession(summary: RuntimeTaskSessionSummary | undefined)
 }
 
 export function useResumeInterruptedTaskSessions({
-	board,
-	sessions,
-	currentProjectId,
-	workspaceHydrationNonce,
-	isWorkspaceMetadataPending,
-	startTaskSession,
+	projectBoards,
+	hasReceivedSnapshot,
+	startTaskSessionForProject,
 }: {
-	board: BoardData;
-	sessions: Record<string, RuntimeTaskSessionSummary>;
-	currentProjectId: string | null;
-	workspaceHydrationNonce: number;
-	isWorkspaceMetadataPending: boolean;
-	startTaskSession: UseTaskSessionsResult["startTaskSession"];
+	projectBoards: RuntimeProjectBoardSnapshot[];
+	hasReceivedSnapshot: boolean;
+	startTaskSessionForProject: UseTaskSessionsResult["startTaskSessionForProject"];
 }): void {
-	const handledProjectIdRef = useRef<string | null>(null);
+	const handledTaskIdsByProjectRef = useRef<Map<string, Set<string>>>(new Map());
 
 	useEffect(() => {
-		if (!currentProjectId) {
-			handledProjectIdRef.current = null;
+		if (!hasReceivedSnapshot) {
 			return;
 		}
-		if (
-			workspaceHydrationNonce === 0 ||
-			isWorkspaceMetadataPending ||
-			handledProjectIdRef.current === currentProjectId
-		) {
-			return;
-		}
-		handledProjectIdRef.current = currentProjectId;
 
-		const resumableColumns = board.columns.filter((column) => column.id === "in_progress" || column.id === "review");
-		for (const column of resumableColumns) {
-			for (const task of column.cards) {
-				if (!isRestartableCliSession(sessions[task.id])) {
-					continue;
-				}
-				const shouldContinueWork = column.id === "in_progress";
-				void startTaskSession(task, {
-					resumeExistingSession: shouldContinueWork ? "running" : "awaiting_review",
-					...(shouldContinueWork ? { continuationPrompt: RESTART_CONTINUATION_PROMPT } : {}),
-				}).then((result) => {
-					if (!result.ok) {
-						notifyError(result.message ?? `Could not resume ${task.title}.`);
-					}
-				});
+		const availableProjectIds = new Set(projectBoards.map((snapshot) => snapshot.project.id));
+		for (const projectId of handledTaskIdsByProjectRef.current.keys()) {
+			if (!availableProjectIds.has(projectId)) {
+				handledTaskIdsByProjectRef.current.delete(projectId);
 			}
 		}
-	}, [board, currentProjectId, isWorkspaceMetadataPending, sessions, startTaskSession, workspaceHydrationNonce]);
+
+		for (const snapshot of projectBoards) {
+			const handledTaskIds = handledTaskIdsByProjectRef.current.get(snapshot.project.id) ?? new Set<string>();
+			handledTaskIdsByProjectRef.current.set(snapshot.project.id, handledTaskIds);
+			const resumableColumns = snapshot.board.columns.filter(
+				(column) => column.id === "in_progress" || column.id === "review",
+			);
+			for (const column of resumableColumns) {
+				for (const task of column.cards) {
+					const summary = snapshot.sessions[task.id];
+					if (!isRestartableCliSession(summary)) {
+						continue;
+					}
+					if (handledTaskIds.has(task.id)) {
+						continue;
+					}
+					handledTaskIds.add(task.id);
+					const shouldContinueWork = column.id === "in_progress";
+					void startTaskSessionForProject(snapshot.project.id, task, {
+						resumeExistingSession: shouldContinueWork ? "running" : "awaiting_review",
+						...(shouldContinueWork ? { continuationPrompt: RESTART_CONTINUATION_PROMPT } : {}),
+					}).then((result) => {
+						if (!result.ok) {
+							notifyError(result.message ?? `Could not resume ${task.title} in ${snapshot.project.name}.`);
+						}
+					});
+				}
+			}
+		}
+	}, [hasReceivedSnapshot, projectBoards, startTaskSessionForProject]);
 }

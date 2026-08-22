@@ -8,7 +8,7 @@ import {
 	useResumeInterruptedTaskSessions,
 } from "@/hooks/use-resume-interrupted-task-sessions";
 import type { UseTaskSessionsResult } from "@/hooks/use-task-sessions";
-import type { RuntimeAgentId, RuntimeTaskSessionSummary } from "@/runtime/types";
+import type { RuntimeAgentId, RuntimeProjectBoardSnapshot, RuntimeTaskSessionSummary } from "@/runtime/types";
 import { addTaskToColumnWithResult } from "@/state/board-state";
 import type { BoardData } from "@/types";
 
@@ -58,25 +58,43 @@ function createSummary(
 }
 
 function Harness({
-	board,
-	sessions,
-	workspaceHydrationNonce,
-	startTaskSession,
+	projectBoards,
+	hasReceivedSnapshot = true,
+	startTaskSessionForProject,
 }: {
-	board: BoardData;
-	sessions: Record<string, RuntimeTaskSessionSummary>;
-	workspaceHydrationNonce: number;
-	startTaskSession: UseTaskSessionsResult["startTaskSession"];
+	projectBoards: RuntimeProjectBoardSnapshot[];
+	hasReceivedSnapshot?: boolean;
+	startTaskSessionForProject: UseTaskSessionsResult["startTaskSessionForProject"];
 }): null {
 	useResumeInterruptedTaskSessions({
-		board,
-		sessions,
-		currentProjectId: "workspace-1",
-		workspaceHydrationNonce,
-		isWorkspaceMetadataPending: false,
-		startTaskSession,
+		projectBoards,
+		hasReceivedSnapshot,
+		startTaskSessionForProject,
 	});
 	return null;
+}
+
+function createProjectSnapshot(
+	projectId: string,
+	board: BoardData,
+	sessions: Record<string, RuntimeTaskSessionSummary>,
+): RuntimeProjectBoardSnapshot {
+	return {
+		project: {
+			id: projectId,
+			path: `/tmp/${projectId}`,
+			name: projectId,
+			taskCounts: {
+				backlog: 0,
+				in_progress: board.columns.find((column) => column.id === "in_progress")?.cards.length ?? 0,
+				review: board.columns.find((column) => column.id === "review")?.cards.length ?? 0,
+				on_hold: board.columns.find((column) => column.id === "on_hold")?.cards.length ?? 0,
+				trash: board.columns.find((column) => column.id === "trash")?.cards.length ?? 0,
+			},
+		},
+		board,
+		sessions,
+	};
 }
 
 describe("useResumeInterruptedTaskSessions", () => {
@@ -95,7 +113,7 @@ describe("useResumeInterruptedTaskSessions", () => {
 		container.remove();
 	});
 
-	it("continues interrupted CLI tasks that were already in progress once per hydration", async () => {
+	it("continues interrupted CLI tasks once per loaded project task", async () => {
 		const codexTask = createTask(createInitialBoardData(), "in_progress", "Codex task", "codex");
 		const claudeTask = createTask(codexTask.board, "in_progress", "Claude task", "claude");
 		const reviewTask = createTask(claudeTask.board, "review", "Review task", "codex");
@@ -108,44 +126,65 @@ describe("useResumeInterruptedTaskSessions", () => {
 			[onHoldTask.task.id]: createSummary(onHoldTask.task.id, "codex", "awaiting_review"),
 			[doneTask.task.id]: createSummary(doneTask.task.id, "codex"),
 		};
-		const startTaskSession = vi.fn<UseTaskSessionsResult["startTaskSession"]>(async () => ({ ok: true as const }));
+		const startTaskSessionForProject = vi.fn<UseTaskSessionsResult["startTaskSessionForProject"]>(async () => ({
+			ok: true as const,
+		}));
+		const projectBoards = [createProjectSnapshot("workspace-1", doneTask.board, sessions)];
 
 		await act(async () => {
-			root.render(
-				<Harness
-					board={doneTask.board}
-					sessions={sessions}
-					workspaceHydrationNonce={1}
-					startTaskSession={startTaskSession}
-				/>,
-			);
+			root.render(<Harness projectBoards={projectBoards} startTaskSessionForProject={startTaskSessionForProject} />);
 		});
 
-		expect(startTaskSession).toHaveBeenCalledTimes(3);
-		expect(startTaskSession).toHaveBeenCalledWith(codexTask.task, {
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(3);
+		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-1", codexTask.task, {
 			resumeExistingSession: "running",
 			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
-		expect(startTaskSession).toHaveBeenCalledWith(reviewTask.task, {
+		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-1", reviewTask.task, {
 			resumeExistingSession: "awaiting_review",
 		});
-		expect(startTaskSession).toHaveBeenCalledWith(claudeTask.task, {
+		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-1", claudeTask.task, {
 			resumeExistingSession: "running",
 			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
 
 		await act(async () => {
 			root.render(
-				<Harness
-					board={doneTask.board}
-					sessions={sessions}
-					workspaceHydrationNonce={2}
-					startTaskSession={startTaskSession}
-				/>,
+				<Harness projectBoards={[...projectBoards]} startTaskSessionForProject={startTaskSessionForProject} />,
 			);
 		});
 
-		expect(startTaskSession).toHaveBeenCalledTimes(3);
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(3);
 		expect(notifyErrorMock).not.toHaveBeenCalled();
+	});
+
+	it("resumes interrupted tasks from every loaded project", async () => {
+		const projectATask = createTask(createInitialBoardData(), "in_progress", "Project A task", "codex");
+		const projectBTask = createTask(createInitialBoardData(), "in_progress", "Project B task", "claude");
+		const projectBoards = [
+			createProjectSnapshot("workspace-a", projectATask.board, {
+				[projectATask.task.id]: createSummary(projectATask.task.id, "codex"),
+			}),
+			createProjectSnapshot("workspace-b", projectBTask.board, {
+				[projectBTask.task.id]: createSummary(projectBTask.task.id, "claude"),
+			}),
+		];
+		const startTaskSessionForProject = vi.fn<UseTaskSessionsResult["startTaskSessionForProject"]>(async () => ({
+			ok: true as const,
+		}));
+
+		await act(async () => {
+			root.render(<Harness projectBoards={projectBoards} startTaskSessionForProject={startTaskSessionForProject} />);
+		});
+
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(2);
+		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-a", projectATask.task, {
+			resumeExistingSession: "running",
+			continuationPrompt: RESTART_CONTINUATION_PROMPT,
+		});
+		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-b", projectBTask.task, {
+			resumeExistingSession: "running",
+			continuationPrompt: RESTART_CONTINUATION_PROMPT,
+		});
 	});
 });

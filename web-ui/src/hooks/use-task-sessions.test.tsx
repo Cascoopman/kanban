@@ -7,15 +7,19 @@ import type { BoardCard } from "@/types";
 
 const startTaskSessionMutateMock = vi.hoisted(() => vi.fn());
 const trackTaskResumedFromTrashMock = vi.hoisted(() => vi.fn());
+const requestedProjectIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/runtime/trpc-client", () => ({
-	getRuntimeTrpcClient: () => ({
-		runtime: {
-			startTaskSession: {
-				mutate: startTaskSessionMutateMock,
+	getRuntimeTrpcClient: (projectId: string) => {
+		requestedProjectIdMock(projectId);
+		return {
+			runtime: {
+				startTaskSession: {
+					mutate: startTaskSessionMutateMock,
+				},
 			},
-		},
-	}),
+		};
+	},
 }));
 
 vi.mock("@/runtime/task-session-geometry", () => ({
@@ -28,6 +32,7 @@ vi.mock("@/telemetry/events", () => ({
 
 interface HookSnapshot {
 	startTaskSession: ReturnType<typeof useTaskSessions>["startTaskSession"];
+	startTaskSessionForProject: ReturnType<typeof useTaskSessions>["startTaskSessionForProject"];
 }
 
 function createTask(): BoardCard {
@@ -51,8 +56,9 @@ function HookHarness({ onSnapshot }: { onSnapshot: (snapshot: HookSnapshot) => v
 	useEffect(() => {
 		onSnapshot({
 			startTaskSession: sessions.startTaskSession,
+			startTaskSessionForProject: sessions.startTaskSessionForProject,
 		});
-	}, [onSnapshot, sessions.startTaskSession]);
+	}, [onSnapshot, sessions.startTaskSession, sessions.startTaskSessionForProject]);
 
 	return null;
 }
@@ -65,6 +71,7 @@ describe("useTaskSessions", () => {
 	beforeEach(() => {
 		startTaskSessionMutateMock.mockReset();
 		trackTaskResumedFromTrashMock.mockReset();
+		requestedProjectIdMock.mockReset();
 		startTaskSessionMutateMock.mockResolvedValue({
 			ok: true,
 			summary: {
@@ -149,6 +156,39 @@ describe("useTaskSessions", () => {
 		});
 
 		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
+	});
+
+	it("starts a background task session in its owning project", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		if (latestSnapshot === null) {
+			throw new Error("Expected a hook snapshot.");
+		}
+
+		await act(async () => {
+			await latestSnapshot?.startTaskSessionForProject("project-2", createTask(), {
+				resumeExistingSession: "running",
+				continuationPrompt: "Continue in the background.",
+			});
+		});
+
+		expect(requestedProjectIdMock).toHaveBeenCalledWith("project-2");
+		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
+			expect.objectContaining({
+				prompt: "Continue in the background.",
+				resumeExistingSession: "running",
+			}),
+		);
 	});
 
 	it("resumes an existing session with a continuation prompt and no kickoff attachments", async () => {
