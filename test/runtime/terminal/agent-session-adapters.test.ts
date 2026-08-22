@@ -133,31 +133,6 @@ describe("prepareAgentLaunch", () => {
 		expect(settings.hooks?.PostToolUseFailure).toBeDefined();
 	});
 
-	it("materializes task images for Codex prompts", async () => {
-		setupTempHome();
-		const launch = await prepareAgentLaunch({
-			taskId: "task-images",
-			agentId: "codex",
-			binary: "codex",
-			args: [],
-			cwd: "/tmp",
-			prompt: "Inspect the attached design",
-			images: [
-				{
-					id: "img-1",
-					data: Buffer.from("hello").toString("base64"),
-					mimeType: "image/png",
-					name: "diagram.png",
-				},
-			],
-		});
-
-		const initialPrompt = launch.args.at(-1) ?? "";
-		expect(initialPrompt).toContain("Attached reference images:");
-		const imagePath = initialPrompt.match(/1\. (.+?) \(diagram\.png\)/)?.[1] ?? "";
-		expect(readFileSync(imagePath).toString("utf8")).toBe("hello");
-	});
-
 	it("defers Codex plan-mode startup input", async () => {
 		setupTempHome();
 		const launch = await prepareAgentLaunch({

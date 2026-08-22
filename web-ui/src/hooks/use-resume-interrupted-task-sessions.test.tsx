@@ -26,7 +26,6 @@ function createTask(
 ) {
 	return addTaskToColumnWithResult(board, columnId, {
 		title,
-		prompt: title,
 		startInPlanMode: false,
 		agentId,
 		baseRef: "main",

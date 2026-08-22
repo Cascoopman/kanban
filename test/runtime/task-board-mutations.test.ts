@@ -23,15 +23,29 @@ function createBoard(): RuntimeBoardData {
 	};
 }
 
-describe("deleteTasksFromBoard", () => {
-	it("removes a trashed task and any dependencies that reference it", () => {
-		const createA = addTaskToColumn(
+describe("title-only tasks", () => {
+	it("creates a task from its title", () => {
+		const created = addTaskToColumn(
 			createBoard(),
 			"backlog",
-			{ prompt: "Task A", baseRef: "main" },
+			{ title: "Investigate terminal workflow", baseRef: "main" },
 			() => "aaaaa111",
 		);
-		const createB = addTaskToColumn(createA.board, "review", { prompt: "Task B", baseRef: "main" }, () => "bbbbb111");
+
+		expect(created.task.title).toBe("Investigate terminal workflow");
+	});
+
+	it("rejects a task without a title", () => {
+		expect(() =>
+			addTaskToColumn(createBoard(), "backlog", { title: " ", baseRef: "main" }, () => "aaaaa111"),
+		).toThrow("Task title is required.");
+	});
+});
+
+describe("deleteTasksFromBoard", () => {
+	it("removes a trashed task and any dependencies that reference it", () => {
+		const createA = addTaskToColumn(createBoard(), "backlog", { title: "Task A", baseRef: "main" }, () => "aaaaa111");
+		const createB = addTaskToColumn(createA.board, "review", { title: "Task B", baseRef: "main" }, () => "bbbbb111");
 		const linked = addTaskDependency(createB.board, "aaaaa", "bbbbb");
 		if (!linked.added) {
 			throw new Error("Expected dependency to be created.");
@@ -46,8 +60,8 @@ describe("deleteTasksFromBoard", () => {
 	});
 
 	it("removes multiple trashed tasks at once", () => {
-		const createA = addTaskToColumn(createBoard(), "trash", { prompt: "Task A", baseRef: "main" }, () => "aaaaa111");
-		const createB = addTaskToColumn(createA.board, "trash", { prompt: "Task B", baseRef: "main" }, () => "bbbbb111");
+		const createA = addTaskToColumn(createBoard(), "trash", { title: "Task A", baseRef: "main" }, () => "aaaaa111");
+		const createB = addTaskToColumn(createA.board, "trash", { title: "Task B", baseRef: "main" }, () => "bbbbb111");
 
 		const deleted = deleteTasksFromBoard(createB.board, ["aaaaa", "bbbbb"]);
 
@@ -62,13 +76,13 @@ describe("on-hold tasks", () => {
 		const prerequisite = addTaskToColumn(
 			createBoard(),
 			"on_hold",
-			{ prompt: "Prerequisite", baseRef: "main" },
+			{ title: "Prerequisite", baseRef: "main" },
 			() => "aaaaa111",
 		);
 		const dependent = addTaskToColumn(
 			prerequisite.board,
 			"backlog",
-			{ prompt: "Dependent", baseRef: "main" },
+			{ title: "Dependent", baseRef: "main" },
 			() => "bbbbb111",
 		);
 		const linked = addTaskDependency(dependent.board, dependent.task.id, prerequisite.task.id);
@@ -79,61 +93,12 @@ describe("on-hold tasks", () => {
 	});
 });
 
-describe("task images", () => {
-	it("preserves images when creating and updating tasks", () => {
-		const created = addTaskToColumn(
-			createBoard(),
-			"backlog",
-			{
-				prompt: "Task with image",
-				baseRef: "main",
-				images: [
-					{
-						id: "img-1",
-						data: "abc123",
-						mimeType: "image/png",
-					},
-				],
-			},
-			() => "aaaaa111",
-		);
-
-		expect(created.task.images).toEqual([
-			{
-				id: "img-1",
-				data: "abc123",
-				mimeType: "image/png",
-			},
-		]);
-
-		const updated = updateTask(created.board, created.task.id, {
-			prompt: "Task with updated image",
-			baseRef: "main",
-			images: [
-				{
-					id: "img-2",
-					data: "def456",
-					mimeType: "image/jpeg",
-				},
-			],
-		});
-
-		expect(updated.task?.images).toEqual([
-			{
-				id: "img-2",
-				data: "def456",
-				mimeType: "image/jpeg",
-			},
-		]);
-	});
-});
-
 describe("per-task agent overrides", () => {
 	it("persists agentId on the card when creating a task", () => {
 		const created = addTaskToColumn(
 			createBoard(),
 			"backlog",
-			{ prompt: "Smart task", baseRef: "main", agentId: "claude" },
+			{ title: "Smart task", baseRef: "main", agentId: "claude" },
 			() => "aaaaa111",
 		);
 
@@ -144,7 +109,7 @@ describe("per-task agent overrides", () => {
 		const created = addTaskToColumn(
 			createBoard(),
 			"backlog",
-			{ prompt: "Default task", baseRef: "main" },
+			{ title: "Default task", baseRef: "main" },
 			() => "aaaaa111",
 		);
 
@@ -152,11 +117,11 @@ describe("per-task agent overrides", () => {
 	});
 
 	it("updates agentId from undefined to a value", () => {
-		const created = addTaskToColumn(createBoard(), "backlog", { prompt: "Task", baseRef: "main" }, () => "aaaaa111");
+		const created = addTaskToColumn(createBoard(), "backlog", { title: "Task", baseRef: "main" }, () => "aaaaa111");
 		expect(created.task.agentId).toBeUndefined();
 
 		const updated = updateTask(created.board, created.task.id, {
-			prompt: "Task",
+			title: "Task",
 			baseRef: "main",
 			agentId: "codex",
 		});
@@ -170,7 +135,7 @@ describe("per-task agent overrides", () => {
 			createBoard(),
 			"backlog",
 			{
-				prompt: "Task",
+				title: "Task",
 				baseRef: "main",
 				agentId: "claude",
 			},
@@ -178,7 +143,7 @@ describe("per-task agent overrides", () => {
 		);
 
 		const updated = updateTask(created.board, created.task.id, {
-			prompt: "Updated prompt",
+			title: "Updated prompt",
 			baseRef: "main",
 			// agentId is undefined, so the existing override should persist.
 		});
@@ -191,7 +156,7 @@ describe("per-task agent overrides", () => {
 			createBoard(),
 			"backlog",
 			{
-				prompt: "Task",
+				title: "Task",
 				baseRef: "main",
 				agentId: "codex",
 			},
@@ -199,7 +164,7 @@ describe("per-task agent overrides", () => {
 		);
 
 		const updated = updateTask(created.board, created.task.id, {
-			prompt: "Task",
+			title: "Task",
 			baseRef: "main",
 			agentId: null,
 		});
@@ -212,7 +177,7 @@ describe("per-task agent overrides", () => {
 			createBoard(),
 			"backlog",
 			{
-				prompt: "Movable task",
+				title: "Movable task",
 				baseRef: "main",
 				agentId: "claude",
 			},

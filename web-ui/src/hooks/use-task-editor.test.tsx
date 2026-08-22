@@ -4,13 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useTaskEditor } from "@/hooks/use-task-editor";
 import type { RuntimeAgentId } from "@/runtime/types";
-import type { BoardCard, BoardData, TaskImage } from "@/types";
+import type { BoardCard, BoardData } from "@/types";
 
-function createTask(taskId: string, prompt: string, createdAt: number, overrides: Partial<BoardCard> = {}): BoardCard {
+function createTask(taskId: string, title: string, createdAt: number, overrides: Partial<BoardCard> = {}): BoardCard {
 	return {
 		id: taskId,
-		title: prompt,
-		prompt,
+		title,
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt,
@@ -35,24 +34,17 @@ interface HookSnapshot {
 	board: BoardData;
 	isInlineTaskCreateOpen: boolean;
 	newTaskTitle: string;
-	newTaskPrompt: string;
-	newTaskImages: TaskImage[];
 	newTaskBranchRef: string;
 	newTaskAgentId: RuntimeAgentId | undefined;
 	editingTaskId: string | null;
-	editTaskPrompt: string;
 	editTaskStartInPlanMode: boolean;
 	isEditTaskStartInPlanModeDisabled: boolean;
 	handleOpenCreateTask: () => void;
-	handleCreateTask: (options?: { keepDialogOpen?: boolean }) => string | null;
-	handleCreateTasks: (prompts: string[], options?: { keepDialogOpen?: boolean }) => string[];
+	handleCreateTask: () => string | null;
 	onNewTaskTitleChange: (value: string) => void;
-	setNewTaskPrompt: (value: string) => void;
-	setNewTaskImages: (value: TaskImage[]) => void;
 	handleOpenEditTask: (task: BoardCard) => void;
 	handleSaveEditedTask: () => string | null;
 	handleSaveAndStartEditedTask: () => void;
-	setEditTaskPrompt: (value: string) => void;
 	setNewTaskAgentId: (value: RuntimeAgentId | undefined) => void;
 }
 
@@ -90,32 +82,23 @@ function HookHarness({
 			board,
 			isInlineTaskCreateOpen: editor.isInlineTaskCreateOpen,
 			newTaskTitle: editor.newTaskTitle,
-			newTaskPrompt: editor.newTaskPrompt,
-			newTaskImages: editor.newTaskImages,
 			newTaskBranchRef: editor.newTaskBranchRef,
 			newTaskAgentId: editor.newTaskAgentId,
 			editingTaskId: editor.editingTaskId,
-			editTaskPrompt: editor.editTaskPrompt,
 			editTaskStartInPlanMode: editor.editTaskStartInPlanMode,
 			isEditTaskStartInPlanModeDisabled: editor.isEditTaskStartInPlanModeDisabled,
 			handleOpenCreateTask: editor.handleOpenCreateTask,
 			handleCreateTask: editor.handleCreateTask,
-			handleCreateTasks: editor.handleCreateTasks,
 			onNewTaskTitleChange: editor.onNewTaskTitleChange,
-			setNewTaskPrompt: editor.setNewTaskPrompt,
-			setNewTaskImages: editor.setNewTaskImages,
 			handleOpenEditTask: editor.handleOpenEditTask,
 			handleSaveEditedTask: editor.handleSaveEditedTask,
 			handleSaveAndStartEditedTask: editor.handleSaveAndStartEditedTask,
-			setEditTaskPrompt: editor.setEditTaskPrompt,
 			setNewTaskAgentId: editor.setNewTaskAgentId,
 		});
 	}, [
 		board,
 		editor.handleCreateTask,
-		editor.handleCreateTasks,
 		editor.handleOpenCreateTask,
-		editor.editTaskPrompt,
 		editor.editTaskStartInPlanMode,
 		editor.editingTaskId,
 		editor.handleOpenEditTask,
@@ -124,14 +107,9 @@ function HookHarness({
 		editor.isEditTaskStartInPlanModeDisabled,
 		editor.isInlineTaskCreateOpen,
 		editor.newTaskTitle,
-		editor.newTaskPrompt,
-		editor.newTaskImages,
 		editor.newTaskBranchRef,
 		editor.newTaskAgentId,
-		editor.setEditTaskPrompt,
 		editor.onNewTaskTitleChange,
-		editor.setNewTaskImages,
-		editor.setNewTaskPrompt,
 		onSnapshot,
 	]);
 
@@ -167,7 +145,7 @@ describe("useTaskEditor", () => {
 		localStorage.clear();
 	});
 
-	it("returns the edited task id when saving a task", async () => {
+	it("returns the edited task id while preserving its title", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 		const initialBoard = createBoard([createTask("task-1", "Initial prompt", 1)]);
 
@@ -194,10 +172,6 @@ describe("useTaskEditor", () => {
 
 		requireSnapshot(latestSnapshot);
 
-		await act(async () => {
-			latestSnapshot?.setEditTaskPrompt("Updated prompt");
-		});
-
 		let savedTaskId: string | null = null;
 		await act(async () => {
 			savedTaskId = latestSnapshot?.handleSaveEditedTask() ?? null;
@@ -205,7 +179,7 @@ describe("useTaskEditor", () => {
 
 		expect(savedTaskId).toBe("task-1");
 		expect(requireSnapshot(latestSnapshot).editingTaskId).toBeNull();
-		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.prompt).toBe("Updated prompt");
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Initial prompt");
 	});
 
 	it("queues the saved task id when saving and starting an edited task", async () => {
@@ -236,18 +210,14 @@ describe("useTaskEditor", () => {
 		});
 
 		await act(async () => {
-			latestSnapshot?.setEditTaskPrompt("Updated prompt");
-		});
-
-		await act(async () => {
 			latestSnapshot?.handleSaveAndStartEditedTask();
 		});
 
 		expect(queueTaskStartAfterEdit).toHaveBeenCalledWith("task-1");
-		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.prompt).toBe("Updated prompt");
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Initial prompt");
 	});
 
-	it("keeps the create dialog open when requested after creating a task", async () => {
+	it("requires a title before creating a task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -264,68 +234,19 @@ describe("useTaskEditor", () => {
 		await act(async () => {
 			requireSnapshot(latestSnapshot).handleOpenCreateTask();
 		});
-
-		await act(async () => {});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).setNewTaskPrompt("Create another task");
-		});
-		await act(async () => {
-			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
-		});
-
-		await act(async () => {});
-		expect(requireSnapshot(latestSnapshot).newTaskPrompt).toBe("Create another task");
-		expect(requireSnapshot(latestSnapshot).newTaskBranchRef).toBe("main");
 
 		let createdTaskId: string | null = null;
 		await act(async () => {
-			createdTaskId = requireSnapshot(latestSnapshot).handleCreateTask({ keepDialogOpen: true });
+			createdTaskId = requireSnapshot(latestSnapshot).handleCreateTask();
 		});
 
 		const snapshot = requireSnapshot(latestSnapshot);
-		expect(createdTaskId).toBeTruthy();
+		expect(createdTaskId).toBeNull();
 		expect(snapshot.isInlineTaskCreateOpen).toBe(true);
-		expect(snapshot.newTaskTitle).toBe("New task");
-		expect(snapshot.newTaskPrompt).toBe("");
-		expect(snapshot.newTaskBranchRef).toBe("main");
-		expect(snapshot.newTaskAgentId).toBeUndefined();
-		expect(snapshot.board.columns[0]?.cards.some((card) => card.prompt === "Create another task")).toBe(true);
+		expect(snapshot.board.columns[0]?.cards).toEqual([]);
 	});
 
-	it("previews the prompt-derived title until the user customizes it", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					initialBoard={createBoard()}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-		});
-		expect(requireSnapshot(latestSnapshot).newTaskTitle).toBe("New task");
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).setNewTaskPrompt("Implement the title field. Include focus behavior.");
-		});
-
-		expect(requireSnapshot(latestSnapshot).newTaskTitle).toBe("Implement the title field.");
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleCreateTask();
-		});
-
-		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Implement the title field.");
-	});
-
-	it("uses a custom title instead of deriving one from the prompt", async () => {
+	it("creates a title-only task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -342,7 +263,39 @@ describe("useTaskEditor", () => {
 		await act(async () => {
 			requireSnapshot(latestSnapshot).handleOpenCreateTask();
 			requireSnapshot(latestSnapshot).onNewTaskTitleChange("Title-first task creation");
-			requireSnapshot(latestSnapshot).setNewTaskPrompt("Implement the title field. Include focus behavior.");
+		});
+
+		let createdTaskId: string | null = null;
+		await act(async () => {
+			createdTaskId = requireSnapshot(latestSnapshot).handleCreateTask();
+		});
+
+		const snapshot = requireSnapshot(latestSnapshot);
+		const createdTask = snapshot.board.columns[0]?.cards[0];
+		expect(createdTaskId).toBe(createdTask?.id);
+		expect(createdTask?.title).toBe("Title-first task creation");
+		expect(snapshot.isInlineTaskCreateOpen).toBe(false);
+		expect(snapshot.newTaskTitle).toBe("");
+	});
+
+	it("preserves the selected agent on a title-only task", async () => {
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					initialBoard={createBoard()}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		await act(async () => {
+			requireSnapshot(latestSnapshot).handleOpenCreateTask();
+			requireSnapshot(latestSnapshot).onNewTaskTitleChange("Use Codex interactively");
+			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
 		});
 
 		await act(async () => {
@@ -350,123 +303,6 @@ describe("useTaskEditor", () => {
 		});
 
 		const createdTask = requireSnapshot(latestSnapshot).board.columns[0]?.cards[0];
-		expect(createdTask?.title).toBe("Title-first task creation");
-		expect(createdTask?.prompt).toBe("Implement the title field. Include focus behavior.");
-	});
-
-	it("falls back to the prompt-derived title when the custom title is cleared", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					initialBoard={createBoard()}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-			requireSnapshot(latestSnapshot).onNewTaskTitleChange("");
-			requireSnapshot(latestSnapshot).setNewTaskPrompt("Use the existing fallback. Keep the title optional.");
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleCreateTask();
-		});
-
-		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.title).toBe("Use the existing fallback.");
-	});
-	it("copies attached images to each split task and clears the draft images", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					initialBoard={createBoard()}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-		});
-
-		await act(async () => {
-			latestSnapshot?.setNewTaskImages([
-				{
-					id: "img-1",
-					data: "abc123",
-					mimeType: "image/png",
-				},
-			]);
-		});
-
-		let createdTaskIds: string[] = [];
-		await act(async () => {
-			createdTaskIds = latestSnapshot?.handleCreateTasks(["First task", "Second task"]) ?? [];
-		});
-
-		expect(createdTaskIds).toHaveLength(2);
-		const backlogCards = requireSnapshot(latestSnapshot).board.columns[0]?.cards ?? [];
-		expect(backlogCards).toHaveLength(2);
-		expect(backlogCards.map((card) => card.images)).toEqual([
-			[
-				{
-					id: "img-1",
-					data: "abc123",
-					mimeType: "image/png",
-				},
-			],
-			[
-				{
-					id: "img-1",
-					data: "abc123",
-					mimeType: "image/png",
-				},
-			],
-		]);
-		expect(requireSnapshot(latestSnapshot).newTaskImages).toEqual([]);
-	});
-
-	it("preserves per-task agent overrides on each split task", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					initialBoard={createBoard()}
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).handleOpenCreateTask();
-		});
-
-		await act(async () => {
-			requireSnapshot(latestSnapshot).setNewTaskAgentId("codex");
-		});
-
-		let createdTaskIds: string[] = [];
-		await act(async () => {
-			createdTaskIds = requireSnapshot(latestSnapshot).handleCreateTasks(["Task A", "Task B", "Task C"]);
-		});
-
-		expect(createdTaskIds).toHaveLength(3);
-		const backlogCards = requireSnapshot(latestSnapshot).board.columns[0]?.cards ?? [];
-		expect(backlogCards).toHaveLength(3);
-		for (const card of backlogCards) {
-			expect(card.agentId).toBe("codex");
-		}
+		expect(createdTask?.agentId).toBe("codex");
 	});
 });

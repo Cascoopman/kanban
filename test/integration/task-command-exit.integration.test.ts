@@ -288,7 +288,7 @@ describe("source task commands", () => {
 					[
 						"task",
 						"create",
-						"--prompt",
+						"--title",
 						"Add a demo banner component to the homepage that displays a welcome message and current weather summary",
 						"--project-path",
 						projectPath,
@@ -441,13 +441,13 @@ describe("source task commands", () => {
 				await waitForServerStart(serverProcess);
 
 				const taskIds: string[] = [];
-				for (const prompt of [
+				for (const title of [
 					"Create a temporary task for done and delete",
 					"Create another temporary task for done and delete",
 					"Create a legacy trash command task for done and delete",
 				]) {
 					const created = await runCliCommandAndCollectOutput({
-						args: ["task", "create", "--prompt", prompt, "--project-path", projectPath],
+						args: ["task", "create", "--title", title, "--project-path", projectPath],
 						cwd: projectPath,
 						env,
 					});

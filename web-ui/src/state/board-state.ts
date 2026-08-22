@@ -6,22 +6,12 @@ import { createInitialBoardData } from "@/data/board-data";
 import { isSupportedAgentId } from "@/runtime/supported-agents";
 import type { RuntimeAgentId } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import type {
-	BoardCard,
-	BoardColumn,
-	BoardColumnId,
-	BoardData,
-	BoardDependency,
-	CardSelection,
-	TaskImage,
-} from "@/types";
+import type { BoardCard, BoardColumn, BoardColumnId, BoardData, BoardDependency, CardSelection } from "@/types";
 
 export interface TaskDraft {
 	taskId?: string;
-	title?: string;
-	prompt: string;
+	title: string;
 	startInPlanMode?: boolean;
-	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
 	branchedFromTaskId?: string;
 	baseRef: string;
@@ -70,29 +60,6 @@ function createBrowserUuid(): string {
 	return Math.random().toString(36).slice(2, 12);
 }
 
-function normalizeTaskImages(rawImages: unknown): TaskImage[] | undefined {
-	if (!Array.isArray(rawImages)) {
-		return undefined;
-	}
-	const images: TaskImage[] = [];
-	for (const rawImage of rawImages) {
-		if (!rawImage || typeof rawImage !== "object") {
-			continue;
-		}
-		const image = rawImage as { id?: unknown; data?: unknown; mimeType?: unknown; name?: unknown };
-		if (typeof image.id !== "string" || typeof image.data !== "string" || typeof image.mimeType !== "string") {
-			continue;
-		}
-		images.push({
-			id: image.id,
-			data: image.data,
-			mimeType: image.mimeType,
-			...(typeof image.name === "string" ? { name: image.name } : {}),
-		});
-	}
-	return images.length > 0 ? images : undefined;
-}
-
 function normalizeCard(rawCard: unknown): BoardCard | null {
 	if (!rawCard || typeof rawCard !== "object") {
 		return null;
@@ -101,24 +68,18 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	const card = rawCard as {
 		id?: unknown;
 		title?: unknown;
-		prompt?: unknown;
 		startInPlanMode?: unknown;
-		images?: unknown;
 		baseRef?: unknown;
 		agentId?: unknown;
 		branchedFromTaskId?: unknown;
 		createdAt?: unknown;
 		updatedAt?: unknown;
 	};
-	const prompt = typeof card.prompt === "string" ? card.prompt.trim() : "";
-	if (!prompt) {
-		return null;
-	}
 	const baseRef = typeof card.baseRef === "string" ? card.baseRef.trim() : "";
 	if (!baseRef) {
 		return null;
 	}
-	const title = (typeof card.title === "string" ? card.title.trim() : "") || prompt;
+	const title = typeof card.title === "string" ? card.title.trim() : "";
 	if (!title) {
 		return null;
 	}
@@ -127,9 +88,7 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	return {
 		id: typeof card.id === "string" && card.id ? card.id : createShortTaskId(createBrowserUuid),
 		title,
-		prompt,
 		startInPlanMode: typeof card.startInPlanMode === "boolean" ? card.startInPlanMode : false,
-		images: normalizeTaskImages(card.images),
 		baseRef,
 		...(typeof card.agentId === "string" && isSupportedAgentId(card.agentId) ? { agentId: card.agentId } : {}),
 		...(typeof card.branchedFromTaskId === "string" && card.branchedFromTaskId.trim()
@@ -254,8 +213,7 @@ export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 }
 
 export function addTaskToColumn(board: BoardData, columnId: BoardColumnId, draft: TaskDraft): BoardData {
-	const prompt = draft.prompt.trim();
-	if (!prompt) {
+	if (!draft.title.trim()) {
 		return board;
 	}
 	return addTaskToColumnWithResult(board, columnId, draft).board;
@@ -266,19 +224,17 @@ export function addTaskToColumnWithResult(
 	columnId: BoardColumnId,
 	draft: TaskDraft,
 ): { board: BoardData; task: BoardCard } {
-	const prompt = draft.prompt.trim();
-	if (!prompt) {
-		throw new Error("Task prompt is required.");
+	const title = draft.title.trim();
+	if (!title) {
+		throw new Error("Task title is required.");
 	}
 	const result = runtimeTaskState.addTaskToColumn(
 		board,
 		columnId,
 		{
 			taskId: draft.taskId,
-			title: draft.title,
-			prompt,
+			title,
 			startInPlanMode: draft.startInPlanMode,
-			images: draft.images,
 			agentId: draft.agentId,
 			branchedFromTaskId: draft.branchedFromTaskId,
 			baseRef: draft.baseRef,
@@ -441,11 +397,10 @@ export function moveTaskToColumn(
 }
 
 export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): { board: BoardData; updated: boolean } {
-	const prompt = draft.prompt.trim();
-	if (!prompt) {
+	const title = draft.title.trim();
+	if (!title) {
 		return { board, updated: false };
 	}
-	const title = typeof draft.title === "string" ? draft.title.trim() : "";
 	const baseRef = draft.baseRef.trim();
 	if (!baseRef) {
 		return { board, updated: false };
@@ -462,15 +417,8 @@ export function updateTask(board: BoardData, taskId: string, draft: TaskDraft): 
 			updated = true;
 			return {
 				...card,
-				title: title || card.title,
-				prompt,
+				title,
 				startInPlanMode: Boolean(draft.startInPlanMode),
-				images:
-					draft.images === undefined
-						? card.images
-						: draft.images.length > 0
-							? draft.images.map((image) => ({ ...image }))
-							: undefined,
 				agentId: draft.agentId,
 				baseRef,
 				updatedAt: Date.now(),
@@ -496,9 +444,7 @@ export function updateTaskTitle(
 	}
 	return updateTask(board, taskId, {
 		title,
-		prompt: selection.card.prompt,
 		startInPlanMode: selection.card.startInPlanMode,
-		images: selection.card.images,
 		agentId: selection.card.agentId,
 		baseRef: selection.card.baseRef,
 	});

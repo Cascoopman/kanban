@@ -9,7 +9,6 @@ interface TelemetryEventMap {
 	task_created: {
 		selected_agent_id: TelemetrySelectedAgentId;
 		start_in_plan_mode: boolean;
-		prompt_character_count: number;
 	};
 	task_dependency_created: Record<string, never>;
 	tasks_auto_started_from_dependency: {

@@ -61,7 +61,6 @@ function createBoard(): BoardData {
 					{
 						id: "task-1",
 						title: "Ship it",
-						prompt: "Ship it",
 						startInPlanMode: false,
 						baseRef: "main",
 						createdAt: 1,

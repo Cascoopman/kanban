@@ -9,8 +9,6 @@ import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import type { ReviewTaskWorkspaceSnapshot } from "@/types";
 
 let mockWorkspaceSnapshot: ReviewTaskWorkspaceSnapshot | undefined;
-let mockMeasureWidths = [240, 240, 240];
-let mockMeasureCallCount = 0;
 
 vi.mock("@hello-pangea/dnd", () => ({
 	Draggable: ({
@@ -33,55 +31,10 @@ vi.mock("@/stores/workspace-metadata-store", () => ({
 	useTaskWorkspaceSnapshotValue: () => mockWorkspaceSnapshot,
 }));
 
-vi.mock("@/utils/react-use", () => ({
-	useMedia: () => false,
-	useMeasure: () => {
-		mockMeasureCallCount += 1;
-		const width = mockMeasureWidths[(mockMeasureCallCount - 1) % mockMeasureWidths.length] ?? 240;
-		return [
-			() => {},
-			{
-				width,
-				height: 0,
-				top: 0,
-				left: 0,
-				bottom: 0,
-				right: 0,
-				x: 0,
-				y: 0,
-				toJSON: () => ({}),
-			},
-		];
-	},
-}));
-
-vi.mock("@/utils/text-measure", () => ({
-	DEFAULT_TEXT_MEASURE_FONT: "400 14px sans-serif",
-	measureTextWidth: (value: string) => value.length * 8,
-	readElementFontShorthand: () => "400 14px sans-serif",
-}));
-
-vi.mock("@/utils/task-prompt", async () => {
-	const actual = await vi.importActual<typeof import("@/utils/task-prompt")>("@/utils/task-prompt");
-	return {
-		...actual,
-		truncateTaskPromptLabel: (prompt: string) => prompt.split("||")[0]?.trim() ?? "",
-		normalizePromptForDisplay: (value: string) => value.split("||")[0]?.trim() ?? value.trim(),
-		getTaskPromptDescription: (prompt: string, title: string) => {
-			const normalized = prompt.trim();
-			if (!normalized.startsWith(title)) {
-				return normalized;
-			}
-			return normalized.slice(title.length).replace(/^\|\|/, "").trim();
-		},
-	};
-});
-
 function createCard(overrides?: Partial<Parameters<typeof BoardCard>[0]["card"]>) {
 	return {
 		id: "task-1",
 		title: "Review API changes",
-		prompt: "Review API changes",
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt: 1,
@@ -120,8 +73,6 @@ describe("BoardCard", () => {
 
 	beforeEach(() => {
 		mockWorkspaceSnapshot = undefined;
-		mockMeasureWidths = [240, 240, 240];
-		mockMeasureCallCount = 0;
 		previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
 			.IS_REACT_ACT_ENVIRONMENT;
 		(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -193,40 +144,13 @@ describe("BoardCard", () => {
 		expect(onBranch).toHaveBeenCalledWith(card);
 	});
 
-	it("shows inline see more and less controls for long descriptions", async () => {
-		const description =
-			"Alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau final hidden segment";
-
+	it("does not render the stored prompt as a card description", async () => {
 		await act(async () => {
-			root.render(
-				<BoardCard card={createCard({ prompt: `Task title||${description}` })} index={0} columnId="backlog" />,
-			);
+			root.render(<BoardCard card={createCard({ title: "Visible title" })} index={0} columnId="backlog" />);
 		});
 
-		const findButton = (label: string) =>
-			Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === label);
-
-		const seeMoreButton = findButton("See more");
-		expect(seeMoreButton).toBeDefined();
-		expect(container.textContent).not.toContain("final hidden segment");
-
-		await act(async () => {
-			seeMoreButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-			seeMoreButton?.click();
-		});
-
-		expect(findButton("See more")).toBeUndefined();
-		expect(findButton("Less")).toBeDefined();
-		expect(container.textContent).toContain(description);
-
-		const lessButton = findButton("Less");
-		await act(async () => {
-			lessButton?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-			lessButton?.click();
-		});
-
-		expect(findButton("See more")).toBeDefined();
-		expect(container.textContent).not.toContain("final hidden segment");
+		expect(container.textContent).toContain("Visible title");
+		expect(container.textContent).not.toContain("Outdated implementation instructions");
 	});
 
 	it("reconstructs and shows trashed worktree path when workspace metadata is not tracked", async () => {
@@ -390,22 +314,6 @@ describe("BoardCard", () => {
 
 		expect(container.textContent).toContain("Waiting for review");
 		expect(container.textContent).not.toContain("fs_write");
-	});
-
-	it("renders a new card description before the async measure observer reports width", async () => {
-		mockMeasureWidths = [0, 0, 0];
-
-		await act(async () => {
-			root.render(
-				<BoardCard
-					card={createCard({ prompt: "Task title||Freshly created task description" })}
-					index={0}
-					columnId="backlog"
-				/>,
-			);
-		});
-
-		expect(container.textContent).toContain("Freshly created task description");
 	});
 
 	it("renders session activity as single-line truncated text on trash cards", async () => {

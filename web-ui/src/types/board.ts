@@ -1,4 +1,4 @@
-import type { RuntimeAgentId, RuntimeBoardColumnId, RuntimeTaskImage } from "@/runtime/types";
+import type { RuntimeAgentId, RuntimeBoardColumnId } from "@/runtime/types";
 
 export type BoardColumnId = RuntimeBoardColumnId;
 
@@ -6,14 +6,10 @@ export function isReviewLikeColumnId(columnId: BoardColumnId | string): boolean 
 	return columnId === "review" || columnId === "on_hold";
 }
 
-export type TaskImage = RuntimeTaskImage;
-
 export interface BoardCard {
 	id: string;
 	title: string;
-	prompt: string;
 	startInPlanMode: boolean;
-	images?: TaskImage[];
 	agentId?: RuntimeAgentId;
 	branchedFromTaskId?: string;
 	baseRef: string;

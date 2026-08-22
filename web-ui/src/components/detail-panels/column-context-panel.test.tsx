@@ -7,16 +7,10 @@ import { ColumnContextPanel } from "@/components/detail-panels/column-context-pa
 import type { BoardColumn, CardSelection } from "@/types";
 
 vi.mock("@/components/board-card", () => ({
-	BoardCard: ({
-		card,
-		selected,
-	}: {
-		card: { id: string; prompt: string };
-		selected?: boolean;
-	}): React.ReactElement => {
+	BoardCard: ({ card, selected }: { card: { id: string; title: string }; selected?: boolean }): React.ReactElement => {
 		return (
 			<div data-task-id={card.id} data-selected={selected ? "true" : "false"}>
-				{card.prompt}
+				{card.title}
 			</div>
 		);
 	},
@@ -33,11 +27,10 @@ vi.mock("@hello-pangea/dnd", () => ({
 	},
 }));
 
-function createCard(id: string, prompt: string) {
+function createCard(id: string, title: string) {
 	return {
 		id,
-		title: prompt,
-		prompt,
+		title,
 		startInPlanMode: false,
 		baseRef: "main",
 		createdAt: 1,

@@ -15,7 +15,6 @@ import {
 	markTabHidden,
 	markTabVisible,
 } from "@/utils/tab-visibility-presence";
-import { truncateTaskPromptLabel } from "@/utils/task-prompt";
 
 interface UseReviewReadyNotificationsOptions {
 	activeWorkspaceId: string | null;
@@ -176,7 +175,7 @@ export function useReviewReadyNotifications({
 		}
 		const selection = findCardSelection(board, latestTaskReadyForReview.taskId);
 		const taskTitle = selection
-			? truncateTaskPromptLabel(selection.card.prompt) || `Task ${latestTaskReadyForReview.taskId}`
+			? selection.card.title.trim() || `Task ${latestTaskReadyForReview.taskId}`
 			: `Task ${latestTaskReadyForReview.taskId}`;
 		const notificationBody = resolveReviewReadyNotificationBody(
 			latestTaskReadyForReview.taskId,

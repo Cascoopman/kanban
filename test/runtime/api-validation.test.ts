@@ -97,7 +97,7 @@ describe("persisted agent normalization", () => {
 	it("discards unsupported card agent IDs and unknown retired settings", () => {
 		const parsed = runtimeBoardCardSchema.parse({
 			id: "task-1",
-			prompt: "Continue legacy task",
+			title: "Continue task",
 			startInPlanMode: false,
 			agentId: "retired-agent",
 			retiredProviderSettings: {

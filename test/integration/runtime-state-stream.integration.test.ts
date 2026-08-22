@@ -52,7 +52,6 @@ function createBoard(title: string): RuntimeBoardData {
 					{
 						id: "task-1",
 						title: title,
-						prompt: title,
 						startInPlanMode: false,
 						baseRef: "main",
 						createdAt: now,
@@ -75,7 +74,6 @@ function createReviewBoard(taskId: string, title: string, existingTrashTaskId?: 
 				{
 					id: existingTrashTaskId,
 					title: "Already trashed task",
-					prompt: "Already trashed task",
 					startInPlanMode: false,
 					baseRef: "main",
 					createdAt: now,
@@ -94,7 +92,6 @@ function createReviewBoard(taskId: string, title: string, existingTrashTaskId?: 
 					{
 						id: taskId,
 						title: title,
-						prompt: title,
 						startInPlanMode: false,
 						baseRef: "main",
 						createdAt: now,
@@ -120,7 +117,6 @@ function createInProgressBoard(taskId: string, title: string): RuntimeBoardData 
 					{
 						id: taskId,
 						title,
-						prompt: title,
 						startInPlanMode: false,
 						baseRef: "main",
 						createdAt: now,
@@ -814,7 +810,7 @@ describe.sequential("runtime state stream integration", () => {
 					message.type === "workspace_state_updated" && message.workspaceId === workspaceBId,
 			)) as RuntimeStateStreamWorkspaceStateMessage;
 			expect(workspaceUpdateB.workspaceState.revision).toBe(previousRevision + 1);
-			expect(workspaceUpdateB.workspaceState.board.columns[0]?.cards[0]?.prompt).toBe("Realtime Task");
+			expect(workspaceUpdateB.workspaceState.board.columns[0]?.cards[0]?.title).toBe("Realtime Task");
 
 			const workspaceUpdateBOnStreamA = (await streamA.waitForMessage(
 				(message): message is RuntimeStateStreamWorkspaceStateMessage =>

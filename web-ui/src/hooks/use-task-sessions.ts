@@ -142,7 +142,7 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 					? ""
 					: options?.resumeExistingSession
 						? (options.continuationPrompt?.trim() ?? "")
-						: task.prompt.trim();
+						: "";
 				const trpcClient = getRuntimeTrpcClient(projectId);
 				const geometry =
 					(projectId === currentProjectId ? getTerminalGeometry(task.id) : null) ??
@@ -150,7 +150,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				const payload = await trpcClient.runtime.startTaskSession.mutate({
 					taskId: task.id,
 					prompt: kickoffPrompt,
-					images: isResumingSession ? undefined : task.images,
 					startInPlanMode: isResumingSession ? undefined : task.startInPlanMode,
 					resumeFromTrash: options?.resumeFromTrash,
 					resumeExistingSession: options?.resumeExistingSession,

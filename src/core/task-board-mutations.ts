@@ -4,34 +4,23 @@ import type {
 	RuntimeBoardColumnId,
 	RuntimeBoardData,
 	RuntimeBoardDependency,
-	RuntimeTaskImage,
 } from "./api-contract";
 import { createUniqueTaskId } from "./task-id";
-import { resolveTaskTitle } from "./task-title";
 
 export interface RuntimeCreateTaskInput {
 	taskId?: string;
-	title?: string;
-	prompt: string;
+	title: string;
 	startInPlanMode?: boolean;
-	images?: RuntimeTaskImage[];
 	agentId?: RuntimeAgentId;
 	branchedFromTaskId?: string;
 	baseRef: string;
 }
 
 export interface RuntimeUpdateTaskInput {
-	title?: string;
-	prompt: string;
+	title: string;
 	startInPlanMode?: boolean;
-	images?: RuntimeTaskImage[];
 	agentId?: RuntimeAgentId | null;
 	baseRef: string;
-}
-
-// Copy image metadata so board tasks do not retain caller-owned array or object references.
-function cloneTaskImages(images?: RuntimeTaskImage[]): RuntimeTaskImage[] | undefined {
-	return images && images.length > 0 ? images.map((image) => ({ ...image })) : undefined;
 }
 
 export interface RuntimeCreateTaskResult {
@@ -259,9 +248,9 @@ export function addTaskToColumn(
 	randomUuid: () => string,
 	now: number = Date.now(),
 ): RuntimeCreateTaskResult {
-	const prompt = input.prompt.trim();
-	if (!prompt) {
-		throw new Error("Task prompt is required.");
+	const title = input.title.trim();
+	if (!title) {
+		throw new Error("Task title is required.");
 	}
 	const baseRef = input.baseRef.trim();
 	if (!baseRef) {
@@ -274,10 +263,8 @@ export function addTaskToColumn(
 	}
 	const task: RuntimeBoardCard = {
 		id: explicitTaskId || createUniqueTaskId(existingIds, randomUuid),
-		title: resolveTaskTitle(input.title, prompt),
-		prompt,
+		title,
 		startInPlanMode: Boolean(input.startInPlanMode),
-		images: cloneTaskImages(input.images),
 		...(input.agentId ? { agentId: input.agentId } : {}),
 		...(input.branchedFromTaskId?.trim() ? { branchedFromTaskId: input.branchedFromTaskId.trim() } : {}),
 		baseRef,
@@ -556,8 +543,8 @@ export function updateTask(
 		};
 	}
 
-	const prompt = input.prompt.trim();
-	if (!prompt) {
+	const title = input.title.trim();
+	if (!title) {
 		return {
 			board,
 			task: null,
@@ -584,10 +571,8 @@ export function updateTask(
 			columnUpdated = true;
 			updatedTask = {
 				...card,
-				title: resolveTaskTitle(input.title, prompt),
-				prompt,
+				title,
 				startInPlanMode: Boolean(input.startInPlanMode),
-				images: input.images === undefined ? card.images : cloneTaskImages(input.images),
 				agentId: input.agentId === undefined ? card.agentId : (input.agentId ?? undefined),
 				baseRef,
 				updatedAt: now,
