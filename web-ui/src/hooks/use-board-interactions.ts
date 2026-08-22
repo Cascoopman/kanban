@@ -45,7 +45,6 @@ interface UseBoardInteractionsInput {
 	currentProjectId: string | null;
 	setSelectedTaskId: Dispatch<SetStateAction<string | null>>;
 	setIsClearTrashDialogOpen: Dispatch<SetStateAction<boolean>>;
-	setIsGitHistoryOpen: Dispatch<SetStateAction<boolean>>;
 	stopTaskSession: (taskId: string) => Promise<void>;
 	cleanupTaskWorkspace: (taskId: string) => Promise<unknown>;
 	ensureTaskWorkspace: UseTaskSessionsResult["ensureTaskWorkspace"];
@@ -79,7 +78,6 @@ export function useBoardInteractions({
 	currentProjectId,
 	setSelectedTaskId,
 	setIsClearTrashDialogOpen,
-	setIsGitHistoryOpen,
 	stopTaskSession,
 	cleanupTaskWorkspace,
 	ensureTaskWorkspace,
@@ -332,9 +330,8 @@ export function useBoardInteractions({
 				return;
 			}
 			setSelectedTaskId(taskId);
-			setIsGitHistoryOpen(false);
 		},
-		[board, setIsGitHistoryOpen, setSelectedTaskId],
+		[board, setSelectedTaskId],
 	);
 
 	const handleMoveToTrash = useCallback(() => {

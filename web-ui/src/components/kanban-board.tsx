@@ -33,12 +33,8 @@ export function KanbanBoard({
 	onBranchTask,
 	onClearTrash,
 	onSaveTaskTitle,
-	onCommitTask,
-	onOpenPrTask,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
-	commitTaskLoadingById,
-	openPrTaskLoadingById,
 	moveToTrashLoadingById,
 	onDragEnd,
 	onRequestProgrammaticCardMoveReady,
@@ -53,12 +49,8 @@ export function KanbanBoard({
 	onBranchTask?: (task: BoardCard) => void;
 	onClearTrash?: () => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
-	onCommitTask?: (taskId: string) => void;
-	onOpenPrTask?: (taskId: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
-	commitTaskLoadingById?: Record<string, boolean>;
-	openPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	onDragEnd?: (result: DropResult) => void;
 	onRequestProgrammaticCardMoveReady?: (requestMove: RequestProgrammaticCardMove | null) => void;
@@ -372,12 +364,8 @@ export function KanbanBoard({
 							onClearTrash={column.id === "trash" ? onClearTrash : undefined}
 							onHide={() => hideColumn(column.id)}
 							onSaveTitle={column.id !== "trash" ? onSaveTaskTitle : undefined}
-							onCommitTask={isReviewLikeColumnId(column.id) ? onCommitTask : undefined}
-							onOpenPrTask={isReviewLikeColumnId(column.id) ? onOpenPrTask : undefined}
 							onMoveToTrashTask={isReviewLikeColumnId(column.id) ? onMoveToTrashTask : undefined}
 							onRestoreFromTrashTask={column.id === "trash" ? onRestoreFromTrashTask : undefined}
-							commitTaskLoadingById={isReviewLikeColumnId(column.id) ? commitTaskLoadingById : undefined}
-							openPrTaskLoadingById={isReviewLikeColumnId(column.id) ? openPrTaskLoadingById : undefined}
 							moveToTrashLoadingById={isReviewLikeColumnId(column.id) ? moveToTrashLoadingById : undefined}
 							activeDragTaskId={activeDragTaskId}
 							activeDragSourceColumnId={activeDragSourceColumnId}

@@ -21,7 +21,6 @@ function createProps(overrides: Partial<Parameters<typeof useAppHotkeys>[0]> = {
 		selectedCard: null,
 		isDetailTerminalOpen: false,
 		isHomeTerminalOpen: false,
-		isHomeGitHistoryOpen: false,
 		canUseCreateTaskShortcut: true,
 		handleToggleDetailTerminal: vi.fn(),
 		handleToggleHomeTerminal: vi.fn(),
@@ -29,8 +28,6 @@ function createProps(overrides: Partial<Parameters<typeof useAppHotkeys>[0]> = {
 		handleToggleExpandHomeTerminal: vi.fn(),
 		handleOpenCreateTask: vi.fn(),
 		handleOpenSettings: vi.fn(),
-		handleToggleGitHistory: vi.fn(),
-		handleCloseGitHistory: vi.fn(),
 		...overrides,
 	};
 }
@@ -61,44 +58,20 @@ describe("useAppHotkeys", () => {
 		}
 	});
 
-	it("registers git history and settings shortcuts", async () => {
+	it("registers the settings shortcut", async () => {
 		const props = createProps();
 		await act(async () => root.render(<HookHarness {...props} />));
 
-		const gitHistoryCall = mockUseHotkeys.mock.calls.find(([shortcut]) => shortcut === "mod+g");
 		const settingsCall = mockUseHotkeys.mock.calls.find(([shortcut]) => shortcut === "mod+shift+s");
-		if (!gitHistoryCall || typeof gitHistoryCall[1] !== "function") {
-			throw new Error("Expected git history shortcut to be registered.");
-		}
 		if (!settingsCall || typeof settingsCall[1] !== "function") {
 			throw new Error("Expected settings shortcut to be registered.");
 		}
 
 		act(() => {
-			(gitHistoryCall[1] as () => void)();
 			(settingsCall[1] as () => void)();
 		});
 
-		expect(props.handleToggleGitHistory).toHaveBeenCalledOnce();
 		expect(props.handleOpenSettings).toHaveBeenCalledOnce();
-	});
-
-	it("closes home git history on Escape", async () => {
-		const props = createProps({ isHomeGitHistoryOpen: true });
-		await act(async () => root.render(<HookHarness {...props} />));
-
-		const escapeCall = mockUseHotkeys.mock.calls.find(([shortcut]) => shortcut === "escape");
-		if (!escapeCall || typeof escapeCall[1] !== "function") {
-			throw new Error("Expected Escape shortcut to be registered.");
-		}
-
-		act(() => {
-			(escapeCall[1] as (event: KeyboardEvent) => void)(
-				new KeyboardEvent("keydown", { key: "Escape", cancelable: true }),
-			);
-		});
-
-		expect(props.handleCloseGitHistory).toHaveBeenCalledOnce();
 	});
 
 	it("does not open create task when the shortcut is disabled", async () => {

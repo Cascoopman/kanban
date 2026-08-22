@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ChevronDown, FolderPlus, Layers3, Plus, Settings2, Trash2 } from "lucide-react";
+import { ChevronDown, FolderPlus, Layers3, Plus, Settings, Settings2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ export function ProjectBoardToolbar({
 	onAddProject,
 	onRemoveProject,
 	onCreateTask,
+	onOpenSettings,
 	removingProjectId,
 }: {
 	projects: RuntimeProjectSummary[];
@@ -47,6 +48,7 @@ export function ProjectBoardToolbar({
 	onAddProject: () => void;
 	onRemoveProject: (projectId: string) => Promise<boolean>;
 	onCreateTask: (projectId: string) => void;
+	onOpenSettings: () => void;
 	removingProjectId: string | null;
 }): React.ReactElement {
 	const [pendingRemoval, setPendingRemoval] = useState<RuntimeProjectSummary | null>(null);
@@ -150,6 +152,14 @@ export function ProjectBoardToolbar({
 							))}
 						</ProjectMenuContent>
 					</DropdownMenu.Root>
+
+					<Button
+						variant="default"
+						size="sm"
+						icon={<Settings size={14} />}
+						onClick={onOpenSettings}
+						aria-label="Settings"
+					/>
 
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger asChild>

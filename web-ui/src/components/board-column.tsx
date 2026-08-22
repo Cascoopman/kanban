@@ -17,12 +17,8 @@ export function BoardColumn({
 	onClearTrash,
 	onHide,
 	onSaveTitle,
-	onCommitTask,
-	onOpenPrTask,
 	onMoveToTrashTask,
 	onRestoreFromTrashTask,
-	commitTaskLoadingById,
-	openPrTaskLoadingById,
 	moveToTrashLoadingById,
 	onCardClick,
 	activeDragTaskId,
@@ -39,12 +35,8 @@ export function BoardColumn({
 	onClearTrash?: () => void;
 	onHide?: () => void;
 	onSaveTitle?: (taskId: string, title: string) => void;
-	onCommitTask?: (taskId: string) => void;
-	onOpenPrTask?: (taskId: string) => void;
 	onMoveToTrashTask?: (taskId: string) => void;
 	onRestoreFromTrashTask?: (taskId: string) => void;
-	commitTaskLoadingById?: Record<string, boolean>;
-	openPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	onCardClick?: (card: BoardCardModel) => void;
 	activeDragTaskId?: string | null;
@@ -146,10 +138,6 @@ export function BoardColumn({
 											onBranch={onBranchTask}
 											onMoveToTrash={onMoveToTrashTask}
 											onRestoreFromTrash={onRestoreFromTrashTask}
-											onCommit={onCommitTask}
-											onOpenPr={onOpenPrTask}
-											isCommitLoading={commitTaskLoadingById?.[card.id] ?? false}
-											isOpenPrLoading={openPrTaskLoadingById?.[card.id] ?? false}
 											isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 											workspacePath={workspacePath}
 											isDragDisabled={isDragDisabled}

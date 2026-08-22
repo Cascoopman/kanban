@@ -114,6 +114,7 @@ describe("CardDetailView VS Code visibility", () => {
 					onTaskDragEnd={() => {}}
 					onMoveToTrash={() => {}}
 					bottomTerminalOpen={false}
+					onToggleBottomTerminal={() => {}}
 					bottomTerminalTaskId={null}
 					bottomTerminalSummary={null}
 					onBottomTerminalClose={() => {}}

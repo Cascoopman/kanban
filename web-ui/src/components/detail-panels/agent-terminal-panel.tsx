@@ -1,6 +1,6 @@
 import "@xterm/xterm/css/xterm.css";
 
-import { Command, Maximize2, MessageSquare, Minimize2, X } from "lucide-react";
+import { Command, Maximize2, MessageSquare, Minimize2, Terminal, X } from "lucide-react";
 import type { MutableRefObject, ReactElement } from "react";
 import { useMemo } from "react";
 
@@ -9,9 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { RuntimeQuickPrompt, RuntimeTaskSessionSummary } from "@/runtime/types";
-import { useTaskWorkspaceSnapshotValue } from "@/stores/workspace-metadata-store";
 import { usePersistentTerminalSession } from "@/terminal/use-persistent-terminal-session";
-import { type BoardColumnId, isReviewLikeColumnId } from "@/types";
+import type { BoardColumnId } from "@/types";
 import { isMacPlatform } from "@/utils/platform";
 
 interface AgentTerminalSessionControls {
@@ -28,10 +27,6 @@ export interface AgentTerminalPanelProps {
 	terminalEnabled?: boolean;
 	summary: RuntimeTaskSessionSummary | null;
 	onSummary?: (summary: RuntimeTaskSessionSummary) => void;
-	onCommit?: () => void;
-	onOpenPr?: () => void;
-	isCommitLoading?: boolean;
-	isOpenPrLoading?: boolean;
 	taskColumnId?: BoardColumnId;
 	quickPrompts?: readonly RuntimeQuickPrompt[];
 	onSendQuickPrompt?: (prompt: string) => Promise<void>;
@@ -39,6 +34,9 @@ export interface AgentTerminalPanelProps {
 	onMoveToTrash?: () => void;
 	isMoveToTrashLoading?: boolean;
 	showMoveToTrash?: boolean;
+	onToggleShell?: () => void;
+	isShellOpen?: boolean;
+	isShellLoading?: boolean;
 	showSessionToolbar?: boolean;
 	onClose?: () => void;
 	autoFocus?: boolean;
@@ -99,61 +97,10 @@ const statusTagColors: Record<StatusTagStyle, string> = {
 	danger: "bg-status-red/15 text-status-red",
 };
 
-function AgentTerminalReviewActions({
-	taskId,
-	taskColumnId,
-	onCommit,
-	onOpenPr,
-	isCommitLoading,
-	isOpenPrLoading,
-}: {
-	taskId: string;
-	taskColumnId: string;
-	onCommit?: () => void;
-	onOpenPr?: () => void;
-	isCommitLoading: boolean;
-	isOpenPrLoading: boolean;
-}): ReactElement | null {
-	const reviewWorkspaceSnapshot = useTaskWorkspaceSnapshotValue(taskId);
-	const showReviewGitActions = isReviewLikeColumnId(taskColumnId) && (reviewWorkspaceSnapshot?.changedFiles ?? 0) > 0;
-
-	if (!showReviewGitActions) {
-		return null;
-	}
-
-	return (
-		<div style={{ display: "flex", gap: 6 }}>
-			<Button
-				variant="primary"
-				size="sm"
-				style={{ flex: "1 1 0" }}
-				disabled={isCommitLoading || isOpenPrLoading}
-				onClick={onCommit}
-			>
-				{isCommitLoading ? "..." : "Commit"}
-			</Button>
-			<Button
-				variant="primary"
-				size="sm"
-				style={{ flex: "1 1 0" }}
-				disabled={isCommitLoading || isOpenPrLoading}
-				onClick={onOpenPr}
-			>
-				{isOpenPrLoading ? "..." : "Open PR"}
-			</Button>
-		</div>
-	);
-}
-
 function AgentTerminalPanelLayout({
-	taskId,
 	summary,
 	terminalEnabled = true,
 	onSummary: _onSummary,
-	onCommit,
-	onOpenPr,
-	isCommitLoading = false,
-	isOpenPrLoading = false,
 	taskColumnId = "in_progress",
 	quickPrompts = [],
 	onSendQuickPrompt,
@@ -161,6 +108,9 @@ function AgentTerminalPanelLayout({
 	onMoveToTrash,
 	isMoveToTrashLoading = false,
 	showMoveToTrash,
+	onToggleShell,
+	isShellOpen = false,
+	isShellLoading = false,
 	showSessionToolbar = true,
 	onClose,
 	autoFocus: _autoFocus = false,
@@ -329,19 +279,31 @@ function AgentTerminalPanelLayout({
 					onEdit={onEditQuickPrompts}
 				/>
 			) : null}
-			{showMoveToTrash && onMoveToTrash ? (
-				<div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "8px 12px" }}>
-					<AgentTerminalReviewActions
-						taskId={taskId}
-						taskColumnId={taskColumnId}
-						onCommit={onCommit}
-						onOpenPr={onOpenPr}
-						isCommitLoading={isCommitLoading}
-						isOpenPrLoading={isOpenPrLoading}
-					/>
-					<Button variant="danger" fill disabled={isMoveToTrashLoading} onClick={onMoveToTrash}>
-						{isMoveToTrashLoading ? <Spinner size={14} /> : "Move Card To Done"}
-					</Button>
+			{onToggleShell || (showMoveToTrash && onMoveToTrash) ? (
+				<div className="flex gap-2 px-3 py-2">
+					{onToggleShell ? (
+						<Button
+							variant="default"
+							size="sm"
+							icon={isShellLoading ? <Spinner size={14} /> : <Terminal size={14} />}
+							disabled={isShellLoading}
+							onClick={onToggleShell}
+							className="flex-1"
+						>
+							{isShellOpen ? "Close Shell" : "Open Shell"}
+						</Button>
+					) : null}
+					{showMoveToTrash && onMoveToTrash ? (
+						<Button
+							variant="danger"
+							size="sm"
+							disabled={isMoveToTrashLoading}
+							onClick={onMoveToTrash}
+							className="flex-1"
+						>
+							{isMoveToTrashLoading ? <Spinner size={14} /> : "Move Card To Done"}
+						</Button>
+					) : null}
 				</div>
 			) : null}
 		</div>

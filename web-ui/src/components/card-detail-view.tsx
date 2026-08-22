@@ -1,6 +1,6 @@
 import type { DropResult } from "@hello-pangea/dnd";
-import { Code2, Maximize2, MessageSquare, Minimize2, PanelRightClose, PanelRightOpen, X } from "lucide-react";
-import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import { Code2, Maximize2, MessageSquare, Minimize2, PanelRightClose, PanelRightOpen } from "lucide-react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 
@@ -129,10 +129,12 @@ function VscodeToolbar({
 	hideExpand?: boolean;
 }): React.ReactElement {
 	return (
-		<div className="flex h-8 shrink-0 items-center gap-2 border-b border-divider bg-surface-1 px-2">
-			{isExpanded ? (
-				<Button variant="ghost" size="sm" icon={<X size={14} />} onClick={onToggleExpand} className="h-6" />
-			) : null}
+		<div
+			className={cn(
+				"flex h-8 shrink-0 items-center gap-2 border-b border-divider bg-surface-1 px-2",
+				isExpanded && "pl-11",
+			)}
+		>
 			<Code2 size={14} className="text-accent" />
 			<span className="text-xs font-medium text-text-primary">VS Code</span>
 			<div className="ml-auto flex items-center gap-1">
@@ -187,7 +189,7 @@ function MobileDetailTabBar({
 		{ id: "code", label: "VS Code", icon: <Code2 size={14} /> },
 	];
 	return (
-		<div className="flex min-h-9 items-center border-b border-border">
+		<div className="flex min-h-9 items-center border-b border-border pl-10">
 			{tabs.map((tab) => (
 				<button
 					key={tab.id}
@@ -220,25 +222,17 @@ export function CardDetailView({
 	onBranchTask,
 	onClearTrash,
 	onSaveTaskTitle,
-	onCommitTask,
-	onOpenPrTask,
-	onAgentCommitTask,
-	onAgentOpenPrTask,
 	onMoveReviewCardToTrash,
 	onRestoreTaskFromTrash,
-	commitTaskLoadingById,
-	openPrTaskLoadingById,
-	agentCommitTaskLoadingById,
-	agentOpenPrTaskLoadingById,
 	moveToTrashLoadingById,
 	quickPrompts = [],
 	onSendQuickPrompt,
 	onEditQuickPrompts,
 	onMoveToTrash,
 	isMoveToTrashLoading,
-	gitHistoryPanel,
-	onCloseGitHistory,
 	bottomTerminalOpen,
+	onToggleBottomTerminal,
+	isBottomTerminalLoading,
 	bottomTerminalTaskId,
 	bottomTerminalSummary,
 	bottomTerminalSubtitle,
@@ -264,25 +258,17 @@ export function CardDetailView({
 	onBranchTask?: (task: BoardCard) => void;
 	onClearTrash?: () => void;
 	onSaveTaskTitle?: (taskId: string, title: string) => void;
-	onCommitTask?: (taskId: string) => void;
-	onOpenPrTask?: (taskId: string) => void;
-	onAgentCommitTask?: (taskId: string) => void;
-	onAgentOpenPrTask?: (taskId: string) => void;
 	onMoveReviewCardToTrash?: (taskId: string) => void;
 	onRestoreTaskFromTrash?: (taskId: string) => void;
-	commitTaskLoadingById?: Record<string, boolean>;
-	openPrTaskLoadingById?: Record<string, boolean>;
-	agentCommitTaskLoadingById?: Record<string, boolean>;
-	agentOpenPrTaskLoadingById?: Record<string, boolean>;
 	moveToTrashLoadingById?: Record<string, boolean>;
 	quickPrompts?: readonly RuntimeQuickPrompt[];
 	onSendQuickPrompt?: (taskId: string, prompt: string) => Promise<void>;
 	onEditQuickPrompts?: () => void;
 	onMoveToTrash: () => void;
 	isMoveToTrashLoading?: boolean;
-	gitHistoryPanel?: ReactNode;
-	onCloseGitHistory?: () => void;
 	bottomTerminalOpen: boolean;
+	onToggleBottomTerminal: () => void;
+	isBottomTerminalLoading?: boolean;
 	bottomTerminalTaskId: string | null;
 	bottomTerminalSummary: RuntimeTaskSessionSummary | null;
 	bottomTerminalSubtitle?: string | null;
@@ -373,17 +359,12 @@ export function CardDetailView({
 		useCallback(
 			(event: KeyboardEvent) => {
 				if (event.key !== "Escape" || event.defaultPrevented || isEventInsideDialog(event.target)) return;
-				if (gitHistoryPanel && onCloseGitHistory) {
-					event.preventDefault();
-					onCloseGitHistory();
-					return;
-				}
 				if (!isTypingTarget(event.target) && isCodeExpanded) {
 					event.preventDefault();
 					setCodePanelState({ taskId: selection.card.id, isCollapsed: false, isExpanded: false, isMounted: true });
 				}
 			},
-			[gitHistoryPanel, isCodeExpanded, onCloseGitHistory, selection.card.id],
+			[isCodeExpanded, selection.card.id],
 		),
 	);
 
@@ -445,15 +426,14 @@ export function CardDetailView({
 			terminalEnabled={isTaskTerminalEnabled}
 			summary={sessionSummary}
 			onSummary={onSessionSummary}
-			onCommit={onAgentCommitTask ? () => onAgentCommitTask(selection.card.id) : undefined}
-			onOpenPr={onAgentOpenPrTask ? () => onAgentOpenPrTask(selection.card.id) : undefined}
-			isCommitLoading={agentCommitTaskLoadingById?.[selection.card.id] ?? false}
-			isOpenPrLoading={agentOpenPrTaskLoadingById?.[selection.card.id] ?? false}
 			showSessionToolbar={false}
 			autoFocus
 			showMoveToTrash={showMoveToTrashActions}
 			onMoveToTrash={onMoveToTrash}
 			isMoveToTrashLoading={isMoveToTrashLoading}
+			onToggleShell={onToggleBottomTerminal}
+			isShellOpen={bottomTerminalOpen}
+			isShellLoading={isBottomTerminalLoading}
 			quickPrompts={quickPrompts}
 			onSendQuickPrompt={
 				onSendQuickPrompt ? async (prompt) => await onSendQuickPrompt(selection.card.id, prompt) : undefined
@@ -528,12 +508,8 @@ export function CardDetailView({
 							onBranchTask={onBranchTask}
 							onClearTrash={onClearTrash}
 							onSaveTaskTitle={onSaveTaskTitle}
-							onCommitTask={onCommitTask}
-							onOpenPrTask={onOpenPrTask}
 							onMoveToTrashTask={onMoveReviewCardToTrash}
 							onRestoreFromTrashTask={onRestoreTaskFromTrash}
-							commitTaskLoadingById={commitTaskLoadingById}
-							openPrTaskLoadingById={openPrTaskLoadingById}
 							moveToTrashLoadingById={moveToTrashLoadingById}
 							panelWidth="100%"
 						/>
@@ -550,84 +526,80 @@ export function CardDetailView({
 				className="flex min-h-0 min-w-0 flex-col overflow-hidden"
 				style={{ width: isCodeExpanded ? "100%" : detailContentPanelPercent }}
 			>
-				{gitHistoryPanel ? (
-					<div className="flex min-h-0 flex-1 overflow-hidden">{gitHistoryPanel}</div>
-				) : (
-					<>
-						<div ref={mainRowRef} className="relative flex min-h-0 flex-1 overflow-hidden">
-							<div
-								className="min-h-0 min-w-0"
-								style={{
-									display: isCodeExpanded ? "none" : "flex",
-									width: isCodeCollapsed ? "calc(100% - 2rem)" : agentPanelPercent,
-								}}
-							>
-								{agentChatPanel}
-							</div>
-							{!isCodeExpanded && !isCodeCollapsed ? (
-								<ResizeHandle
-									orientation="vertical"
-									ariaLabel="Resize agent and VS Code panels"
-									onMouseDown={handleAgentCodeSeparatorMouseDown}
-									className="z-10"
-								/>
-							) : null}
-							{isCodeCollapsed && !isCodeExpanded ? (
-								<Button
-									variant="ghost"
-									size="sm"
-									icon={<PanelRightOpen size={14} />}
-									onClick={expandCode}
-									className="h-full w-8 shrink-0 flex-col justify-start gap-2 rounded-none border-l border-divider px-0 py-1.5"
-									aria-label="Open VS Code"
-								>
-									<span
-										aria-hidden="true"
-										className="rotate-180 text-[11px] font-medium [writing-mode:vertical-rl]"
-									>
-										VS Code
-									</span>
-								</Button>
-							) : null}
-							{isCodeMounted ? (
-								<div
-									aria-hidden={isCodeCollapsed || undefined}
-									className={cn(
-										"flex min-h-0 min-w-0 flex-col",
-										isCodeCollapsed && "pointer-events-none invisible absolute inset-y-0 right-8",
-									)}
-									style={{ width: isCodeExpanded ? "100%" : codePanelPercent }}
-								>
-									<VscodeToolbar
-										isExpanded={isCodeExpanded}
-										onToggleExpand={toggleCodeExpanded}
-										onCollapse={collapseCode}
-									/>
-									{vscodePanel}
-								</div>
-							) : null}
+				<>
+					<div ref={mainRowRef} className="relative flex min-h-0 flex-1 overflow-hidden">
+						<div
+							className="min-h-0 min-w-0"
+							style={{
+								display: isCodeExpanded ? "none" : "flex",
+								width: isCodeCollapsed ? "calc(100% - 2rem)" : agentPanelPercent,
+							}}
+						>
+							{agentChatPanel}
 						</div>
-						{bottomTerminalOpen && bottomTerminalTaskId ? (
-							<BottomTerminalSection
-								taskId={bottomTerminalTaskId}
-								workspaceId={currentProjectId}
-								summary={bottomTerminalSummary}
-								onSummary={onSessionSummary}
-								onClose={onBottomTerminalClose}
-								subtitle={bottomTerminalSubtitle}
-								terminalThemeColors={terminalThemeColors}
-								onConnectionReady={onBottomTerminalConnectionReady}
-								agentCommand={bottomTerminalAgentCommand}
-								onSendAgentCommand={onBottomTerminalSendAgentCommand}
-								paneHeight={bottomTerminalPaneHeight}
-								onPaneHeightChange={onBottomTerminalPaneHeightChange}
-								onCollapse={onBottomTerminalCollapse}
-								isExpanded={isBottomTerminalExpanded}
-								onToggleExpand={onBottomTerminalToggleExpand}
+						{!isCodeExpanded && !isCodeCollapsed ? (
+							<ResizeHandle
+								orientation="vertical"
+								ariaLabel="Resize agent and VS Code panels"
+								onMouseDown={handleAgentCodeSeparatorMouseDown}
+								className="z-10"
 							/>
 						) : null}
-					</>
-				)}
+						{isCodeCollapsed && !isCodeExpanded ? (
+							<Button
+								variant="ghost"
+								size="sm"
+								icon={<PanelRightOpen size={14} />}
+								onClick={expandCode}
+								className="h-full w-8 shrink-0 flex-col justify-start gap-2 rounded-none border-l border-divider px-0 py-1.5"
+								aria-label="Open VS Code"
+							>
+								<span
+									aria-hidden="true"
+									className="rotate-180 text-[11px] font-medium [writing-mode:vertical-rl]"
+								>
+									VS Code
+								</span>
+							</Button>
+						) : null}
+						{isCodeMounted ? (
+							<div
+								aria-hidden={isCodeCollapsed || undefined}
+								className={cn(
+									"flex min-h-0 min-w-0 flex-col",
+									isCodeCollapsed && "pointer-events-none invisible absolute inset-y-0 right-8",
+								)}
+								style={{ width: isCodeExpanded ? "100%" : codePanelPercent }}
+							>
+								<VscodeToolbar
+									isExpanded={isCodeExpanded}
+									onToggleExpand={toggleCodeExpanded}
+									onCollapse={collapseCode}
+								/>
+								{vscodePanel}
+							</div>
+						) : null}
+					</div>
+					{bottomTerminalOpen && bottomTerminalTaskId ? (
+						<BottomTerminalSection
+							taskId={bottomTerminalTaskId}
+							workspaceId={currentProjectId}
+							summary={bottomTerminalSummary}
+							onSummary={onSessionSummary}
+							onClose={onBottomTerminalClose}
+							subtitle={bottomTerminalSubtitle}
+							terminalThemeColors={terminalThemeColors}
+							onConnectionReady={onBottomTerminalConnectionReady}
+							agentCommand={bottomTerminalAgentCommand}
+							onSendAgentCommand={onBottomTerminalSendAgentCommand}
+							paneHeight={bottomTerminalPaneHeight}
+							onPaneHeightChange={onBottomTerminalPaneHeightChange}
+							onCollapse={onBottomTerminalCollapse}
+							isExpanded={isBottomTerminalExpanded}
+							onToggleExpand={onBottomTerminalToggleExpand}
+						/>
+					) : null}
+				</>
 			</div>
 		</div>
 	);

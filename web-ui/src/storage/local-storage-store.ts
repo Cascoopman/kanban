@@ -6,9 +6,6 @@ export enum LocalStorageKey {
 	DetailTaskCardsPanelRatio = "kanban.detail-task-cards-panel-ratio",
 	ProjectNavigationPanelWidth = "kb-sidebar-width",
 	ProjectNavigationPanelCollapsed = "kanban.project-navigation-panel-collapsed",
-	GitHistoryRefsPanelWidth = "kanban.git-history-refs-panel-width",
-	GitHistoryCommitsPanelWidth = "kanban.git-history-commits-panel-width",
-	GitDiffFileTreePanelRatio = "kanban.git-diff-file-tree-panel-ratio",
 	BoardHiddenColumns = "kanban.board-hidden-columns",
 	OnboardingDialogShown = "kanban.onboarding.dialog.shown",
 	NotificationPermissionPrompted = "kanban.notifications.permission-prompted",
@@ -24,9 +21,6 @@ const LAYOUT_CUSTOMIZATION_LOCAL_STORAGE_KEYS = [
 	LocalStorageKey.DetailTaskCardsPanelRatio,
 	LocalStorageKey.ProjectNavigationPanelWidth,
 	LocalStorageKey.ProjectNavigationPanelCollapsed,
-	LocalStorageKey.GitHistoryRefsPanelWidth,
-	LocalStorageKey.GitHistoryCommitsPanelWidth,
-	LocalStorageKey.GitDiffFileTreePanelRatio,
 	LocalStorageKey.BoardHiddenColumns,
 ] as const;
 

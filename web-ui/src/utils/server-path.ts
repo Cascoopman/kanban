@@ -8,7 +8,7 @@
 /**
  * Normalise a server path by replacing all backslashes with forward slashes.
  * This is the standard convention used across the codebase (path-display,
- * file-url, top-bar, is-binary-file-path, etc.).
+ * file-url and other browser-side path helpers).
  */
 export function normalizeServerPath(pathValue: string): string {
 	return pathValue.replaceAll("\\", "/");

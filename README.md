@@ -4,7 +4,7 @@
   <img src="https://github.com/user-attachments/assets/2aa3dcc7-94e3-4076-bcfe-6d0272007cfe" width="100%" />
 </p>
 
-A replacement for your IDE better suited for running many agents in parallel and reviewing diffs. Each task card gets its own terminal and worktree, all handled for you automatically. Enable auto-commit or auto-PR to let agents ship completed work autonomously.
+A workspace for running many coding agents in parallel. Each task card gets its own terminal and worktree, all handled for you automatically.
 
 <div align="left">
 <table>
@@ -39,15 +39,10 @@ Every task gets its own worktree so agents can work in parallel without merge co
 As agents work, Kanban uses hooks to display the latest message or tool call on each card, so you can monitor hundreds of agents at a glance without opening each one.
 
 ### 4. Review changes
-Click a card to view the agent's TUI and a diff of all the changes in that worktree. Kanban includes its own checkpointing system so you can also see a diff from the last messages you've sent. Click on lines to leave comments and send them back to the agent.
-
-To easily test and debug your app, create a Script Shortcut in settings. Use a command like `npm run dev` so that all you have to do is hit a play button in the navbar instead of remembering commands or asking your agent to do it.
+Click a card to work with the agent and its VS Code workspace side by side. Use customizable quick prompts for repeated follow-up actions, or open a shell from the task footer when you need direct terminal access.
 
 ### 5. Ship it
-When the work looks good, hit **Commit** or **Open PR**. Kanban sends a dynamic prompt to the agent to convert the worktree into a commit on your base ref or a new PR branch, and work through any merge conflicts intelligently. Or skip review by enabling auto-commit / auto-PR and the agent ships as soon as it's done. Move the card to trash to clean up the worktree (you can always resume later since Kanban tracks the resume ID).
-
-### 6. Keep track with git interface
-Click the branch name in the navbar to open a full git interface to browse commit history, switch branches, fetch, pull, push, and visualize your git all without leaving Kanban. Keep track of everything your agents are doing across branches as work is completed.
+Review and ship changes with VS Code's Git tools or a quick prompt tailored to your workflow. Move the card to Done when the work is complete; clearing Done removes its worktree, while the saved session can still be restored later.
 
 ---
 
