@@ -15,6 +15,10 @@ kanban \- local orchestration board for coding agents
 .RI " " ingest|notify|codex-wrapper
 .RI " " [ options ]
 .br
+.B kanban logs
+.RI " " [ backend|frontend ]
+.RI " " [ --all ] [ --tail " " lines ] [ --follow ]
+.br
 .B kanban mcp
 .SH DESCRIPTION
 .B kanban
@@ -109,6 +113,24 @@ but best-effort.
 .RI [ agentArgs... ]
 
 .TP
+.B logs
+Read persisted runtime and browser console logs. With no source or with
+.BR --all ,
+frontend and backend records are merged chronologically.
+
+Options:
+.br
+.B --all
+Read both log sources.
+.br
+.B --tail
+.RI " " lines
+Show only the final number of records.
+.br
+.B --follow, -f
+Continue printing appended records.
+
+.TP
 .B mcp
 Deprecated compatibility command. Prints a deprecation warning and exits.
 .SH EXAMPLES
@@ -142,6 +164,9 @@ Branch the current agent task, including its worktree and conversation:
 .TP
 Ingest a hook event:
 .B kanban hooks ingest --event to_review
+.TP
+Follow merged frontend and backend logs:
+.B kanban logs --all --follow
 .SH EXIT STATUS
 .TP
 .B 0

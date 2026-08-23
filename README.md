@@ -69,6 +69,23 @@ Each browser run creates and removes its own temporary `KANBAN_RUNTIME_HOME` and
 
 The browser suite also exercises workspace concurrency end to end: it pauses a browser save, applies a separate lifecycle update through the runtime API, then verifies both changes are merged and persisted without showing the workspace-conflict warning.
 
+### Logs
+
+Kanban mirrors its existing runtime output and browser console output into separate files under `$KANBAN_RUNTIME_HOME/logs` (normally `~/.kanban/logs`):
+
+```text
+backend.log
+frontend.log
+```
+
+Read them through the CLI:
+
+```bash
+kanban logs backend
+kanban logs frontend --tail 200
+kanban logs --all --follow
+```
+
 ---
 
 [Apache 2.0](./LICENSE)

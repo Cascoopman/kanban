@@ -7,6 +7,7 @@ import { Command, Option } from "commander";
 import ora, { type Ora } from "ora";
 import packageJson from "../package.json" with { type: "json" };
 import { registerHooksCommand } from "./commands/hooks";
+import { registerLogsCommand } from "./commands/logs";
 import { registerTaskCommand } from "./commands/task";
 import { loadGlobalRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config";
 import type { RuntimeCommandRunResponse } from "./core/api-contract";
@@ -30,6 +31,7 @@ import {
 	setKanbanRuntimePort,
 	setKanbanRuntimeTls,
 } from "./core/runtime-endpoint";
+import { installBackendLogCapture } from "./logging/backend-log-capture";
 import { disablePasscode, generateInternalToken, generatePasscode } from "./security/passcode-manager";
 import { terminateProcessForTimeout } from "./server/process-termination";
 import type { RuntimeStateHub } from "./server/runtime-state-hub";
@@ -497,6 +499,7 @@ async function startServerWithAutoPortRetry(options: CliOptions): Promise<Awaite
 }
 
 async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolean): Promise<void> {
+	const backendLogCapture = installBackendLogCapture();
 	if (options.host) {
 		setKanbanRuntimeHost(options.host);
 		console.log(`Binding to host ${options.host}.`);
@@ -525,7 +528,9 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 			const passcode = generatePasscode();
 			generateInternalToken();
 			// NOTE: passcode is printed ONLY here and never stored in logs or env.
-			console.log(`\n🔐 Remote access passcode: ${passcode}\n\nShare this with users who need access.\n`);
+			backendLogCapture.runWithoutCapture(() => {
+				console.log(`\n🔐 Remote access passcode: ${passcode}\n\nShare this with users who need access.\n`);
+			});
 		}
 	}
 
@@ -634,6 +639,7 @@ function createProgram(invocationArgs: string[]): Command {
 
 	registerTaskCommand(program);
 	registerHooksCommand(program);
+	registerLogsCommand(program);
 
 	program
 		.command("mcp")

@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
 import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../src/runtime/types";
@@ -85,6 +88,31 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByText("On Hold", { exact: true })).toBeVisible();
 	await expect(page.getByText("Done", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
+});
+
+test("persists existing browser console output in the frontend log", async ({ page }, testInfo) => {
+	const runtimeHome = testInfo.config.metadata.runtimeHome;
+	if (typeof runtimeHome !== "string" || !runtimeHome) {
+		throw new Error("The Playwright configuration did not provide its runtime home.");
+	}
+	const marker = `playwright frontend log ${Date.now()}`;
+	const visibleConsoleMessage = new Promise<string>((resolveMessage) => {
+		page.on("console", (message) => {
+			if (message.text().includes(marker)) {
+				resolveMessage(message.text());
+			}
+		});
+	});
+
+	await page.goto("/");
+	const logResponse = page.waitForResponse((response) => response.url().endsWith("/api/logs/frontend"));
+	await page.evaluate((message) => console.warn(message), marker);
+	await expect(visibleConsoleMessage).resolves.toContain(marker);
+	expect((await logResponse).status()).toBe(204);
+	const frontendLogPath = join(runtimeHome, "logs", "frontend.log");
+	await expect
+		.poll(() => (existsSync(frontendLogPath) ? readFileSync(frontendLogPath, "utf8") : ""))
+		.toContain(`[warn] ${marker}`);
 });
 
 test("creating a task opens its live agent terminal directly", async ({ page }) => {

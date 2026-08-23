@@ -13,6 +13,7 @@ import {
 	getKanbanRuntimeTls,
 	isKanbanRemoteHost,
 } from "../core/runtime-endpoint";
+import { FrontendLogStore, parseFrontendLogEntry } from "../logging/frontend-log-store";
 import {
 	checkRateLimit,
 	clearRateLimit,
@@ -91,6 +92,7 @@ function readWorkspaceIdFromRequest(request: IncomingMessage, requestUrl: URL): 
 export async function createRuntimeServer(deps: CreateRuntimeServerDependencies): Promise<RuntimeServer> {
 	const webUiDir = getWebUiDir();
 	const vsCodeWebManager = new VsCodeWebManager({ warn: deps.warn });
+	let frontendLogStore: FrontendLogStore | null = null;
 
 	try {
 		await readFile(join(webUiDir, "index.html"));
@@ -348,6 +350,35 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				}
 			}
 			// ── End passcode gate ──────────────────────────────────────────────
+			if (req.method === "POST" && pathname === "/api/logs/frontend") {
+				let body: string;
+				try {
+					body = await readRequestBody(req, 256 * 1024);
+				} catch {
+					res.writeHead(413, { "Content-Type": "application/json; charset=utf-8" });
+					res.end(JSON.stringify({ error: "Log entry is too large." }));
+					return;
+				}
+				let parsed: unknown;
+				try {
+					parsed = JSON.parse(body);
+				} catch {
+					res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+					res.end(JSON.stringify({ error: "Invalid JSON." }));
+					return;
+				}
+				const entry = parseFrontendLogEntry(parsed);
+				if (!entry) {
+					res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
+					res.end(JSON.stringify({ error: "Invalid frontend log entry." }));
+					return;
+				}
+				frontendLogStore ??= new FrontendLogStore();
+				frontendLogStore.append(entry);
+				res.writeHead(204, { "Cache-Control": "no-store" });
+				res.end();
+				return;
+			}
 			if (pathname.startsWith("/api/trpc")) {
 				await trpcHttpHandler(req, res);
 				return;
@@ -446,18 +477,22 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 	return {
 		url,
 		close: async () => {
-			await vsCodeWebManager.dispose();
-			await deps.runtimeStateHub.close();
-			await terminalWebSocketBridge.close();
-			await new Promise<void>((resolveClose, rejectClose) => {
-				server.close((error) => {
-					if (error) {
-						rejectClose(error);
-						return;
-					}
-					resolveClose();
+			try {
+				await vsCodeWebManager.dispose();
+				await deps.runtimeStateHub.close();
+				await terminalWebSocketBridge.close();
+				await new Promise<void>((resolveClose, rejectClose) => {
+					server.close((error) => {
+						if (error) {
+							rejectClose(error);
+							return;
+						}
+						resolveClose();
+					});
 				});
-			});
+			} finally {
+				frontendLogStore?.close();
+			}
 		},
 	};
 }
