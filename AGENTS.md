@@ -30,6 +30,15 @@ What NOT to add: Stuff you can figure out from reading a few files, obvious patt
 - If the target Linear account is ambiguous, ask before creating, editing, or deleting content.
 - When mutating Linear content, state which account was used.
 
+## Garmin MCP
+
+- `garmin` is Cas's personal Garmin Connect MCP in Codex. Use it for personal health, fitness, activity, recovery, training, and device data.
+- The local server is `Taxuspt/garmin_mcp`, launched with `uvx` and pinned in `~/.codex/config.toml` to reviewed commit `3610be6feed93088d85b0f35aba9d7d07c2505a7`.
+- The Codex configuration intentionally exposes a read-only allowlist. Do not add activity, workout, or gear mutation tools unless Cas explicitly asks for that capability.
+- Garmin credentials are not stored in Codex configuration. Authentication creates owner-only OAuth token files at `~/.garminconnect/garmin_tokens.json` and `~/.garminconnect_base64`; never read, print, copy, commit, or expose their contents.
+- If authentication expires, ask Cas to run this interactively in their own terminal: `uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@3610be6feed93088d85b0f35aba9d7d07c2505a7 garmin-mcp-auth --force-reauth`.
+- A configured MCP may not appear in an already-running agent session. Start a new Codex session after adding it or refreshing its tokens, then verify it with a harmless read such as `get_device_last_used` or `get_sleep_summary` without echoing personal identifiers.
+
 TypeScript principles
 - No any types unless absolutely necessary.
 - Check node_modules for external API type definitions instead of guessing.
