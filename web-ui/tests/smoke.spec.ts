@@ -7,7 +7,8 @@ import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../
 import type { BoardCard, BoardColumnId, BoardData } from "../src/types";
 
 const ONBOARDING_DIALOG_SHOWN_KEY = "kanban.onboarding.dialog.shown";
-const WORKSPACE_CONFLICT_MESSAGE = "Workspace changed elsewhere. Synced latest state. Retry your last edit if needed.";
+const WORKSPACE_CONFLICT_MESSAGE =
+	"Workspace changed elsewhere. Your local tickets were preserved; retry the edit if needed.";
 
 test.beforeEach(async ({ page }) => {
 	await page.addInitScript((key) => window.localStorage.setItem(key, "true"), ONBOARDING_DIALOG_SHOWN_KEY);
@@ -203,7 +204,7 @@ test("settings button opens runtime settings dialog", async ({ page }) => {
 	await expect(page.getByRole("dialog").getByText("Settings", { exact: true })).toBeVisible();
 });
 
-test("merges a local card move with a concurrent server lifecycle move", async ({ page, request }) => {
+test("preserves a local card move during a conflicting server move", async ({ page, request }) => {
 	const projects = await requestTrpc<RuntimeProjectsResponse>({
 		request,
 		procedure: "projects.list",
@@ -278,6 +279,7 @@ test("merges a local card move with a concurrent server lifecycle move", async (
 		await expect(page.locator(`[data-task-id="${localTask.id}"][data-column-id="on_hold"]`)).toBeVisible();
 		await firstBrowserSaveIntercepted;
 
+		const remoteLocalTask = { ...localTask, updatedAt: localTask.updatedAt + 1_000 };
 		const remoteLifecycleTask = { ...lifecycleTask, updatedAt: lifecycleTask.updatedAt + 1_000 };
 		await requestTrpc<RuntimeWorkspaceStateResponse>({
 			request,
@@ -285,7 +287,7 @@ test("merges a local card move with a concurrent server lifecycle move", async (
 			type: "mutation",
 			workspaceId,
 			payload: {
-				board: placeTask(seededState.board, "review", remoteLifecycleTask),
+				board: placeTask(placeTask(seededState.board, "in_progress", remoteLocalTask), "review", remoteLifecycleTask),
 				sessions: seededState.sessions,
 				expectedRevision: seededState.revision,
 			},

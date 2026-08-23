@@ -459,7 +459,7 @@ describe("useWorkspaceSync", () => {
 		expect(onWorkspaceStateConflict).not.toHaveBeenCalled();
 	});
 
-	it("uses the server board and reports a conflict when the same field changed twice", async () => {
+	it("preserves the local value when the same field changed twice", async () => {
 		const initialState = createWorkspaceState("task-1", 1);
 		const remoteEditState = {
 			...createWorkspaceState("task-1", 2),
@@ -498,12 +498,11 @@ describe("useWorkspaceSync", () => {
 			);
 		});
 
-		const conflictSnapshot = requireSnapshot(latestSnapshot);
-		expect(findTask(conflictSnapshot.board, "task-1")?.card.title).toBe("Remote title");
-		expect(onWorkspaceStateConflict).toHaveBeenCalledWith({
-			workspaceId: "project-a",
-			currentRevision: 2,
-		});
+		const mergedSnapshot = requireSnapshot(latestSnapshot);
+		expect(findTask(mergedSnapshot.board, "task-1")?.card.title).toBe("Local title");
+		expect(findTask(mergedSnapshot.workspaceBaseBoard, "task-1")?.card.title).toBe("Remote title");
+		expect(mergedSnapshot.workspaceRevision).toBe(2);
+		expect(onWorkspaceStateConflict).not.toHaveBeenCalled();
 	});
 
 	it("preserves a newer local edit when the stream for an earlier save arrives first", async () => {

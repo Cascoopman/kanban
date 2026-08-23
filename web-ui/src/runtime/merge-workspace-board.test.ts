@@ -58,19 +58,51 @@ describe("mergeWorkspaceBoards", () => {
 		]);
 	});
 
-	it("reports a conflict when both writers change the same card field", () => {
+	it("preserves the local value when both writers change the same card field", () => {
 		const base = createBoard({ in_progress: [createCard("task-1", "Original")] });
 		const local = createBoard({ in_progress: [createCard("task-1", "Local title", 2)] });
 		const remote = createBoard({ in_progress: [createCard("task-1", "Remote title", 3)] });
 
-		expect(mergeWorkspaceBoards(base, local, remote)).toEqual({ status: "conflict" });
+		const result = mergeWorkspaceBoards(base, local, remote);
+
+		expect(result.status).toBe("merged");
+		if (result.status !== "merged") {
+			return;
+		}
+		expect(result.board.columns.find((column) => column.id === "in_progress")?.cards).toEqual([
+			createCard("task-1", "Local title", 3),
+		]);
 	});
 
-	it("reports a conflict when both writers move the same card to different columns", () => {
+	it("preserves the local move when both writers move the same card to different columns", () => {
 		const base = createBoard({ in_progress: [createCard("task-1", "Original")] });
 		const local = createBoard({ review: [createCard("task-1", "Original", 2)] });
 		const remote = createBoard({ on_hold: [createCard("task-1", "Original", 3)] });
 
-		expect(mergeWorkspaceBoards(base, local, remote)).toEqual({ status: "conflict" });
+		const result = mergeWorkspaceBoards(base, local, remote);
+
+		expect(result.status).toBe("merged");
+		if (result.status !== "merged") {
+			return;
+		}
+		expect(result.board.columns.find((column) => column.id === "review")?.cards).toEqual([
+			createCard("task-1", "Original", 3),
+		]);
+	});
+
+	it("preserves a modified ticket when the concurrent writer deletes it", () => {
+		const base = createBoard({ in_progress: [createCard("task-1", "Original")] });
+		const local = createBoard({ in_progress: [createCard("task-1", "Local title", 2)] });
+		const remote = createBoard({});
+
+		const result = mergeWorkspaceBoards(base, local, remote);
+
+		expect(result.status).toBe("merged");
+		if (result.status !== "merged") {
+			return;
+		}
+		expect(result.board.columns.find((column) => column.id === "in_progress")?.cards).toEqual([
+			createCard("task-1", "Local title", 2),
+		]);
 	});
 });
