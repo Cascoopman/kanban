@@ -147,6 +147,61 @@ describe.sequential("task-worktree integration", () => {
 		});
 	});
 
+	it("creates a task from the fetched upstream when the local branch has diverged", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-diverged-");
+			try {
+				const repoPath = join(sandboxRoot, "repo");
+				const remotePath = join(sandboxRoot, "remote.git");
+				const updaterPath = join(sandboxRoot, "updater");
+				mkdirSync(repoPath, { recursive: true });
+
+				runGit(sandboxRoot, ["init", "--bare", remotePath]);
+				runGit(repoPath, ["init"]);
+				runGit(repoPath, ["config", "user.name", "Kanban Test"]);
+				runGit(repoPath, ["config", "user.email", "kanban-test@example.com"]);
+				writeFileSync(join(repoPath, "README.md"), "initial\n", "utf8");
+				runGit(repoPath, ["add", "README.md"]);
+				runGit(repoPath, ["commit", "-m", "initial"]);
+				const branchName = runGit(repoPath, ["symbolic-ref", "--short", "HEAD"]);
+				runGit(repoPath, ["remote", "add", "origin", remotePath]);
+				runGit(repoPath, ["push", "--set-upstream", "origin", branchName]);
+				runGit(remotePath, ["symbolic-ref", "HEAD", `refs/heads/${branchName}`]);
+
+				runGit(sandboxRoot, ["clone", remotePath, updaterPath]);
+				runGit(updaterPath, ["config", "user.name", "Kanban Test"]);
+				runGit(updaterPath, ["config", "user.email", "kanban-test@example.com"]);
+				writeFileSync(join(updaterPath, "remote.txt"), "remote advance\n", "utf8");
+				runGit(updaterPath, ["add", "remote.txt"]);
+				runGit(updaterPath, ["commit", "-m", "remote advance"]);
+				const remoteCommit = runGit(updaterPath, ["rev-parse", "HEAD"]);
+				runGit(updaterPath, ["push", "origin", branchName]);
+
+				writeFileSync(join(repoPath, "local.txt"), "local advance\n", "utf8");
+				runGit(repoPath, ["add", "local.txt"]);
+				runGit(repoPath, ["commit", "-m", "local advance"]);
+				const localCommit = runGit(repoPath, ["rev-parse", "HEAD"]);
+
+				const ensured = await ensureTaskWorktreeIfDoesntExist({
+					cwd: repoPath,
+					taskId: "task-from-diverged-local",
+					baseRef: branchName,
+				});
+
+				expect(ensured.ok).toBe(true);
+				if (!ensured.ok || !ensured.path) {
+					throw new Error(ensured.error ?? "Task worktree was not created");
+				}
+				expect(ensured.baseCommit).toBe(remoteCommit);
+				expect(runGit(ensured.path, ["rev-parse", "HEAD"])).toBe(remoteCommit);
+				expect(runGit(ensured.path, ["show", "--format=", "--name-only", "HEAD"])).toContain("remote.txt");
+				expect(runGit(repoPath, ["rev-parse", branchName])).toBe(localCommit);
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
 	it("keeps symlinked ignored paths ignored in task worktrees", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-task-worktree-");

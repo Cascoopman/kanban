@@ -87,4 +87,20 @@ describe("task base ref refresh", () => {
 		await second;
 		expect(gitMocks.runGit).toHaveBeenCalledTimes(2);
 	});
+
+	it("uses the fetched upstream when the requested local branch has diverged", async () => {
+		gitMocks.runGit.mockImplementation(async (_cwd: string, args: string[]) => {
+			const command = args.join(" ");
+			if (command === "fetch --all --prune") return gitResult();
+			if (command === "rev-parse --verify main^{commit}") return gitResult("local-commit");
+			if (command === "rev-parse --symbolic-full-name main") return gitResult("refs/heads/main");
+			if (command === "for-each-ref --format=%(upstream:short) refs/heads/main") return gitResult("origin/main");
+			if (command === "rev-parse --verify origin/main^{commit}") return gitResult("remote-commit");
+			throw new Error(`Unexpected git command: ${command}`);
+		});
+
+		await expect(resolveLatestTaskBaseCommit("/tmp/kanban-diverged-base-test", "main")).resolves.toBe(
+			"remote-commit",
+		);
+	});
 });
