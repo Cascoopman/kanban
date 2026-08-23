@@ -10,6 +10,7 @@ function isRestartableCliSession(summary: RuntimeTaskSessionSummary | undefined)
 	return (
 		summary !== undefined &&
 		summary.agentId !== null &&
+		summary.pid === null &&
 		(summary.state === "idle" || summary.state === "interrupted" || summary.state === "awaiting_review")
 	);
 }
@@ -17,15 +18,21 @@ function isRestartableCliSession(summary: RuntimeTaskSessionSummary | undefined)
 export function useResumeInterruptedTaskSessions({
 	projectBoards,
 	hasReceivedSnapshot,
+	isRuntimeDisconnected,
 	startTaskSessionForProject,
 }: {
 	projectBoards: RuntimeProjectBoardSnapshot[];
 	hasReceivedSnapshot: boolean;
+	isRuntimeDisconnected: boolean;
 	startTaskSessionForProject: UseTaskSessionsResult["startTaskSessionForProject"];
 }): void {
 	const handledTaskIdsByProjectRef = useRef<Map<string, Set<string>>>(new Map());
 
 	useEffect(() => {
+		if (isRuntimeDisconnected) {
+			handledTaskIdsByProjectRef.current.clear();
+			return;
+		}
 		if (!hasReceivedSnapshot) {
 			return;
 		}
@@ -59,11 +66,12 @@ export function useResumeInterruptedTaskSessions({
 						...(shouldContinueWork ? { continuationPrompt: RESTART_CONTINUATION_PROMPT } : {}),
 					}).then((result) => {
 						if (!result.ok) {
+							handledTaskIds.delete(task.id);
 							notifyError(result.message ?? `Could not resume ${task.title} in ${snapshot.project.name}.`);
 						}
 					});
 				}
 			}
 		}
-	}, [hasReceivedSnapshot, projectBoards, startTaskSessionForProject]);
+	}, [hasReceivedSnapshot, isRuntimeDisconnected, projectBoards, startTaskSessionForProject]);
 }

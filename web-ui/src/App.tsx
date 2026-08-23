@@ -182,6 +182,7 @@ export default function App(): ReactElement {
 	useResumeInterruptedTaskSessions({
 		projectBoards: streamedProjectBoards,
 		hasReceivedSnapshot,
+		isRuntimeDisconnected,
 		startTaskSessionForProject,
 	});
 

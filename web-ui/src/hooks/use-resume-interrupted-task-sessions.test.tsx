@@ -36,13 +36,14 @@ function createSummary(
 	taskId: string,
 	agentId: RuntimeAgentId,
 	state: RuntimeTaskSessionSummary["state"] = "interrupted",
+	pid: number | null = null,
 ): RuntimeTaskSessionSummary {
 	return {
 		taskId,
 		state,
 		agentId,
 		workspacePath: `/tmp/${taskId}`,
-		pid: null,
+		pid,
 		startedAt: 1,
 		updatedAt: 2,
 		lastOutputAt: 1,
@@ -59,15 +60,18 @@ function createSummary(
 function Harness({
 	projectBoards,
 	hasReceivedSnapshot = true,
+	isRuntimeDisconnected = false,
 	startTaskSessionForProject,
 }: {
 	projectBoards: RuntimeProjectBoardSnapshot[];
 	hasReceivedSnapshot?: boolean;
+	isRuntimeDisconnected?: boolean;
 	startTaskSessionForProject: UseTaskSessionsResult["startTaskSessionForProject"];
 }): null {
 	useResumeInterruptedTaskSessions({
 		projectBoards,
 		hasReceivedSnapshot,
+		isRuntimeDisconnected,
 		startTaskSessionForProject,
 	});
 	return null;
@@ -181,6 +185,74 @@ describe("useResumeInterruptedTaskSessions", () => {
 			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
 		expect(startTaskSessionForProject).toHaveBeenCalledWith("workspace-b", projectBTask.task, {
+			resumeExistingSession: "running",
+			continuationPrompt: RESTART_CONTINUATION_PROMPT,
+		});
+	});
+
+	it("resumes a task again after a later runtime restart", async () => {
+		const task = createTask(createInitialBoardData(), "in_progress", "Restarted task", "codex");
+		const interrupted = createSummary(task.task.id, "codex");
+		const startTaskSessionForProject = vi.fn<UseTaskSessionsResult["startTaskSessionForProject"]>(async () => ({
+			ok: true as const,
+		}));
+
+		await act(async () => {
+			root.render(
+				<Harness
+					projectBoards={[createProjectSnapshot("workspace-1", task.board, { [task.task.id]: interrupted })]}
+					startTaskSessionForProject={startTaskSessionForProject}
+				/>,
+			);
+		});
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(1);
+
+		const running = {
+			...interrupted,
+			state: "running" as const,
+			pid: 123,
+			updatedAt: 3,
+			reviewReason: null,
+		};
+		await act(async () => {
+			root.render(
+				<Harness
+					projectBoards={[createProjectSnapshot("workspace-1", task.board, { [task.task.id]: running })]}
+					startTaskSessionForProject={startTaskSessionForProject}
+				/>,
+			);
+		});
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			root.render(
+				<Harness
+					projectBoards={[createProjectSnapshot("workspace-1", task.board, { [task.task.id]: running })]}
+					isRuntimeDisconnected
+					startTaskSessionForProject={startTaskSessionForProject}
+				/>,
+			);
+		});
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(1);
+
+		const interruptedAgain = {
+			...running,
+			state: "interrupted" as const,
+			pid: null,
+			updatedAt: 4,
+			reviewReason: "interrupted" as const,
+		};
+		await act(async () => {
+			root.render(
+				<Harness
+					projectBoards={[createProjectSnapshot("workspace-1", task.board, { [task.task.id]: interruptedAgain })]}
+					startTaskSessionForProject={startTaskSessionForProject}
+				/>,
+			);
+		});
+
+		expect(startTaskSessionForProject).toHaveBeenCalledTimes(2);
+		expect(startTaskSessionForProject).toHaveBeenLastCalledWith("workspace-1", task.task, {
 			resumeExistingSession: "running",
 			continuationPrompt: RESTART_CONTINUATION_PROMPT,
 		});
