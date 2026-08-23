@@ -1,6 +1,5 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
-import { buildTaskWorktreeDisplayPath } from "@runtime-task-worktree-path";
 import { AlertCircle, AlertTriangle, Bot, Copy, Layers3, RotateCcw, Trash2 } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useMemo, useRef, useState } from "react";
@@ -28,17 +27,6 @@ const SESSION_ACTIVITY_COLOR = {
 	muted: "var(--color-text-tertiary)",
 	secondary: "var(--color-text-secondary)",
 } as const;
-
-function reconstructTaskWorktreeDisplayPath(taskId: string, workspacePath: string | null | undefined): string | null {
-	if (!workspacePath) {
-		return null;
-	}
-	try {
-		return buildTaskWorktreeDisplayPath(taskId, workspacePath);
-	} catch {
-		return null;
-	}
-}
 
 function extractToolInputSummaryFromActivityText(activityText: string, toolName: string): string | null {
 	const escapedToolName = toolName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -200,7 +188,6 @@ export function BoardCard({
 	onMoveToTrash,
 	onRestoreFromTrash,
 	isMoveToTrashLoading = false,
-	workspacePath,
 	isDragDisabled = false,
 	hideActions = false,
 	wrapTitle = false,
@@ -215,7 +202,6 @@ export function BoardCard({
 	onMoveToTrash?: (taskId: string) => void;
 	onRestoreFromTrash?: (taskId: string) => void;
 	isMoveToTrashLoading?: boolean;
-	workspacePath?: string | null;
 	isDragDisabled?: boolean;
 	hideActions?: boolean;
 	wrapTitle?: boolean;
@@ -256,12 +242,8 @@ export function BoardCard({
 		return null;
 	};
 	const statusMarker = renderStatusMarker();
-	const showWorkspaceStatus = columnId === "in_progress" || isReviewLikeColumnId(columnId) || isTrashCard;
-	const reviewWorkspacePath = reviewWorkspaceSnapshot
-		? formatPathForDisplay(reviewWorkspaceSnapshot.path)
-		: isTrashCard
-			? reconstructTaskWorktreeDisplayPath(card.id, workspacePath)
-			: null;
+	const showWorkspaceStatus = !isTrashCard && (columnId === "in_progress" || isReviewLikeColumnId(columnId));
+	const reviewWorkspacePath = reviewWorkspaceSnapshot ? formatPathForDisplay(reviewWorkspaceSnapshot.path) : null;
 	const agentOverrideLabel = useMemo(
 		() => (card.agentId ? (getRuntimeAgentCatalogEntry(card.agentId)?.label ?? card.agentId) : null),
 		[card.agentId],
@@ -436,21 +418,10 @@ export function BoardCard({
 										lineHeight: 1.4,
 										whiteSpace: "normal",
 										overflowWrap: "anywhere",
-										color: isTrashCard ? SESSION_ACTIVITY_COLOR.muted : undefined,
+										color: SESSION_ACTIVITY_COLOR.secondary,
 									}}
 								>
-									{isTrashCard ? (
-										<span
-											style={{
-												color: SESSION_ACTIVITY_COLOR.muted,
-												textDecoration: "line-through",
-											}}
-										>
-											{reviewWorkspacePath}
-										</span>
-									) : reviewWorkspaceSnapshot ? (
-										<span style={{ color: SESSION_ACTIVITY_COLOR.secondary }}>{reviewWorkspacePath}</span>
-									) : null}
+									{reviewWorkspacePath}
 								</p>
 							) : null}
 							{showDeepViewActions ? (

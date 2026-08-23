@@ -12,9 +12,26 @@ vi.mock("react-hotkeys-hook", () => ({
 }));
 
 vi.mock("@/components/detail-panels/agent-terminal-panel", () => ({
-	AgentTerminalPanel: ({ onConnectionReady }: { onConnectionReady?: (taskId: string) => void }) => {
+	AgentTerminalPanel: ({
+		onConnectionReady,
+		onToggleCode,
+		isCodeOpen,
+	}: {
+		onConnectionReady?: (taskId: string) => void;
+		onToggleCode?: () => void;
+		isCodeOpen?: boolean;
+	}) => {
 		latestAgentConnectionReady = onConnectionReady;
-		return <div>Agent</div>;
+		return (
+			<div>
+				Agent
+				{onToggleCode ? (
+					<button type="button" onClick={onToggleCode}>
+						{isCodeOpen ? "Hide VS Code" : "Open VS Code"}
+					</button>
+				) : null}
+			</div>
+		);
 	},
 }));
 
@@ -132,11 +149,16 @@ describe("CardDetailView VS Code visibility", () => {
 		});
 	}
 
+	function findButton(label: string): HTMLButtonElement | undefined {
+		return Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.trim() === label);
+	}
+
 	it("preloads VS Code after the main terminal is ready and preserves it while collapsed", () => {
 		render(createSelection("task-1"));
 
 		expect(container.textContent).not.toContain("VS Code task-1");
-		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeInstanceOf(HTMLButtonElement);
+		expect(findButton("Open VS Code")).toBeInstanceOf(HTMLButtonElement);
+		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeNull();
 
 		signalMainTerminalReady("task-1");
 
@@ -144,14 +166,15 @@ describe("CardDetailView VS Code visibility", () => {
 		expect(preloadedPanel).toBeInstanceOf(HTMLElement);
 		expect(preloadedPanel?.parentElement?.getAttribute("aria-hidden")).toBe("true");
 
-		const expandButton = container.querySelector('button[aria-label="Open VS Code"]');
-		if (!(expandButton instanceof HTMLButtonElement)) {
-			throw new Error("Collapsed VS Code control was not rendered.");
+		const openButton = findButton("Open VS Code");
+		if (!openButton) {
+			throw new Error("Open VS Code action was not rendered.");
 		}
 		act(() => {
-			expandButton.click();
+			openButton.click();
 		});
 		expect(preloadedPanel?.parentElement?.hasAttribute("aria-hidden")).toBe(false);
+		expect(findButton("Hide VS Code")).toBeInstanceOf(HTMLButtonElement);
 
 		const collapseButton = container.querySelector('button[aria-label="Collapse VS Code"]');
 		if (!(collapseButton instanceof HTMLButtonElement)) {
@@ -163,6 +186,7 @@ describe("CardDetailView VS Code visibility", () => {
 		});
 		expect(container.querySelector('[data-testid="vscode-panel"]')).toBe(preloadedPanel);
 		expect(preloadedPanel?.parentElement?.getAttribute("aria-hidden")).toBe("true");
+		expect(findButton("Open VS Code")).toBeInstanceOf(HTMLButtonElement);
 	});
 
 	it("starts each newly selected task collapsed and schedules a fresh preload", () => {
@@ -173,21 +197,22 @@ describe("CardDetailView VS Code visibility", () => {
 		render(createSelection("task-2"));
 		expect(container.textContent).not.toContain("VS Code task-1");
 		expect(container.textContent).not.toContain("VS Code task-2");
-		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeInstanceOf(HTMLButtonElement);
+		expect(findButton("Open VS Code")).toBeInstanceOf(HTMLButtonElement);
+		expect(container.querySelector('button[aria-label="Open VS Code"]')).toBeNull();
 
 		signalMainTerminalReady("task-2");
 		expect(container.textContent).toContain("VS Code task-2");
 	});
 
-	it("mounts VS Code immediately when the collapsed control is opened", () => {
+	it("mounts VS Code immediately when the agent action is opened", () => {
 		render(createSelection("task-1"));
 
-		const expandButton = container.querySelector('button[aria-label="Open VS Code"]');
-		if (!(expandButton instanceof HTMLButtonElement)) {
-			throw new Error("Collapsed VS Code control was not rendered.");
+		const openButton = findButton("Open VS Code");
+		if (!openButton) {
+			throw new Error("Open VS Code action was not rendered.");
 		}
 		act(() => {
-			expandButton.click();
+			openButton.click();
 		});
 
 		expect(container.textContent).toContain("VS Code task-1");

@@ -1,5 +1,5 @@
 import type { DropResult } from "@hello-pangea/dnd";
-import { Code2, Maximize2, MessageSquare, Minimize2, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Code2, Maximize2, MessageSquare, Minimize2, PanelRightClose } from "lucide-react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
@@ -212,7 +212,6 @@ function MobileDetailTabBar({
 export function CardDetailView({
 	selection,
 	workspaceId,
-	workspacePath,
 	sessionSummary,
 	taskSessions,
 	onSessionSummary,
@@ -246,7 +245,6 @@ export function CardDetailView({
 }: {
 	selection: CardSelection;
 	workspaceId: string | null;
-	workspacePath?: string | null;
 	sessionSummary: RuntimeTaskSessionSummary | null;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onSessionSummary: (summary: RuntimeTaskSessionSummary) => void;
@@ -505,7 +503,6 @@ export function CardDetailView({
 					<div className="flex min-h-0 min-w-0" style={{ width: taskCardsPanelPercent }}>
 						<ColumnContextPanel
 							selection={selection}
-							workspacePath={workspacePath}
 							onCardSelect={onCardSelect}
 							taskSessions={taskSessions}
 							onTaskDragEnd={onTaskDragEnd}
@@ -537,7 +534,7 @@ export function CardDetailView({
 							className="min-h-0 min-w-0"
 							style={{
 								display: isCodeExpanded ? "none" : "flex",
-								width: isCodeCollapsed ? "calc(100% - 2rem)" : agentPanelPercent,
+								width: isCodeCollapsed ? "100%" : agentPanelPercent,
 							}}
 						>
 							{agentChatPanel}
@@ -550,29 +547,12 @@ export function CardDetailView({
 								className="z-10"
 							/>
 						) : null}
-						{isCodeCollapsed && !isCodeExpanded ? (
-							<Button
-								variant="ghost"
-								size="sm"
-								icon={<PanelRightOpen size={14} />}
-								onClick={expandCode}
-								className="h-full w-8 shrink-0 flex-col justify-start gap-2 rounded-none border-l border-divider px-0 py-1.5"
-								aria-label="Open VS Code"
-							>
-								<span
-									aria-hidden="true"
-									className="rotate-180 text-[11px] font-medium [writing-mode:vertical-rl]"
-								>
-									VS Code
-								</span>
-							</Button>
-						) : null}
 						{isCodeMounted ? (
 							<div
 								aria-hidden={isCodeCollapsed || undefined}
 								className={cn(
 									"flex min-h-0 min-w-0 flex-col",
-									isCodeCollapsed && "pointer-events-none invisible absolute inset-y-0 right-8",
+									isCodeCollapsed && "pointer-events-none invisible absolute inset-y-0 right-0",
 								)}
 								style={{ width: isCodeExpanded ? "100%" : codePanelPercent }}
 							>
