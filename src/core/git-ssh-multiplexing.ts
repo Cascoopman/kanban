@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdtempSync } from "node:fs";
 import { readdir, rm } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { quoteShellArg } from "./shell";
@@ -21,7 +21,6 @@ interface GitSshMultiplexingState {
 interface GitSshProjectProfile {
 	configuredCommand: string | null;
 	configuredVariant: string | null;
-	repositoryScope: string;
 }
 
 let state: GitSshMultiplexingState | null = null;
@@ -50,10 +49,8 @@ export function isGitSshMultiplexingActive(): boolean {
 	return state !== null;
 }
 
-function createControlScopeHash(repositoryScope: string, baseCommand: string, env: NodeJS.ProcessEnv): string {
+function createControlScopeHash(baseCommand: string, env: NodeJS.ProcessEnv): string {
 	return createHash("sha256")
-		.update(repositoryScope)
-		.update("\0")
 		.update(baseCommand)
 		.update("\0")
 		.update(env.SSH_AUTH_SOCK?.trim() ?? "")
@@ -64,7 +61,6 @@ function createControlScopeHash(repositoryScope: string, baseCommand: string, en
 export function buildMultiplexedGitSshCommand(
 	configuredCommand: string | null,
 	env: NodeJS.ProcessEnv,
-	repositoryScope: string,
 	configuredVariant: string | null = null,
 ): string | null {
 	if (!state) {
@@ -84,9 +80,11 @@ export function buildMultiplexedGitSshCommand(
 		return null;
 	}
 
-	const scopeHash = createControlScopeHash(repositoryScope, baseCommand, env);
+	const scopeHash = createControlScopeHash(baseCommand, env);
 	// %C separates effective host/user/port/proxy-jump combinations. %k also
 	// keeps SSH Host aliases distinct when several accounts target one provider.
+	// The command and agent hash lets repositories using the same account reuse
+	// startup authentication without crossing account configurations.
 	const controlPath = quoteShellArg(join(state.controlDirectory, `${scopeHash}-%C-%k`));
 	return [
 		baseCommand,
@@ -110,24 +108,6 @@ async function readGitConfigValue(cwd: string, key: string, env: NodeJS.ProcessE
 	}
 }
 
-async function resolveRepositoryScope(cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
-	try {
-		const { stdout } = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
-			cwd,
-			encoding: "utf8",
-			maxBuffer: GIT_MAX_BUFFER_BYTES,
-			env,
-		});
-		const commonDirectory = String(stdout ?? "").trim();
-		if (commonDirectory) {
-			return isAbsolute(commonDirectory) ? resolve(commonDirectory) : resolve(cwd, commonDirectory);
-		}
-	} catch {
-		// Commands such as clone can run from a directory that is not a repository.
-	}
-	return resolve(cwd);
-}
-
 async function readProjectProfile(cwd: string, env: NodeJS.ProcessEnv): Promise<GitSshProjectProfile> {
 	const cacheKey = resolve(cwd);
 	const existing = projectProfileByCwd.get(cacheKey);
@@ -136,15 +116,13 @@ async function readProjectProfile(cwd: string, env: NodeJS.ProcessEnv): Promise<
 	}
 
 	const profile = (async () => {
-		const [configuredCommand, configuredVariant, repositoryScope] = await Promise.all([
+		const [configuredCommand, configuredVariant] = await Promise.all([
 			readGitConfigValue(cwd, "core.sshCommand", env),
 			readGitConfigValue(cwd, "ssh.variant", env),
-			resolveRepositoryScope(cwd, env),
 		]);
 		return {
 			configuredCommand,
 			configuredVariant,
-			repositoryScope,
 		};
 	})();
 	projectProfileByCwd.set(cacheKey, profile);
@@ -161,7 +139,6 @@ export async function applyGitSshMultiplexing(cwd: string, env: NodeJS.ProcessEn
 	const multiplexedCommand = buildMultiplexedGitSshCommand(
 		hasEnvironmentCommand ? null : profile.configuredCommand,
 		env,
-		profile.repositoryScope,
 		profile.configuredVariant,
 	);
 	if (!multiplexedCommand) {

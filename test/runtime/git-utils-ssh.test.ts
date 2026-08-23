@@ -39,9 +39,6 @@ describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
 			if (command === "config --get ssh.variant") {
 				throw new Error("not configured");
 			}
-			if (command === "rev-parse --path-format=absolute --git-common-dir") {
-				return { stdout: "/repos/work/.git\n", stderr: "" };
-			}
 			return { stdout: "", stderr: "" };
 		});
 		expect(initializeGitSshMultiplexing()).toBe(true);
@@ -71,21 +68,12 @@ describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
 		).toHaveLength(1);
 	});
 
-	it("shares a socket across worktrees but not across separate repositories", async () => {
+	it("shares a socket across repositories that use the same SSH account", async () => {
 		childProcessMocks.execFilePromise.mockImplementation(
-			async (_file: string, args: string[], options?: { cwd?: string }) => {
+			async (_file: string, args: string[]) => {
 				const command = args.join(" ");
 				if (command.startsWith("config --get")) {
 					throw new Error("not configured");
-				}
-				if (command === "rev-parse --path-format=absolute --git-common-dir") {
-					if (options?.cwd === "/repos/worktree") {
-						return { stdout: "/repos/main/.git\n", stderr: "" };
-					}
-					if (options?.cwd === "/repos/main") {
-						return { stdout: "/repos/main/.git\n", stderr: "" };
-					}
-					return { stdout: "/repos/personal/.git\n", stderr: "" };
 				}
 				return { stdout: "", stderr: "" };
 			},
@@ -100,6 +88,6 @@ describe.runIf(process.platform !== "win32")("runGit SSH multiplexing", () => {
 			.filter(([, args]) => (args as string[]).includes("fetch"))
 			.map(([, , options]) => (options as { env?: NodeJS.ProcessEnv }).env?.GIT_SSH_COMMAND);
 		expect(commands[1]).toBe(commands[0]);
-		expect(commands[2]).not.toBe(commands[0]);
+		expect(commands[2]).toBe(commands[0]);
 	});
 });

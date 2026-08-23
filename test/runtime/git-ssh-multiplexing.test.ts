@@ -13,7 +13,7 @@ describe("Git SSH multiplexing", () => {
 
 	it.runIf(process.platform !== "win32")("adds an app-scoped persistent OpenSSH control connection", () => {
 		expect(initializeGitSshMultiplexing()).toBe(true);
-		const command = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {}, "/repos/work/.git");
+		const command = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {});
 
 		expect(command).toContain("ssh -i ~/.ssh/work");
 		expect(command).toContain("ControlMaster=auto");
@@ -25,7 +25,7 @@ describe("Git SSH multiplexing", () => {
 
 	it.runIf(process.platform !== "win32")("keeps the expanded control socket path within the macOS limit", () => {
 		expect(initializeGitSshMultiplexing()).toBe(true);
-		const command = buildMultiplexedGitSshCommand("ssh", {}, "/repos/work/.git");
+		const command = buildMultiplexedGitSshCommand("ssh", {});
 		const controlPath = command?.match(/ControlPath='([^']+)'/u)?.[1];
 
 		expect(controlPath).toBeDefined();
@@ -34,25 +34,24 @@ describe("Git SSH multiplexing", () => {
 		expect(openSshTemporaryPath.length).toBeLessThanOrEqual(103);
 	});
 
-	it.runIf(process.platform !== "win32")("isolates control sockets by project and SSH command", () => {
+	it.runIf(process.platform !== "win32")("shares control sockets by SSH account while isolating SSH commands", () => {
 		expect(initializeGitSshMultiplexing()).toBe(true);
-		const workCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {}, "/repos/work/.git");
-		const personalCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/personal", {}, "/repos/personal/.git");
-		const otherProjectCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {}, "/repos/other/.git");
+		const workCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {});
+		const personalCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/personal", {});
+		const otherProjectCommand = buildMultiplexedGitSshCommand("ssh -i ~/.ssh/work", {});
 		const otherAgentCommand = buildMultiplexedGitSshCommand(
 			"ssh -i ~/.ssh/work",
 			{ SSH_AUTH_SOCK: "/tmp/other-agent.sock" },
-			"/repos/work/.git",
 		);
 
 		expect(personalCommand).not.toBe(workCommand);
-		expect(otherProjectCommand).not.toBe(workCommand);
+		expect(otherProjectCommand).toBe(workCommand);
 		expect(otherAgentCommand).not.toBe(workCommand);
 	});
 
 	it.runIf(process.platform !== "win32")("does not add OpenSSH options to a configured PuTTY transport", () => {
 		expect(initializeGitSshMultiplexing()).toBe(true);
 
-		expect(buildMultiplexedGitSshCommand("plink.exe", { GIT_SSH_VARIANT: "plink" }, "/repos/work/.git")).toBeNull();
+		expect(buildMultiplexedGitSshCommand("plink.exe", { GIT_SSH_VARIANT: "plink" })).toBeNull();
 	});
 });
