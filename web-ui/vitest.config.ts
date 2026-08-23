@@ -24,6 +24,7 @@ export default defineConfig({
 		conditions: ["import", "module", "browser", "default"],
 	},
 	test: {
+		execArgv: ["--no-experimental-webstorage"],
 		environment: "jsdom",
 		include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
 		passWithNoTests: true,

@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test"
+    "e2e": "NO_COLOR= playwright test"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -26,7 +26,7 @@
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@sentry/react": "^10.45.0",
-		"@tailwindcss/vite": "^4.3.3",
+    "@tailwindcss/vite": "^4.3.3",
     "@trpc/client": "^11.11.0",
     "@xterm/addon-clipboard": "^0.2.0",
     "@xterm/addon-fit": "^0.11.0",
@@ -37,23 +37,23 @@
     "fzf": "^0.5.2",
     "lucide-react": "^0.577.0",
     "p-limit": "^7.3.0",
-    "posthog-js": "^1.357.1",
+    "posthog-js": "^1.418.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hotkeys-hook": "^5.2.4",
-    "react-use": "^17.6.0",
+    "react-use": "^17.6.1",
     "react-virtuoso": "^4.18.3",
     "sonner": "^2.0.7",
-		"tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.1",
+    "@playwright/test": "^1.62.1",
     "@types/react": "^18.3.24",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^5.0.2",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.2",
-    "vite": "^6.4.2",
+    "vite": "^6.4.3",
     "vitest": "^4.1.0"
   },
   "overrides": {
@@ -62,5 +62,11 @@
     "postcss": ">=8.5.23 <9",
     "protobufjs": ">=7.6.1 <8",
     "ws": ">=8.21.0 <9"
+  },
+  "allowScripts": {
+    "core-js@3.50.0": true,
+    "esbuild@0.25.12": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true
   }
 }
