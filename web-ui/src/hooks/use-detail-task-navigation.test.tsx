@@ -65,12 +65,7 @@ function HookHarness({
 			setSelectedTaskId: navigation.setSelectedTaskId,
 			handleProjectTaskSelect: navigation.handleProjectTaskSelect,
 		});
-	}, [
-		navigation.handleProjectTaskSelect,
-		navigation.selectedTaskId,
-		navigation.setSelectedTaskId,
-		onSnapshot,
-	]);
+	}, [navigation.handleProjectTaskSelect, navigation.selectedTaskId, navigation.setSelectedTaskId, onSnapshot]);
 
 	return null;
 }

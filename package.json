@@ -71,7 +71,7 @@
     "esbuild": "^0.28.1",
     "husky": "^9.1.7",
     "shx": "^0.4.0",
-    "tsx": "^4.20.3",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
@@ -83,7 +83,7 @@
     "@rolldown/binding-linux-x64-gnu": "1.0.0-rc.9"
   },
   "dependencies": {
-    "@sentry/node": "^10.45.0",
+    "@sentry/node": "^10.70.0",
     "@trpc/client": "^11.11.0",
     "@trpc/server": "^11.11.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -104,5 +104,11 @@
     "js-yaml": ">=4.3.1 <5",
     "nanoid@<4": ">=3.3.18 <4",
     "postcss": ">=8.5.23 <9"
+  },
+  "allowScripts": {
+    "@sentry/cli@3.3.3": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "node-pty@1.2.0-beta.11": true
   }
 }
