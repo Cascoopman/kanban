@@ -57,7 +57,10 @@ function mergeValue<T>(base: T, local: T, remote: T): { merged: true; value: T }
 	if (valuesEqual(remote, base)) {
 		return { merged: true, value: local };
 	}
-	return { merged: false };
+	// Both writers changed the same value. Keep the in-browser edit: it is the
+	// only copy that may not exist anywhere else yet, while the remote value is
+	// already durable and remains available as the next merge baseline.
+	return { merged: true, value: local };
 }
 
 function mergeExistingCard(base: PositionedCard, local: PositionedCard, remote: PositionedCard): PositionedCard | null {
@@ -240,7 +243,9 @@ export function mergeWorkspaceBoards(base: BoardData, local: BoardData, remote: 
 		if (!localCard || !remoteCard) {
 			const remainingCard = localCard ?? remoteCard;
 			if (remainingCard && !positionedCardsEqual(baseCard, remainingCard)) {
-				return { status: "conflict" };
+				// A changed ticket must survive a concurrent deletion. Deleting an
+				// unchanged ticket remains safe and is handled by the branch below.
+				mergedCards.set(taskId, remainingCard);
 			}
 			continue;
 		}

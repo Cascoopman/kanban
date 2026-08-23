@@ -209,13 +209,14 @@ describe("useWorkspacePersistence", () => {
 		expect(callbacks.onWorkspaceStateSaved).toHaveBeenCalledWith(savedState, editedBoard);
 	});
 
-	it("reloads and reports a genuine concurrent edit to the same field", async () => {
+	it("preserves the local value and retries a concurrent edit to the same field", async () => {
 		const baseBoard = createBoard("Original title");
 		const editedBoard = createBoard("My edit", "in_progress", 2);
 		const concurrentBoard = createBoard("Concurrent edit", "in_progress", 3);
 		const persistWorkspaceState = vi
 			.fn<UseWorkspacePersistenceParams["persistWorkspaceState"]>()
-			.mockRejectedValue(new WorkspaceStateConflictError(2));
+			.mockRejectedValueOnce(new WorkspaceStateConflictError(2))
+			.mockResolvedValueOnce(createWorkspaceState(editedBoard, 3));
 		const loadWorkspaceState = vi
 			.fn<UseWorkspacePersistenceParams["loadWorkspaceState"]>()
 			.mockResolvedValue(createWorkspaceState(concurrentBoard, 2));
@@ -236,11 +237,16 @@ describe("useWorkspacePersistence", () => {
 			await vi.runAllTimersAsync();
 		});
 
-		expect(persistWorkspaceState).toHaveBeenCalledTimes(1);
-		expect(callbacks.resolveWorkspaceStateConflict).toHaveBeenCalledOnce();
-		expect(callbacks.onWorkspaceStateConflict).toHaveBeenCalledWith({
+		expect(persistWorkspaceState).toHaveBeenCalledTimes(2);
+		expect(persistWorkspaceState).toHaveBeenLastCalledWith({
 			workspaceId: WORKSPACE_ID,
-			currentRevision: 2,
+			payload: {
+				board: createBoard("My edit", "in_progress", 3),
+				sessions: {},
+				expectedRevision: 2,
+			},
 		});
+		expect(callbacks.resolveWorkspaceStateConflict).not.toHaveBeenCalled();
+		expect(callbacks.onWorkspaceStateConflict).not.toHaveBeenCalled();
 	});
 });

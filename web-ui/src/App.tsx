@@ -149,7 +149,7 @@ export default function App(): ReactElement {
 			{
 				intent: "warning",
 				icon: "warning-sign",
-				message: "Workspace changed elsewhere. Synced latest state. Retry your last edit if needed.",
+				message: "Workspace changed elsewhere. Your local tickets were preserved; retry the edit if needed.",
 				timeout: 5000,
 			},
 			"workspace-state-conflict",
@@ -333,7 +333,7 @@ export default function App(): ReactElement {
 		[],
 	);
 	const resolveWorkspaceStateConflict = useCallback(
-		async () => await refreshWorkspaceState({ discardLocalBoardChanges: true }),
+		async () => await refreshWorkspaceState(),
 		[refreshWorkspaceState],
 	);
 

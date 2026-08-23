@@ -164,6 +164,9 @@ export function useWorkspaceSync({
 					if (merged.status === "merged") {
 						nextBoard = merged.board;
 					} else {
+						// Never replace unsaved browser state merely because reconciliation
+						// failed. A later user edit or refresh can retry from the new baseline.
+						nextBoard = boardRef.current;
 						onWorkspaceStateConflict?.({
 							workspaceId: currentProjectId ?? "",
 							currentRevision: nextWorkspaceState.revision,
