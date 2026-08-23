@@ -333,6 +333,8 @@ export function RuntimeSettingsDialog({
 		globalAgentInstructions !== null && globalAgentInstructionsContent !== globalAgentInstructions.content;
 	const hasUnsavedChanges =
 		hasRuntimeConfigChanges || draftThemeId !== initialThemeId || hasGlobalAgentInstructionsChanges;
+	const isSaveDisabled =
+		areGlobalAgentInstructionsSaving || !hasUnsavedChanges || (hasRuntimeConfigChanges && controlsDisabled);
 
 	useEffect(() => {
 		if (!open) {
@@ -429,28 +431,28 @@ export function RuntimeSettingsDialog({
 
 	const handleSave = async () => {
 		setSaveError(null);
-		if (!config) {
-			setSaveError("Runtime settings are still loading. Try again in a moment.");
-			return;
-		}
-		if (quickPrompts.some((quickPrompt) => !quickPrompt.label.trim() || !quickPrompt.prompt.trim())) {
-			setSaveError("Each quick prompt needs both a button label and prompt text.");
-			return;
-		}
-		const selectedAgent = displayedAgents.find((agent) => agent.id === selectedAgentId);
-		if (!selectedAgent || selectedAgent.installed !== true) {
-			setSaveError("Selected agent is not installed. Install it first or choose an installed agent.");
-			return;
-		}
-		const shouldRequestNotificationPermission =
-			!initialReadyForReviewNotificationsEnabled &&
-			readyForReviewNotificationsEnabled &&
-			notificationPermission === "default";
-		if (shouldRequestNotificationPermission) {
-			const nextPermission = await requestBrowserNotificationPermission();
-			setNotificationPermission(nextPermission);
-		}
 		if (hasRuntimeConfigChanges) {
+			if (!config) {
+				setSaveError("Runtime settings are still loading. Try again in a moment.");
+				return;
+			}
+			if (quickPrompts.some((quickPrompt) => !quickPrompt.label.trim() || !quickPrompt.prompt.trim())) {
+				setSaveError("Each quick prompt needs both a button label and prompt text.");
+				return;
+			}
+			const selectedAgent = displayedAgents.find((agent) => agent.id === selectedAgentId);
+			if (!selectedAgent || selectedAgent.installed !== true) {
+				setSaveError("Selected agent is not installed. Install it first or choose an installed agent.");
+				return;
+			}
+			const shouldRequestNotificationPermission =
+				!initialReadyForReviewNotificationsEnabled &&
+				readyForReviewNotificationsEnabled &&
+				notificationPermission === "default";
+			if (shouldRequestNotificationPermission) {
+				const nextPermission = await requestBrowserNotificationPermission();
+				setNotificationPermission(nextPermission);
+			}
 			const saved = await save({
 				selectedAgentId,
 				agentAutonomousModeEnabled,
@@ -826,11 +828,7 @@ export function RuntimeSettingsDialog({
 				>
 					Cancel
 				</Button>
-				<Button
-					variant="primary"
-					onClick={() => void handleSave()}
-					disabled={controlsDisabled || areGlobalAgentInstructionsSaving || !hasUnsavedChanges}
-				>
+				<Button variant="primary" onClick={() => void handleSave()} disabled={isSaveDisabled}>
 					Save
 				</Button>
 			</DialogFooter>

@@ -378,6 +378,44 @@ describe("RuntimeSettingsDialog", () => {
 		expect(handleOpenChange).toHaveBeenCalledWith(false);
 	});
 
+	it("saves Kanban-wide instructions when project settings are unavailable", async () => {
+		const handleOpenChange = vi.fn();
+		await act(async () => {
+			root.render(
+				<RuntimeSettingsDialog
+					open={true}
+					workspaceId={null}
+					initialConfig={null}
+					onOpenChange={handleOpenChange}
+				/>,
+			);
+		});
+
+		const globalEditor = document.querySelector(
+			'textarea[aria-label="Kanban-wide AGENTS.md contents"]',
+		) as HTMLTextAreaElement | null;
+		const saveButton = findButtonByText(document.body, "Save");
+
+		await act(async () => {
+			if (!globalEditor) {
+				throw new Error("Expected the Kanban-wide AGENTS.md editor.");
+			}
+			const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+			valueSetter?.call(globalEditor, "# Instructions available without project config\n");
+			globalEditor.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+
+		expect(saveButton?.disabled).toBe(false);
+		await act(async () => {
+			saveButton?.click();
+		});
+
+		expect(agentInstructionsHookMocks.saveGlobal).toHaveBeenCalledWith(
+			"# Instructions available without project config\n",
+		);
+		expect(handleOpenChange).toHaveBeenCalledWith(false);
+	});
+
 	it("explains that a missing AGENTS.md procedure requires a runtime restart", async () => {
 		agentInstructionsHookMocks.useGlobalAgentInstructions.mockReturnValue({
 			instructions: null,

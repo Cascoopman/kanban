@@ -204,6 +204,31 @@ test("settings button opens runtime settings dialog", async ({ page }) => {
 	await expect(page.getByRole("dialog").getByText("Settings", { exact: true })).toBeVisible();
 });
 
+test("edits and reloads Kanban-wide agent instructions", async ({ page }, testInfo) => {
+	const runtimeHome = testInfo.config.metadata.runtimeHome;
+	if (typeof runtimeHome !== "string" || !runtimeHome) {
+		throw new Error("The Playwright configuration did not provide its runtime home.");
+	}
+	const instructions = `# Playwright agent instructions\n\nMarker: ${Date.now()}\n`;
+
+	await page.goto("/");
+	await page.getByRole("button", { name: "Settings" }).click();
+	const dialog = page.getByRole("dialog");
+	await dialog.getByRole("button", { name: "AGENTS.md", exact: true }).click();
+	const editor = dialog.getByRole("textbox", { name: "Kanban-wide AGENTS.md contents" });
+	await editor.fill(instructions);
+	await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+	const instructionsPath = join(runtimeHome, "AGENTS.md");
+	await expect
+		.poll(() => (existsSync(instructionsPath) ? readFileSync(instructionsPath, "utf8") : ""))
+		.toBe(instructions);
+
+	await page.getByRole("button", { name: "Settings" }).click();
+	await dialog.getByRole("button", { name: "AGENTS.md", exact: true }).click();
+	await expect(dialog.getByRole("textbox", { name: "Kanban-wide AGENTS.md contents" })).toHaveValue(instructions);
+});
+
 test("preserves a local card move during a conflicting server move", async ({ page, request }) => {
 	const projects = await requestTrpc<RuntimeProjectsResponse>({
 		request,
@@ -287,7 +312,11 @@ test("preserves a local card move during a conflicting server move", async ({ pa
 			type: "mutation",
 			workspaceId,
 			payload: {
-				board: placeTask(placeTask(seededState.board, "in_progress", remoteLocalTask), "review", remoteLifecycleTask),
+				board: placeTask(
+					placeTask(seededState.board, "in_progress", remoteLocalTask),
+					"review",
+					remoteLifecycleTask,
+				),
 				sessions: seededState.sessions,
 				expectedRevision: seededState.revision,
 			},
