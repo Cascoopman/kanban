@@ -85,33 +85,10 @@ export async function resolveLatestTaskBaseCommit(repoPath: string, baseRef: str
 		return localCommitResult.stdout;
 	}
 
-	const localIsAncestorResult = await runGit(repoPath, [
-		"merge-base",
-		"--is-ancestor",
-		localCommitResult.stdout,
-		upstreamCommitResult.stdout,
-	]);
-	if (localIsAncestorResult.ok) {
-		return upstreamCommitResult.stdout;
-	}
-	if (localIsAncestorResult.exitCode !== 1) {
-		throw new Error(localIsAncestorResult.error ?? "Could not compare the local and remote task base commits.");
-	}
-
-	const upstreamIsAncestorResult = await runGit(repoPath, [
-		"merge-base",
-		"--is-ancestor",
-		upstreamCommitResult.stdout,
-		localCommitResult.stdout,
-	]);
-	if (upstreamIsAncestorResult.ok) {
-		return localCommitResult.stdout;
-	}
-	if (upstreamIsAncestorResult.exitCode !== 1) {
-		throw new Error(upstreamIsAncestorResult.error ?? "Could not compare the local and remote task base commits.");
-	}
-
-	throw new Error(
-		`Local branch "${branchName}" and its upstream "${upstreamRef}" have diverged. Choose an explicit base ref before starting the task.`,
-	);
+	// Task worktrees should start from the fetched shared branch state. Fetching
+	// updates the remote-tracking ref without moving the user's local branch, so
+	// the local branch may be behind, ahead, or diverged without being the right
+	// source for a new task. Callers can still request an untracked ref or commit
+	// explicitly when they need a purely local base.
+	return upstreamCommitResult.stdout;
 }
