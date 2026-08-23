@@ -1,4 +1,7 @@
-import { expect, type APIRequestContext, type Page, test } from "@playwright/test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
 import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../src/runtime/types";
 import type { BoardCard, BoardColumnId, BoardData } from "../src/types";
@@ -87,12 +90,39 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
 });
 
+test("persists existing browser console output in the frontend log", async ({ page }, testInfo) => {
+	const runtimeHome = testInfo.config.metadata.runtimeHome;
+	if (typeof runtimeHome !== "string" || !runtimeHome) {
+		throw new Error("The Playwright configuration did not provide its runtime home.");
+	}
+	const marker = `playwright frontend log ${Date.now()}`;
+	const visibleConsoleMessage = new Promise<string>((resolveMessage) => {
+		page.on("console", (message) => {
+			if (message.text().includes(marker)) {
+				resolveMessage(message.text());
+			}
+		});
+	});
+
+	await page.goto("/");
+	const logResponse = page.waitForResponse((response) => response.url().endsWith("/api/logs/frontend"));
+	await page.evaluate((message) => console.warn(message), marker);
+	await expect(visibleConsoleMessage).resolves.toContain(marker);
+	expect((await logResponse).status()).toBe(204);
+	const frontendLogPath = join(runtimeHome, "logs", "frontend.log");
+	await expect
+		.poll(() => (existsSync(frontendLogPath) ? readFileSync(frontendLogPath, "utf8") : ""))
+		.toContain(`[warn] ${marker}`);
+});
+
 test("creating a task opens its live agent terminal directly", async ({ page }) => {
 	await page.goto("/");
 	await createTask(page);
 	await expect(page).toHaveURL(/\?task=/);
 	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeFocused();
-	await expect(page.getByRole("navigation", { name: "Task breadcrumb" }).getByText("New task", { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("navigation", { name: "Task breadcrumb" }).getByText("New task", { exact: true }),
+	).toBeVisible();
 });
 
 test("creating a task does not open a prompt dialog", async ({ page }) => {
@@ -141,11 +171,7 @@ test("merges a local card move with a concurrent server lifecycle move", async (
 		createdAt: testRunId,
 		updatedAt: testRunId,
 	};
-	const seededBoard = placeTask(
-		placeTask(initialState.board, "review", localTask),
-		"in_progress",
-		lifecycleTask,
-	);
+	const seededBoard = placeTask(placeTask(initialState.board, "review", localTask), "in_progress", lifecycleTask);
 	const seededState = await requestTrpc<RuntimeWorkspaceStateResponse>({
 		request,
 		procedure: "workspace.saveState",

@@ -36,6 +36,9 @@ process.once("exit", () => {
 export default defineConfig({
 	testDir: "./tests",
 	timeout: 30_000,
+	metadata: {
+		runtimeHome: e2eRuntimeHome,
+	},
 	use: {
 		baseURL: `http://127.0.0.1:${webUiPort}`,
 		headless: true,

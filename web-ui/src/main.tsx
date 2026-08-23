@@ -7,10 +7,12 @@ import { PasscodeGateProvider } from "@/components/passcode-gate";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UiReviewOverlay } from "@/components/ui-review-overlay";
 import { isThemeId } from "@/hooks/use-theme";
+import { installFrontendConsoleLogger } from "@/runtime/frontend-console-logger";
 import { TelemetryProvider } from "@/telemetry/posthog-provider";
 import { initializeSentry } from "@/telemetry/sentry";
 import "@/styles/globals.css";
 
+installFrontendConsoleLogger();
 initializeSentry();
 
 // Apply the persisted theme synchronously before first paint to prevent a flash.
