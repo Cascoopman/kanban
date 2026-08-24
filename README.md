@@ -41,6 +41,8 @@ As agents work, Kanban uses hooks to display the latest message or tool call on 
 ### 4. Review changes
 Click a card to work with the agent and its VS Code workspace side by side. Use customizable quick prompts for repeated follow-up actions, or open a shell from the task footer when you need direct terminal access.
 
+Dependencies can be managed from a task's detail sidebar. They provide visible sequencing context and are satisfied when prerequisite tasks reach Done, without delaying task startup or overriding agent-owned lifecycle transitions.
+
 ### 5. Ship it
 Review and ship changes with VS Code's Git tools or a quick prompt tailored to your workflow. Move the card to Done when the work is complete; clearing Done removes its worktree, while the saved session can still be restored later.
 

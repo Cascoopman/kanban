@@ -21,7 +21,7 @@ describe("board state", () => {
 		expect(findCardSelection(created.board, created.task.id)?.column.id).toBe("in_progress");
 	});
 
-	it("migrates persisted backlog cards into in progress and drops dependency data", () => {
+	it("migrates persisted backlog cards and removes dangling legacy dependencies", () => {
 		const normalized = normalizeBoardData({
 			columns: [
 				{
@@ -45,7 +45,7 @@ describe("board state", () => {
 		expect(normalized?.columns.map((column) => column.id)).toEqual(["in_progress", "review", "on_hold", "trash"]);
 		expect(normalized?.columns.find((column) => column.id === "review")?.title).toBe("In Review / Blocked");
 		expect(findCardSelection(normalized!, "legacy")?.column.id).toBe("in_progress");
-		expect(normalized).not.toHaveProperty("dependencies");
+		expect(normalized?.dependencies).toEqual([]);
 	});
 
 	it("updates, moves, and clears tasks", () => {

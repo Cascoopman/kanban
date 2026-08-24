@@ -134,6 +134,112 @@ test("creating a task does not open a prompt dialog", async ({ page }) => {
 	await expect(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
 });
 
+test("creates, resolves, and removes a task dependency without changing lifecycle columns", async ({
+	page,
+	request,
+}) => {
+	const projects = await requestTrpc<RuntimeProjectsResponse>({
+		request,
+		procedure: "projects.list",
+		type: "query",
+	});
+	const workspaceId = projects.currentProjectId ?? projects.projects[0]?.id;
+	if (!workspaceId) throw new Error("Expected an isolated workspace.");
+	const initialState = await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.getState",
+		type: "query",
+		workspaceId,
+	});
+	const now = Date.now();
+	const dependent: BoardCard = {
+		id: `dependent-${now}`,
+		title: "Ship dependency UX",
+		startInPlanMode: false,
+		baseRef: "main",
+		createdAt: now,
+		updatedAt: now,
+	};
+	const prerequisite: BoardCard = {
+		id: `prerequisite-${now}`,
+		title: "Finish runtime support",
+		startInPlanMode: false,
+		baseRef: "main",
+		createdAt: now + 1,
+		updatedAt: now + 1,
+	};
+	await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.saveState",
+		type: "mutation",
+		workspaceId,
+		payload: {
+			board: placeTask(placeTask(initialState.board, "in_progress", dependent), "review", prerequisite),
+			sessions: initialState.sessions,
+			expectedRevision: initialState.revision,
+		},
+	});
+
+	await page.goto("/");
+	await page.locator(`[data-task-id="${dependent.id}"]`).click();
+	const dependencyPanel = page.getByRole("region", { name: "Task dependencies" });
+	await dependencyPanel.getByRole("button", { name: "Add" }).click();
+	await page.getByRole("button", { name: prerequisite.title, exact: true }).click();
+	await expect(dependencyPanel).toContainText(prerequisite.title);
+	await expect(dependencyPanel).toContainText("Blocking");
+	await expect(page.locator(`[data-task-id="${dependent.id}"][data-selected="true"]`)).toContainText("1 blocker");
+	await expect(
+		page.locator(`[data-task-id="${dependent.id}"][data-column-id="in_progress"][data-selected="true"]`),
+	).toBeVisible();
+
+	await expect
+		.poll(async () => {
+			const state = await requestTrpc<RuntimeWorkspaceStateResponse>({
+				request,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId,
+			});
+			return state.board.dependencies.length === 1 ? state : null;
+		})
+		.not.toBeNull();
+	const latestState = await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.getState",
+		type: "query",
+		workspaceId,
+	});
+	await requestTrpc<RuntimeWorkspaceStateResponse>({
+		request,
+		procedure: "workspace.saveState",
+		type: "mutation",
+		workspaceId,
+		payload: {
+			board: placeTask(latestState.board, "trash", { ...prerequisite, updatedAt: Date.now() }),
+			sessions: latestState.sessions,
+			expectedRevision: latestState.revision,
+		},
+	});
+
+	await expect(dependencyPanel).toContainText("Done");
+	await expect(page.locator(`[data-task-id="${dependent.id}"][data-selected="true"]`)).toContainText(
+		"Dependencies done",
+	);
+	await dependencyPanel.getByRole("button", { name: `Remove dependency ${prerequisite.title}` }).click();
+	await expect(dependencyPanel).toContainText("None");
+	await expect
+		.poll(async () => {
+			const state = await requestTrpc<RuntimeWorkspaceStateResponse>({
+				request,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId,
+			});
+			return state.board.dependencies;
+		})
+		.toEqual([]);
+});
+
 test("moving a card to Done removes the stale worktree path", async ({ page, request }) => {
 	const projects = await requestTrpc<RuntimeProjectsResponse>({
 		request,
@@ -287,7 +393,11 @@ test("preserves a local card move during a conflicting server move", async ({ pa
 			type: "mutation",
 			workspaceId,
 			payload: {
-				board: placeTask(placeTask(seededState.board, "in_progress", remoteLocalTask), "review", remoteLifecycleTask),
+				board: placeTask(
+					placeTask(seededState.board, "in_progress", remoteLocalTask),
+					"review",
+					remoteLifecycleTask,
+				),
 				sessions: seededState.sessions,
 				expectedRevision: seededState.revision,
 			},

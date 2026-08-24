@@ -1,4 +1,5 @@
 import type { RuntimeAgentId, RuntimeBoardCard, RuntimeBoardColumnId, RuntimeBoardData } from "./api-contract";
+import { removeTaskDependenciesForTasks } from "./task-dependencies";
 import { createUniqueTaskId } from "./task-id";
 import { validateTaskTitle } from "./task-title";
 
@@ -177,11 +178,9 @@ export function deleteTasksFromBoard(board: RuntimeBoardData, taskIds: Iterable<
 		};
 	}
 
+	const boardWithoutTasks = { ...board, columns };
 	return {
-		board: {
-			...board,
-			columns,
-		},
+		board: removeTaskDependenciesForTasks(boardWithoutTasks, new Set(deletedTaskIds)),
 		deleted: true,
 		deletedTaskIds,
 	};
