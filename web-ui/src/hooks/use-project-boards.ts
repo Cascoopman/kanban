@@ -79,6 +79,7 @@ export function buildUnifiedProjectBoard(
 	const visibleSnapshots = snapshots.filter((snapshot) => visibleProjectIds.has(snapshot.project.id));
 	const columnsById = new Map<BoardData["columns"][number]["id"], BoardData["columns"][number]>();
 	const sessions: Record<string, RuntimeTaskSessionSummary> = {};
+	const dependencies: BoardData["dependencies"] = [];
 
 	for (const snapshot of visibleSnapshots) {
 		for (const column of snapshot.board.columns) {
@@ -98,6 +99,9 @@ export function buildUnifiedProjectBoard(
 			columnsById.set(column.id, existing);
 		}
 		Object.assign(sessions, snapshot.sessions);
+		dependencies.push(
+			...snapshot.board.dependencies.map((dependency) => ({ ...dependency, projectId: snapshot.project.id })),
+		);
 	}
 
 	const columnOrder = ["in_progress", "review", "on_hold", "trash"] as const;
@@ -111,6 +115,7 @@ export function buildUnifiedProjectBoard(
 						cards: [],
 					},
 			),
+			dependencies,
 		},
 		sessions,
 	};

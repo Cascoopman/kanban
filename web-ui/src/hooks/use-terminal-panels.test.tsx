@@ -57,6 +57,7 @@ function createSelection(taskId: string): CardSelection {
 		card,
 		column,
 		allColumns: [column],
+		allDependencies: [],
 	};
 }
 

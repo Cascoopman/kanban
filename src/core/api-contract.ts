@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateTaskDependencyGraph } from "./task-dependency-graph";
 
 export const runtimeWorkspaceFileStatusSchema = z.enum([
 	"modified",
@@ -92,6 +93,14 @@ export const runtimeBoardCardSchema = z.object({
 });
 export type RuntimeBoardCard = z.infer<typeof runtimeBoardCardSchema>;
 
+export const runtimeTaskDependencySchema = z.object({
+	id: z.string().trim().min(1),
+	taskId: z.string().trim().min(1),
+	dependsOnTaskId: z.string().trim().min(1),
+	createdAt: z.number(),
+});
+export type RuntimeTaskDependency = z.infer<typeof runtimeTaskDependencySchema>;
+
 export const runtimeBoardColumnSchema = z.object({
 	id: runtimeBoardColumnIdSchema,
 	title: z.string(),
@@ -99,9 +108,42 @@ export const runtimeBoardColumnSchema = z.object({
 });
 export type RuntimeBoardColumn = z.infer<typeof runtimeBoardColumnSchema>;
 
-export const runtimeBoardDataSchema = z.object({
-	columns: z.array(runtimeBoardColumnSchema),
-});
+export const runtimeBoardDataSchema = z
+	.object({
+		columns: z.array(runtimeBoardColumnSchema),
+		dependencies: z.array(runtimeTaskDependencySchema).default([]),
+	})
+	.superRefine((board, context) => {
+		const taskIds = new Set(board.columns.flatMap((column) => column.cards.map((card) => card.id)));
+		for (const issue of validateTaskDependencyGraph(taskIds, board.dependencies)) {
+			const path = ["dependencies", issue.dependencyIndex];
+			switch (issue.code) {
+				case "duplicate_id":
+					context.addIssue({
+						code: "custom",
+						path: [...path, "id"],
+						message: `Duplicate dependency ID "${issue.dependencyId}".`,
+					});
+					break;
+				case "duplicate_link":
+					context.addIssue({ code: "custom", path, message: "Duplicate task dependency." });
+					break;
+				case "missing_task":
+					context.addIssue({
+						code: "custom",
+						path,
+						message: `Dependency references missing task "${issue.taskId}".`,
+					});
+					break;
+				case "self_dependency":
+					context.addIssue({ code: "custom", path, message: "A task cannot depend on itself." });
+					break;
+				case "cycle":
+					context.addIssue({ code: "custom", path, message: "Task dependencies cannot contain cycles." });
+					break;
+			}
+		}
+	});
 export type RuntimeBoardData = z.infer<typeof runtimeBoardDataSchema>;
 
 export const runtimeGitRepositoryInfoSchema = z.object({

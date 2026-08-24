@@ -21,6 +21,7 @@ function createBoard(cardsByColumn: Partial<Record<BoardColumnId, BoardCard[]>>)
 			...column,
 			cards: cardsByColumn[column.id] ?? [],
 		})),
+		dependencies: [],
 	};
 }
 
@@ -104,5 +105,36 @@ describe("mergeWorkspaceBoards", () => {
 		expect(result.board.columns.find((column) => column.id === "in_progress")?.cards).toEqual([
 			createCard("task-1", "Local title", 2),
 		]);
+	});
+
+	it("merges independent dependency additions", () => {
+		const base = createBoard({ in_progress: [createCard("a", "A"), createCard("b", "B"), createCard("c", "C")] });
+		const local = { ...base, dependencies: [{ id: "a-b", taskId: "a", dependsOnTaskId: "b", createdAt: 1 }] };
+		const remote = { ...base, dependencies: [{ id: "c-b", taskId: "c", dependsOnTaskId: "b", createdAt: 2 }] };
+
+		const result = mergeWorkspaceBoards(base, local, remote);
+		expect(result.status).toBe("merged");
+		if (result.status === "merged")
+			expect(result.board.dependencies.map((dependency) => dependency.id)).toEqual(["a-b", "c-b"]);
+	});
+
+	it("preserves dependency removal during an unrelated remote card move", () => {
+		const base = createBoard({ in_progress: [createCard("a", "A"), createCard("b", "B")] });
+		base.dependencies = [{ id: "a-b", taskId: "a", dependsOnTaskId: "b", createdAt: 1 }];
+		const local = { ...base, dependencies: [] };
+		const remote = createBoard({ in_progress: [createCard("a", "A")], review: [createCard("b", "B", 2)] });
+		remote.dependencies = [...base.dependencies];
+
+		const result = mergeWorkspaceBoards(base, local, remote);
+		expect(result.status).toBe("merged");
+		if (result.status === "merged") expect(result.board.dependencies).toEqual([]);
+	});
+
+	it("reports a conflict when concurrent dependency additions form a cycle", () => {
+		const base = createBoard({ in_progress: [createCard("a", "A"), createCard("b", "B")] });
+		const local = { ...base, dependencies: [{ id: "a-b", taskId: "a", dependsOnTaskId: "b", createdAt: 1 }] };
+		const remote = { ...base, dependencies: [{ id: "b-a", taskId: "b", dependsOnTaskId: "a", createdAt: 2 }] };
+
+		expect(mergeWorkspaceBoards(base, local, remote)).toEqual({ status: "conflict" });
 	});
 });

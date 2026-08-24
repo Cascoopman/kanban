@@ -31,6 +31,7 @@ function createSnapshot(projectId: string, taskId: string): RuntimeProjectBoardS
 				{ id: "on_hold", title: "On Hold", cards: [] },
 				{ id: "trash", title: "Done", cards: [] },
 			],
+			dependencies: [],
 		},
 		sessions: {},
 	};
@@ -38,13 +39,28 @@ function createSnapshot(projectId: string, taskId: string): RuntimeProjectBoardS
 
 describe("buildUnifiedProjectBoard", () => {
 	it("combines visible projects into the four-column board", () => {
-		const result = buildUnifiedProjectBoard(
-			[createSnapshot("a", "task-a"), createSnapshot("b", "task-b")],
-			new Set(["a", "b"]),
-		);
+		const projectA = createSnapshot("a", "task-a");
+		projectA.board.columns[0]?.cards.push({
+			id: "prerequisite-a",
+			title: "Prerequisite",
+			startInPlanMode: false,
+			baseRef: "main",
+			createdAt: 1,
+			updatedAt: 1,
+		});
+		projectA.board.dependencies.push({
+			id: "link-a",
+			taskId: "task-a",
+			dependsOnTaskId: "prerequisite-a",
+			createdAt: 1,
+		});
+		const result = buildUnifiedProjectBoard([projectA, createSnapshot("b", "task-b")], new Set(["a", "b"]));
 
 		expect(result.board.columns.map((column) => column.id)).toEqual(["in_progress", "review", "on_hold", "trash"]);
 		expect(result.board.columns.find((column) => column.id === "review")?.title).toBe("In Review / Blocked");
-		expect(result.board.columns[0]?.cards.map((card) => card.id)).toEqual(["task-a", "task-b"]);
+		expect(result.board.columns[0]?.cards.map((card) => card.id)).toEqual(["task-a", "prerequisite-a", "task-b"]);
+		expect(result.board.dependencies).toEqual([
+			{ id: "link-a", taskId: "task-a", dependsOnTaskId: "prerequisite-a", createdAt: 1, projectId: "a" },
+		]);
 	});
 });

@@ -1,4 +1,6 @@
-import type { BoardCard, BoardColumnId, BoardData } from "@/types";
+import { validateTaskDependencyGraph } from "@runtime-task-dependency-graph";
+
+import type { BoardCard, BoardColumnId, BoardData, BoardDependency } from "@/types";
 
 export type WorkspaceBoardMergeResult = { status: "merged"; board: BoardData } | { status: "conflict" };
 
@@ -206,6 +208,47 @@ function mergeColumnOrder(
 	return mergedOrder.length === taskIds.length ? mergedOrder : null;
 }
 
+function dependencyLinkKey(dependency: BoardDependency): string {
+	return `${dependency.taskId}\0${dependency.dependsOnTaskId}`;
+}
+
+function mergeDependencies(
+	base: BoardData,
+	local: BoardData,
+	remote: BoardData,
+	mergedTaskIds: ReadonlySet<string>,
+): BoardDependency[] | null {
+	const baseIds = new Set(base.dependencies.map((dependency) => dependency.id));
+	const localIds = new Set(local.dependencies.map((dependency) => dependency.id));
+	const remoteIds = new Set(remote.dependencies.map((dependency) => dependency.id));
+	const dependencies: BoardDependency[] = [];
+	const dependencyIds = new Set<string>();
+	const linkKeys = new Set<string>();
+
+	const append = (dependency: BoardDependency): boolean => {
+		if (!mergedTaskIds.has(dependency.taskId) || !mergedTaskIds.has(dependency.dependsOnTaskId)) return true;
+		const linkKey = dependencyLinkKey(dependency);
+		if (linkKeys.has(linkKey)) return true;
+		if (dependencyIds.has(dependency.id)) return false;
+		dependencies.push(dependency);
+		dependencyIds.add(dependency.id);
+		linkKeys.add(linkKey);
+		return true;
+	};
+
+	for (const dependency of base.dependencies) {
+		if (localIds.has(dependency.id) && remoteIds.has(dependency.id) && !append(dependency)) return null;
+	}
+	for (const dependency of local.dependencies) {
+		if (!baseIds.has(dependency.id) && !append(dependency)) return null;
+	}
+	for (const dependency of remote.dependencies) {
+		if (!baseIds.has(dependency.id) && !append(dependency)) return null;
+	}
+
+	return validateTaskDependencyGraph(mergedTaskIds, dependencies).length === 0 ? dependencies : null;
+}
+
 export function mergeWorkspaceBoards(base: BoardData, local: BoardData, remote: BoardData): WorkspaceBoardMergeResult {
 	if (areWorkspaceBoardsEqual(local, remote)) {
 		return { status: "merged", board: local };
@@ -272,12 +315,15 @@ export function mergeWorkspaceBoards(base: BoardData, local: BoardData, remote: 
 				.filter((card): card is BoardCard => Boolean(card)),
 		});
 	}
+	const mergedDependencies = mergeDependencies(base, local, remote, new Set(mergedCards.keys()));
+	if (!mergedDependencies) return { status: "conflict" };
 
 	return {
 		status: "merged",
 		board: {
 			...remote,
 			columns: mergedColumns,
+			dependencies: mergedDependencies,
 		},
 	};
 }

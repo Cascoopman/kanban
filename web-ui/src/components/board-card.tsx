@@ -1,6 +1,6 @@
 import { Draggable } from "@hello-pangea/dnd";
 import { getRuntimeAgentCatalogEntry } from "@runtime-agent-catalog";
-import { AlertCircle, AlertTriangle, Bot, Copy, Layers3, RotateCcw, Trash2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Bot, CheckCircle2, Copy, Layers3, Link2, RotateCcw, Trash2 } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -191,6 +191,7 @@ export function BoardCard({
 	isDragDisabled = false,
 	hideActions = false,
 	wrapTitle = false,
+	dependencySummary,
 }: {
 	card: BoardCardModel;
 	index: number;
@@ -205,6 +206,7 @@ export function BoardCard({
 	isDragDisabled?: boolean;
 	hideActions?: boolean;
 	wrapTitle?: boolean;
+	dependencySummary?: { total: number; unresolved: number };
 }): React.ReactElement {
 	const [isHovered, setIsHovered] = useState(false);
 	const reviewWorkspaceSnapshot = useTaskWorkspaceSnapshotValue(card.id);
@@ -372,6 +374,30 @@ export function BoardCard({
 									>
 										<Bot size={12} className="shrink-0" />
 										<span className="truncate">{taskAgentSettingsLabel}</span>
+									</span>
+								</div>
+							) : null}
+							{dependencySummary && dependencySummary.total > 0 ? (
+								<div className="mt-1">
+									<span
+										className={cn(
+											"inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs",
+											dependencySummary.unresolved > 0
+												? "border-status-orange/30 bg-status-orange/10 text-status-orange"
+												: "border-status-green/30 bg-status-green/10 text-status-green",
+										)}
+										title={
+											dependencySummary.unresolved > 0
+												? `${dependencySummary.unresolved} unresolved of ${dependencySummary.total}`
+												: "All dependencies satisfied"
+										}
+									>
+										{dependencySummary.unresolved > 0 ? <Link2 size={11} /> : <CheckCircle2 size={11} />}
+										<span>
+											{dependencySummary.unresolved > 0
+												? `${dependencySummary.unresolved} blocker${dependencySummary.unresolved === 1 ? "" : "s"}`
+												: "Dependencies done"}
+										</span>
 									</span>
 								</div>
 							) : null}

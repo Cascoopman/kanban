@@ -4,14 +4,17 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { BoardCard } from "@/components/board-card";
+import { TaskDependenciesPanel } from "@/components/task-dependencies-panel";
 import { Button } from "@/components/ui/button";
 import { ColumnIndicator } from "@/components/ui/column-indicator";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { findCardColumnId, isCardDropDisabled } from "@/state/drag-rules";
+import { getTaskDependencies, getUnresolvedTaskDependencies } from "@/state/task-dependency-state";
 import {
 	type BoardCard as BoardCardModel,
 	type BoardColumn,
 	type BoardColumnId,
+	type BoardData,
 	type CardSelection,
 	isReviewLikeColumnId,
 } from "@/types";
@@ -30,6 +33,7 @@ function ColumnSection({
 	moveToTrashLoadingById,
 	activeDragSourceColumnId,
 	mutableProjectId,
+	displayBoard,
 }: {
 	column: BoardColumn;
 	selectedCardId: string;
@@ -44,6 +48,7 @@ function ColumnSection({
 	moveToTrashLoadingById?: Record<string, boolean>;
 	activeDragSourceColumnId?: BoardColumnId | null;
 	mutableProjectId?: string | null;
+	displayBoard: BoardData;
 }): React.ReactElement {
 	const [open, setOpen] = useState(defaultOpen);
 	const canCreate = column.id === "in_progress" && onCreateTask;
@@ -163,6 +168,10 @@ function ColumnSection({
 												isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 												isDragDisabled={!isCardMutable}
 												wrapTitle
+												dependencySummary={{
+													total: getTaskDependencies(displayBoard, card).length,
+													unresolved: getUnresolvedTaskDependencies(displayBoard, card).length,
+												}}
 												onClick={() => onCardClick(card)}
 											/>,
 										);
@@ -196,6 +205,10 @@ export function ColumnContextPanel({
 	moveToTrashLoadingById,
 	panelWidth,
 	mutableProjectId,
+	dependencyBoard,
+	onAddDependency,
+	onRemoveDependency,
+	onSelectDependencyTask,
 }: {
 	selection: CardSelection;
 	onCardSelect: (taskId: string) => void;
@@ -209,6 +222,10 @@ export function ColumnContextPanel({
 	moveToTrashLoadingById?: Record<string, boolean>;
 	panelWidth?: string;
 	mutableProjectId?: string | null;
+	dependencyBoard: BoardData;
+	onAddDependency: (dependsOnTaskId: string) => void;
+	onRemoveDependency: (dependencyId: string) => void;
+	onSelectDependencyTask: (taskId: string) => void;
 }): React.ReactElement {
 	const [activeDragSourceColumnId, setActiveDragSourceColumnId] = useState<BoardColumnId | null>(null);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -273,6 +290,14 @@ export function ColumnContextPanel({
 						overflowAnchor: "none",
 					}}
 				>
+					<TaskDependenciesPanel
+						task={selection.card}
+						board={dependencyBoard}
+						disabled={mutableProjectId === null}
+						onAdd={onAddDependency}
+						onRemove={onRemoveDependency}
+						onSelectTask={onSelectDependencyTask}
+					/>
 					{selection.allColumns.map((column) => (
 						<ColumnSection
 							key={column.id}
@@ -295,6 +320,7 @@ export function ColumnContextPanel({
 							}
 							activeDragSourceColumnId={activeDragSourceColumnId}
 							mutableProjectId={mutableProjectId}
+							displayBoard={{ columns: selection.allColumns, dependencies: selection.allDependencies }}
 						/>
 					))}
 				</div>

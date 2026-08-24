@@ -11,5 +11,6 @@ If you are new to the codebase, read these in order:
 
 1. [`../README.md`](../README.md) for the product overview and local setup.
 2. [`architecture.md`](./architecture.md) for the system map, runtime model, and key file guide.
+3. [`task-dependencies.md`](./task-dependencies.md) for dependency semantics, validation, and persistence behavior.
 
 When adding engineering docs, keep durable explanations here and use issues or pull requests for temporary plans and handoffs.

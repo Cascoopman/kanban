@@ -27,8 +27,17 @@ export interface BoardColumn {
 	cards: BoardCard[];
 }
 
+export interface BoardDependency {
+	id: string;
+	taskId: string;
+	dependsOnTaskId: string;
+	createdAt: number;
+	projectId?: string;
+}
+
 export interface BoardData {
 	columns: BoardColumn[];
+	dependencies: BoardDependency[];
 }
 
 export interface ReviewTaskWorkspaceSnapshot {
@@ -46,4 +55,5 @@ export interface CardSelection {
 	card: BoardCard;
 	column: BoardColumn;
 	allColumns: BoardColumn[];
+	allDependencies: BoardDependency[];
 }
