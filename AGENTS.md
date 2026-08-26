@@ -131,10 +131,11 @@ Bug reproduction and regression testing
 - Keep the exact reproduction as a named regression test and document the command a developer can run locally. Before handoff, run the new regression test plus the relevant unit, integration, typecheck, and lint suites, and report exact pass/fail counts.
 
 Misc. tribal knowledge
-- Use `agent-memory search "<question>"` for semantic recall and `agent-memory grep "<RE2>"` for exact or regex matches across prior coding sessions.
-- Open supporting evidence with `agent-memory session <session-id> --ordinal <n> --context 2`; commands are read-only and emit compact JSONL by default (`--raw` is lossless).
+- `coding-agent-memory` is Cas's globally configured, read-only Codex MCP for durable coding-session memory. Use it before repeating substantial investigation or when recovering task context.
+- Use `memory_search` for semantic recall and `memory_grep` for exact or regex recall across prior coding sessions. Use `memory_status` only for harmless diagnostics.
+- Open supporting provenance with `session_evidence`, always narrowing with a result's `session_id` and `evidence_ordinals` (plus small context). It intentionally does not return an entire raw transcript.
+- The MCP is installed locally as `agent-memory-mcp`; do not add, restore, or invoke a parallel `agent-memory` CLI interface.
 - Treat semantic memory results as leads, not evidence. Distinguish "no results" from "results returned but not relevant," and open the source session for any nugget that materially influences a diagnosis or implementation.
-- Run `agent-memory --help` for filters and configuration details.
 - Kanban is launched from the user's shell and inherits its environment. For agent detection and task-agent startup, prefer direct PATH checks and direct process launches over spawning an interactive shell. Avoid `zsh -i`, shell fallback command discovery, or "launch shell then type command into it" on hot paths. On setups with heavy shell init like `conda` or `nvm`, doing that per task can freeze the runtime and even make new Terminal.app windows feel hung when several tasks start at once. It's fine to use an actual interactive shell for explicit shell terminals, not for normal agent session work.
 - If CI hangs on Node 22 after tests seem to finish, suspect a live subprocess before assuming a slow test body. Read `docs/node22-ci-hanging-tests-investigation.md` before repeating that investigation.
 - When Kanban runs on a headless remote Linux instance (for example over SSH+tunnel), native folder picker commands may be unavailable (`zenity`/`kdialog`). Treat this as a normal remote-runtime limitation and use manual path entry fallback instead of requiring desktop packages.
