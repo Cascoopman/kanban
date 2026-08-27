@@ -8,7 +8,11 @@ vi.mock("../../src/workspace/git-utils.js", () => ({
 	runGit: gitMocks.runGit,
 }));
 
-import { refreshTaskBaseRefs, resolveLatestTaskBaseCommit } from "../../src/workspace/task-base-ref";
+import {
+	createTaskBaseRefRefreshScheduler,
+	refreshTaskBaseRefs,
+	resolveLatestTaskBaseCommit,
+} from "../../src/workspace/task-base-ref";
 
 function gitResult(stdout = "", ok = true) {
 	return {
@@ -26,7 +30,7 @@ describe("task base ref refresh", () => {
 		gitMocks.runGit.mockReset();
 	});
 
-	it("fetches again for task creation after the workspace startup fetch", async () => {
+	it("reuses a recent startup fetch for task creation", async () => {
 		gitMocks.runGit.mockImplementation(async (_cwd: string, args: string[]) => {
 			const command = args.join(" ");
 			if (command === "fetch --all --prune") return gitResult();
@@ -45,7 +49,7 @@ describe("task base ref refresh", () => {
 
 		expect(
 			gitMocks.runGit.mock.calls.filter(([, args]) => (args as string[]).join(" ") === "fetch --all --prune"),
-		).toHaveLength(2);
+		).toHaveLength(1);
 	});
 
 	it("shares only an in-flight refresh for the same repository", async () => {
@@ -66,26 +70,95 @@ describe("task base ref refresh", () => {
 		await expect(Promise.all([first, second])).resolves.toHaveLength(2);
 	});
 
-	it("serializes startup refreshes across repositories so the SSH master can be reused", async () => {
+	it("starts an interactive task refresh before queued background warmups", async () => {
 		let finishFirstFetch: ((result: ReturnType<typeof gitResult>) => void) | undefined;
-		gitMocks.runGit
-			.mockImplementationOnce(
-				async () =>
-					await new Promise<ReturnType<typeof gitResult>>((resolveFetch) => {
+		let finishInteractiveFetch: ((result: ReturnType<typeof gitResult>) => void) | undefined;
+		const startedRepos: string[] = [];
+		const scheduler = createTaskBaseRefRefreshScheduler({
+			refresh: async (repoPath: string) => {
+				startedRepos.push(repoPath);
+				if (repoPath === "/tmp/kanban-priority-background-a") {
+					return await new Promise<ReturnType<typeof gitResult>>((resolveFetch) => {
 						finishFirstFetch = resolveFetch;
-					}),
-			)
-			.mockResolvedValueOnce(gitResult());
+					});
+				}
+				if (repoPath === "/tmp/kanban-priority-interactive") {
+					return await new Promise<ReturnType<typeof gitResult>>((resolveFetch) => {
+						finishInteractiveFetch = resolveFetch;
+					});
+				}
+				return gitResult();
+			},
+		});
 
-		const first = refreshTaskBaseRefs("/tmp/kanban-serial-fetch-a");
-		const second = refreshTaskBaseRefs("/tmp/kanban-serial-fetch-b");
+		const first = scheduler.refresh("/tmp/kanban-priority-background-a", { priority: "background" });
+		const second = scheduler.refresh("/tmp/kanban-priority-background-b", { priority: "background" });
+		const third = scheduler.refresh("/tmp/kanban-priority-background-c", { priority: "background" });
+		const interactive = scheduler.refresh("/tmp/kanban-priority-interactive", { priority: "interactive" });
 		await Promise.resolve();
-		expect(gitMocks.runGit).toHaveBeenCalledOnce();
+		expect(startedRepos).toEqual(["/tmp/kanban-priority-background-a"]);
 
 		finishFirstFetch?.(gitResult());
 		await first;
-		await second;
-		expect(gitMocks.runGit).toHaveBeenCalledTimes(2);
+		await Promise.resolve();
+		expect(startedRepos).toEqual(["/tmp/kanban-priority-background-a", "/tmp/kanban-priority-interactive"]);
+
+		finishInteractiveFetch?.(gitResult());
+		await interactive;
+		await Promise.all([second, third]);
+		expect(startedRepos).toEqual([
+			"/tmp/kanban-priority-background-a",
+			"/tmp/kanban-priority-interactive",
+			"/tmp/kanban-priority-background-b",
+			"/tmp/kanban-priority-background-c",
+		]);
+	});
+
+	it("promotes a queued background refresh for the same repository", async () => {
+		let finishActiveFetch: ((result: ReturnType<typeof gitResult>) => void) | undefined;
+		let finishTaskFetch: ((result: ReturnType<typeof gitResult>) => void) | undefined;
+		const startedRepos: string[] = [];
+		const scheduler = createTaskBaseRefRefreshScheduler({
+			refresh: async (repoPath: string) =>
+				await new Promise<ReturnType<typeof gitResult>>((resolveFetch) => {
+					startedRepos.push(repoPath);
+					if (repoPath === "/tmp/active") {
+						finishActiveFetch = resolveFetch;
+					} else {
+						finishTaskFetch = resolveFetch;
+					}
+				}),
+		});
+
+		const active = scheduler.refresh("/tmp/active", { priority: "background" });
+		const queuedBackground = scheduler.refresh("/tmp/task", { priority: "background" });
+		const queuedInteractive = scheduler.refresh("/tmp/task", { priority: "interactive" });
+		await Promise.resolve();
+		expect(startedRepos).toEqual(["/tmp/active"]);
+
+		finishActiveFetch?.(gitResult());
+		await active;
+		await Promise.resolve();
+		expect(startedRepos).toEqual(["/tmp/active", "/tmp/task"]);
+
+		finishTaskFetch?.(gitResult());
+		await Promise.all([queuedBackground, queuedInteractive]);
+	});
+
+	it("refreshes again after the freshness window expires", async () => {
+		let currentTime = 0;
+		const refresh = vi.fn(async () => gitResult());
+		const scheduler = createTaskBaseRefRefreshScheduler({
+			refresh,
+			now: () => currentTime,
+			freshnessMs: 30_000,
+		});
+
+		await scheduler.refresh("/tmp/freshness", { priority: "background" });
+		currentTime = 30_001;
+		await scheduler.refresh("/tmp/freshness", { priority: "interactive" });
+
+		expect(refresh).toHaveBeenCalledTimes(2);
 	});
 
 	it("uses the fetched upstream when the requested local branch has diverged", async () => {
