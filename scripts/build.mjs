@@ -64,6 +64,13 @@ await Promise.all([
 		outfile: "dist/codex-hook.js",
 		banner: { js: `#!/usr/bin/env node\n${cjsShimBanner}` },
 	}),
+	// Internal runtime hooks are not part of the public board CLI.
+	esbuild.build({
+		...shared,
+		entryPoints: ["src/hooks-cli.ts"],
+		outfile: "dist/hooks.js",
+		banner: { js: `#!/usr/bin/env node\n${cjsShimBanner}` },
+	}),
 ]);
 
-console.log("esbuild: bundled dist/cli.js, dist/codex-hook.js, and dist/index.js");
+console.log("esbuild: bundled dist/cli.js, dist/hooks.js, dist/codex-hook.js, and dist/index.js");

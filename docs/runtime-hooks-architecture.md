@@ -7,7 +7,7 @@ This document explains how Kanban tracks agent session state using runtime hooks
 It focuses on:
 
 1. Launch-time wiring for each agent.
-2. The `kanban hooks ...` subcommand pipeline.
+2. The internal `kanban-hooks ...` helper pipeline.
 3. State transition rules (`running` <-> `awaiting_review`).
 4. Generated files under the runtime home directory.
 5. Platform behavior differences and why the transport is implemented in Node.
@@ -59,9 +59,9 @@ Terminal session starts
   -> prepareAgentLaunch() builds per-agent command/env/config
   -> agent process emits hook-relevant signals
   -> agent hook/wrapper calls:
-       kanban hooks notify --event <to_review|to_in_progress>
+       kanban-hooks notify --event <to_review|to_in_progress>
   -> notify path dispatches best-effort ingest
-       kanban hooks ingest --event <to_review|to_in_progress>
+       kanban-hooks ingest --event <to_review|to_in_progress>
   -> hooks ingest calls runtime TRPC hooks.ingest
   -> hooks API validates transition eligibility
   -> session manager applies reducer transition event
@@ -93,7 +93,7 @@ Generated files by agent:
    2. `~/.kanban/hooks/opencode/opencode.json`
 4. Codex
    1. No persistent wrapper script file is generated now.
-   2. Codex uses `kanban hooks codex-wrapper` as the wrapper command.
+   2. Codex uses `kanban-hooks codex-wrapper` as the wrapper command.
 
 Generated hook files are written through idempotent text writes. Files only update when content changes.
 
@@ -101,14 +101,12 @@ Generated hook files are written through idempotent text writes. Files only upda
 
 When hook context is available, launch wiring injects:
 
-1. `KANBAN_TASK_ID` and `KANBAN_WORKSPACE_ID` for agent-facing task commands
+1. `KANBAN_TASK_ID` and `KANBAN_WORKSPACE_ID` for the agent-facing Kanban MCP
 2. `KANBAN_HOOK_TASK_ID` and `KANBAN_HOOK_WORKSPACE_ID` for hook compatibility
 3. `KANBAN_HOOK_PORT`
 
-The hook-specific values and port are required by `kanban hooks ingest` to route an event to the correct session and runtime process.
-The agent-facing aliases allow `kanban task current`, `kanban task update --title "..."`, and
-`kanban task branch --title "..." --prompt "..."` to target the current card without copying an ID
-or resolving the main worktree path. Urgent user alerts are owned by the separate `notify-user-mac` MCP,
+The hook-specific values and port are required by `kanban-hooks ingest` to route an event to the correct session and runtime process.
+The Kanban MCP uses the same task context to target the current card without copying an ID or resolving the main worktree path. Urgent user alerts are owned by the separate `notify-user-mac` MCP,
 which creates a Notification Center entry and a short-lived modal alert so Focus modes do not hide the
 immediate call to action.
 Branching creates and starts a new task with the source worktree

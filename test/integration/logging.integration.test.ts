@@ -144,7 +144,7 @@ async function stopRuntime(child: ChildProcess): Promise<void> {
 
 describe("persisted frontend and backend logs", () => {
 	it(
-		"captures runtime output, accepts frontend console entries, and exposes both through the CLI",
+		"captures runtime output and accepts frontend console entries",
 		{ timeout: 40_000 },
 		async () => {
 			const { path: runtimeHome, cleanup: cleanupRuntimeHome } = createTempDir("kanban-logging-home-");
@@ -188,35 +188,6 @@ describe("persisted frontend and backend logs", () => {
 				});
 				expect(invalidResponse.status).toBe(400);
 
-				const frontendCli = await collectProcess(spawnSourceCli(["logs", "frontend"], projectPath, env));
-				expect(frontendCli.exitCode).toBe(0);
-				expect(frontendCli.stderr).not.toContain("Failed to start Kanban");
-				expect(frontendCli.stdout).toContain("2026-08-22T20:00:00.000Z [warn] browser websocket disconnected");
-
-				const combinedCli = await collectProcess(
-					spawnSourceCli(["logs", "--all", "--tail", "10"], projectPath, env),
-				);
-				expect(combinedCli.exitCode).toBe(0);
-				expect(combinedCli.stdout).toContain("[backend]");
-				expect(combinedCli.stdout).toContain("[frontend] [warn] browser websocket disconnected");
-
-				const followingCli = spawnSourceCli(["logs", "frontend", "--tail", "1", "--follow"], projectPath, env);
-				await waitForProcessOutput(followingCli, "browser websocket disconnected");
-				const followedMarker = `followed browser entry ${Date.now()}`;
-				const followedOutput = waitForProcessOutput(followingCli, followedMarker);
-				const followedResponse = await fetch(`http://127.0.0.1:${port}/api/logs/frontend`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						timestamp: new Date().toISOString(),
-						level: "info",
-						message: followedMarker,
-					}),
-				});
-				expect(followedResponse.status).toBe(204);
-				await followedOutput;
-				followingCli.kill("SIGINT");
-				expect((await collectProcess(followingCli)).exitCode).toBe(0);
 			} finally {
 				await stopRuntime(runtime);
 				cleanupProject();
