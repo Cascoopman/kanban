@@ -1,3 +1,5 @@
+import { devNull } from "node:os";
+
 export function createGitTestEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 	const sanitized: NodeJS.ProcessEnv = {};
 	for (const [key, value] of Object.entries(process.env)) {
@@ -13,6 +15,8 @@ export function createGitTestEnv(overrides: NodeJS.ProcessEnv = {}): NodeJS.Proc
 		GIT_AUTHOR_EMAIL: "test@test.com",
 		GIT_COMMITTER_NAME: "Test",
 		GIT_COMMITTER_EMAIL: "test@test.com",
+		GIT_CONFIG_NOSYSTEM: "1",
+		GIT_CONFIG_GLOBAL: devNull,
 		...overrides,
 	};
 }
