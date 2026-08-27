@@ -6,7 +6,7 @@ import type {
 	RuntimeTaskImage,
 	RuntimeTaskSessionSummary,
 } from "../core/api-contract";
-import { buildKanbanCommandParts } from "../core/kanban-command";
+import { buildKanbanHooksCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
 import { getRuntimeHomePath } from "../state/workspace-state";
@@ -88,7 +88,7 @@ function resolveHookContext(input: AgentAdapterLaunchInput): HookContext | null 
 }
 
 function buildHooksCommandParts(args: string[]): string[] {
-	return buildKanbanCommandParts(["hooks", ...args]);
+	return buildKanbanHooksCommandParts(args);
 }
 
 function buildHookCommand(event: RuntimeHookEvent, metadata?: HookCommandMetadata): string {

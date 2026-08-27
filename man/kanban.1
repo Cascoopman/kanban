@@ -1,31 +1,21 @@
-.TH KANBAN 1 "March 2026" "kanban 0.1.10" "User Commands"
+.TH KANBAN 1 "August 2026" "kanban" "User Commands"
 .SH NAME
-kanban \- local orchestration board for coding agents
+kanban \- local orchestration board runtime for coding agents
 .SH SYNOPSIS
 .B kanban
 .RI [ --port " " number|auto ]
 .RI [ --no-open ]
-.RI [ command ]
-.br
-.B kanban task
-.RI " " list|current|create|update|notify|start
-.RI " " [ options ]
-.br
-.B kanban hooks
-.RI " " ingest|notify|codex-wrapper
-.RI " " [ options ]
-.br
-.B kanban logs
-.RI " " [ backend|frontend ]
-.RI " " [ --all ] [ --tail " " lines ] [ --follow ]
-.br
-.B kanban mcp
 .SH DESCRIPTION
 .B kanban
 starts the local Kanban runtime server and serves the web UI.
-
-When launched inside a git repository, it opens that repository's indexed workspace.
-When launched outside git, it starts with no active workspace or falls back to the first indexed project.
+When launched inside a Git repository, it opens that repository's indexed workspace.
+.PP
+Kanban does not expose task, notification, or log subcommands. Agent task lifecycle
+operations are provided by the separate Kanban MCP package in the
+.B llm-capability
+repository. Urgent notifications are provided by the separate
+.B notify-user-mac
+MCP.
 .SH OPTIONS
 .TP
 .B --port <number|auto>
@@ -39,134 +29,9 @@ Show help text and exit.
 .TP
 .B --version, -v
 Show version and exit.
-.SH COMMANDS
-.TP
-.B task|tasks
-Manage Kanban board tasks from the CLI.
-
-Subcommands:
-.br
-.B list
-.RI [ --project-path " " path ]
-.RI [ --column " " in_progress|review|on_hold|done ]
-.br
-.B current|whoami
-.RI [ --project-path " " path ]
-.br
-.B create
-.B --title
-.RI " " text
-.RI [ --project-path " " path ]
-.RI [ --base-ref " " branch ]
-.RI [ --start-in-plan-mode " " true|false ]
-.br
-.B update
-.RI [ --task-id " " id ]
-.RI [ --title " " text ]
-.RI [ --project-path " " path ]
-.RI [ --base-ref " " branch ]
-.RI [ --start-in-plan-mode " " true|false ]
-.br
-.B notify
-.B --message
-.RI " " text
-.RI [ --title " " text ]
-.RI [ --subtitle " " text ]
-.RI [ --sound " " name|none ]
-.RI [ --no-modal ]
-.br
-.B start
-.B --task-id
-.RI " " id
-.RI [ --project-path " " path ]
-
-All task commands return JSON.
-
-Use kebab-case flags only.
-
-.TP
-.B hooks
-Runtime hook helpers used by agent adapters.
-
-Subcommands:
-.br
-.B ingest
-.RI [ payload ]
-.B --event
-.RI " " to_review|to_in_progress|activity
-.RI [ --source " " source ]
-.RI [ --activity-text " " text ]
-.RI [ --tool-name " " name ]
-.RI [ --final-message " " text ]
-.RI [ --hook-event-name " " name ]
-.RI [ --notification-type " " type ]
-.RI [ --metadata-base64 " " base64 ]
-.br
-.B notify
-same options as
-.BR ingest ,
-but best-effort.
-.br
-.B codex-wrapper
-.B --real-binary
-.RI " " path
-.RI [ agentArgs... ]
-
-.TP
-.B logs
-Read persisted runtime and browser console logs. With no source or with
-.BR --all ,
-frontend and backend records are merged chronologically.
-
-Options:
-.br
-.B --all
-Read both log sources.
-.br
-.B --tail
-.RI " " lines
-Show only the final number of records.
-.br
-.B --follow, -f
-Continue printing appended records.
-
-.TP
-.B mcp
-Deprecated compatibility command. Prints a deprecation warning and exits.
-.SH EXAMPLES
-.TP
-Start server on the default port:
-.B kanban
-.TP
-Start server without auto-opening a browser:
-.B kanban --no-open
-.TP
-Start server on a custom port:
-.B kanban --port 9000
-.TP
-List tasks for the current workspace:
-.B kanban task list
-.TP
-Show the task associated with the current agent session:
-.B kanban task current
-.TP
-Rename the current agent task:
-.B kanban task update --title "Implement prompt-first task creation"
-.TP
-Create a task manually:
-.B kanban task create --title "Implement API pagination"
-.TP
-Branch the current agent task, including its worktree and conversation:
-.B kanban task branch --title "Explore alternate implementation" --prompt "Try the streaming approach"
-.TP
-Ingest a hook event:
-.B kanban hooks ingest --event to_review
-.TP
-Follow merged frontend and backend logs:
-.B kanban logs --all --follow
-.SH EXIT STATUS
-.TP
-.B 0
-Successful execution.
+.SH INTERNAL HELPERS
+.B kanban-hooks
+is an internal runtime-hook helper installed alongside Kanban. It is not an
+agent-facing task interface.
 .SH SEE ALSO
 .BR npm (1)

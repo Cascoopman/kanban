@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	buildKanbanCodexHookCommandParts,
-	buildKanbanCommandParts,
+	buildKanbanHooksCommandParts,
 	resolveKanbanCommandParts,
 } from "../../src/core/kanban-command";
 
@@ -41,14 +41,23 @@ describe("resolveKanbanCommandParts", () => {
 	});
 });
 
-describe("buildKanbanCommandParts", () => {
-	it("appends command arguments to resolved runtime invocation", () => {
+describe("buildKanbanHooksCommandParts", () => {
+	it("uses the bundled hooks entrypoint beside the runtime launcher", () => {
 		expect(
-			buildKanbanCommandParts(["hooks", "ingest"], {
+			buildKanbanHooksCommandParts(["ingest"], {
 				execPath: "/usr/local/bin/node",
 				argv: ["/usr/local/bin/node", "/tmp/.npx/321/node_modules/kanban/dist/cli.js"],
 			}),
-		).toEqual(["/usr/local/bin/node", "/tmp/.npx/321/node_modules/kanban/dist/cli.js", "hooks", "ingest"]);
+		).toEqual(["/usr/local/bin/node", "/tmp/.npx/321/node_modules/kanban/dist/hooks.js", "ingest"]);
+	});
+
+	it("falls back to the installed hook executable for opaque launches", () => {
+		expect(
+			buildKanbanHooksCommandParts(["notify"], {
+				execPath: "/usr/local/bin/kanban",
+				argv: ["/usr/local/bin/kanban"],
+			}),
+		).toEqual(["kanban-hooks", "notify"]);
 	});
 });
 
@@ -72,12 +81,12 @@ describe("buildKanbanCodexHookCommandParts", () => {
 		).toEqual(["/usr/local/bin/node", "--import", "tsx", "/repo/src/codex-hook-cli.ts", "--event", "activity"]);
 	});
 
-	it("falls back to the main CLI for opaque executable launches", () => {
+	it("falls back to the installed hook executable for opaque launches", () => {
 		expect(
 			buildKanbanCodexHookCommandParts(["--event", "activity"], {
 				execPath: "/usr/local/bin/kanban",
 				argv: ["/usr/local/bin/kanban"],
 			}),
-		).toEqual(["/usr/local/bin/kanban", "hooks", "codex-hook", "--event", "activity"]);
+		).toEqual(["kanban-hooks", "codex-hook", "--event", "activity"]);
 	});
 });

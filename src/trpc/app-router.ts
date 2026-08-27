@@ -114,6 +114,16 @@ import {
 	runtimeWorktreeEnsureRequestSchema,
 	runtimeWorktreeEnsureResponseSchema,
 } from "../core/api-contract";
+import {
+	branchTask,
+	createTask,
+	deleteTask,
+	getCurrentTask,
+	listTasks,
+	startTask,
+	trashTask,
+	updateTaskCommand,
+} from "../commands/task";
 
 export interface RuntimeTrpcWorkspaceScope {
 	workspaceId: string;
@@ -294,7 +304,87 @@ const gitSyncActionInputSchema = z.object({
 	action: runtimeGitSyncActionSchema,
 });
 
+const agentTaskContextInputSchema = z.object({
+	cwd: z.string().trim().min(1),
+	projectPath: z.string().trim().min(1).optional(),
+});
+const agentTaskColumnSchema = z.enum(["in_progress", "review", "on_hold", "trash"]);
+const agentTaskTargetInputSchema = agentTaskContextInputSchema
+	.extend({
+		taskId: z.string().trim().min(1).optional(),
+		column: agentTaskColumnSchema.optional(),
+	})
+	.superRefine((input, context) => {
+		if (Boolean(input.taskId) === Boolean(input.column)) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Provide exactly one of taskId or column.",
+			});
+		}
+	});
+
 export const runtimeAppRouter = t.router({
+	agentTasks: t.router({
+		list: t.procedure
+			.input(agentTaskContextInputSchema.extend({ column: agentTaskColumnSchema.optional() }))
+			.query(async ({ input }) => await listTasks(input)),
+		current: t.procedure
+			.input(agentTaskContextInputSchema.extend({ taskId: z.string().trim().min(1) }))
+			.query(async ({ input }) => await getCurrentTask(input)),
+		create: t.procedure
+			.input(
+				agentTaskContextInputSchema.extend({
+					title: z.string().trim().min(1),
+					baseRef: z.string().trim().min(1).optional(),
+					startInPlanMode: z.boolean().optional(),
+					agentId: z.enum(["claude", "codex"]).optional(),
+				}),
+			)
+			.mutation(async ({ input }) => await createTask(input)),
+		branch: t.procedure
+			.input(
+				agentTaskContextInputSchema.extend({
+					taskId: z.string().trim().min(1),
+					title: z.string().trim().min(1),
+					prompt: z.string().optional(),
+				}),
+			)
+			.mutation(async ({ input }) => await branchTask(input)),
+		update: t.procedure
+			.input(
+				agentTaskContextInputSchema
+					.extend({
+						taskId: z.string().trim().min(1),
+						title: z.string().trim().min(1).optional(),
+						baseRef: z.string().trim().min(1).optional(),
+						startInPlanMode: z.boolean().optional(),
+						agentId: z.enum(["claude", "codex"]).nullable().optional(),
+					})
+					.refine(
+						(input) =>
+							input.title !== undefined ||
+							input.baseRef !== undefined ||
+							input.startInPlanMode !== undefined ||
+							input.agentId !== undefined,
+						"Provide at least one field to update.",
+					),
+			)
+			.mutation(async ({ input }) => await updateTaskCommand(input)),
+		start: t.procedure
+			.input(
+				agentTaskContextInputSchema.extend({
+					taskId: z.string().trim().min(1),
+					prompt: z.string().optional(),
+				}),
+			)
+			.mutation(async ({ input }) => await startTask(input)),
+		trash: t.procedure
+			.input(agentTaskTargetInputSchema)
+			.mutation(async ({ input }) => await trashTask(input)),
+		delete: t.procedure
+			.input(agentTaskTargetInputSchema)
+			.mutation(async ({ input }) => await deleteTask(input)),
+	}),
 	runtime: t.router({
 		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.loadConfig(ctx.workspaceScope);

@@ -80,13 +80,7 @@ backend.log
 frontend.log
 ```
 
-Read them through the CLI:
-
-```bash
-kanban logs backend
-kanban logs frontend --tail 200
-kanban logs --all --follow
-```
+They are local debugging artifacts, not an agent-facing CLI or MCP surface.
 
 ---
 

@@ -6,14 +6,15 @@
   "keywords": [
     "kanban",
     "agents",
-    "cli",
+    "runtime",
     "task-management",
     "typescript"
   ],
   "author": "Kanban contributors",
   "type": "module",
   "bin": {
-    "kanban": "dist/cli.js"
+    "kanban": "dist/cli.js",
+    "kanban-hooks": "dist/hooks.js"
   },
   "man": "./man/kanban.1",
   "main": "./dist/index.js",
@@ -36,7 +37,7 @@
   "scripts": {
     "clean": "shx rm -rf dist coverage",
     "install:all": "npm install && npm --prefix web-ui install && npm --prefix packages/desktop install",
-    "build": "npm run clean && npm run web:build && node scripts/build.mjs && shx mkdir -p dist/web-ui && shx cp -r web-ui/dist/* dist/web-ui && node scripts/upload-sentry-sourcemaps.mjs && shx chmod +x dist/cli.js",
+    "build": "npm run clean && npm run web:build && node scripts/build.mjs && shx mkdir -p dist/web-ui && shx cp -r web-ui/dist/* dist/web-ui && node scripts/upload-sentry-sourcemaps.mjs && shx chmod +x dist/cli.js dist/hooks.js",
     "dogfood": "node scripts/dogfood.mjs",
     "link": "npm run build && npm link",
     "unlink": "npm unlink -g kanban",
