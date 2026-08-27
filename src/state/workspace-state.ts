@@ -50,6 +50,22 @@ export interface RuntimeWorkspaceIndexEntry {
 	repoPath: string;
 }
 
+export type WorkspaceContextByIdLookup =
+	| {
+			kind: "available";
+			context: RuntimeWorkspaceContext;
+	  }
+	| {
+			kind: "unknown";
+			workspaceId: string;
+	  }
+	| {
+			kind: "unavailable";
+			workspaceId: string;
+			repoPath: string;
+			message: string;
+	  };
+
 interface WorkspaceIndexFile {
 	version: typeof LEGACY_INDEX_VERSION | typeof INDEX_VERSION;
 	entries: Record<string, WorkspaceIndexEntry>;
@@ -135,6 +151,12 @@ export interface RuntimeWorkspaceContext {
 	workspaceId: string;
 	statePath: string;
 	git: RuntimeGitRepositoryInfo;
+}
+
+export interface PersistedWorkspaceState {
+	board: RuntimeBoardData;
+	sessions: Record<string, RuntimeTaskSessionSummary>;
+	revision: number;
 }
 
 export interface LoadWorkspaceContextOptions {
@@ -329,6 +351,19 @@ async function readWorkspaceBoard(workspaceId: string): Promise<RuntimeBoardData
 
 export async function loadWorkspaceBoardById(workspaceId: string): Promise<RuntimeBoardData> {
 	return await readWorkspaceBoard(workspaceId);
+}
+
+export async function loadPersistedWorkspaceStateById(workspaceId: string): Promise<PersistedWorkspaceState> {
+	const [board, sessions, meta] = await Promise.all([
+		readWorkspaceBoard(workspaceId),
+		readWorkspaceSessions(workspaceId),
+		readWorkspaceMeta(workspaceId),
+	]);
+	return {
+		board,
+		sessions,
+		revision: meta.revision,
+	};
 }
 
 async function readWorkspaceSessions(workspaceId: string): Promise<Record<string, RuntimeTaskSessionSummary>> {
@@ -633,15 +668,33 @@ export async function loadWorkspaceContext(
 }
 
 export async function loadWorkspaceContextById(workspaceId: string): Promise<RuntimeWorkspaceContext | null> {
+	const lookup = await resolveWorkspaceContextById(workspaceId);
+	return lookup.kind === "available" ? lookup.context : null;
+}
+
+export async function resolveWorkspaceContextById(workspaceId: string): Promise<WorkspaceContextByIdLookup> {
 	const index = await readWorkspaceIndex();
 	const entry = index.entries[workspaceId];
 	if (!entry) {
-		return null;
+		return {
+			kind: "unknown",
+			workspaceId,
+		};
 	}
 	try {
-		return await loadWorkspaceContext(entry.repoPath);
+		return {
+			kind: "available",
+			context: await loadWorkspaceContext(entry.repoPath, {
+				autoCreateIfMissing: false,
+			}),
+		};
 	} catch {
-		return null;
+		return {
+			kind: "unavailable",
+			workspaceId: entry.workspaceId,
+			repoPath: entry.repoPath,
+			message: `Workspace "${entry.workspaceId}" is still registered but unavailable at ${entry.repoPath}. Check that the directory and Git repository are accessible, then reconnect it or remove it explicitly. Persisted board and session data has been kept.`,
+		};
 	}
 }
 

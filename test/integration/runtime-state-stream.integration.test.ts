@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { realpath } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -639,6 +639,99 @@ describe.sequential("runtime state stream integration", () => {
 				await secondStream.close();
 			}
 			await secondServer.stop();
+			cleanupRoot();
+			cleanupHome();
+		}
+	}, 45_000);
+
+	it("keeps a registered workspace and its persisted board when its Git probe becomes unavailable", async () => {
+		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-unavailable-project-");
+		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-unavailable-project-");
+		const projectPath = join(tempRoot, "project");
+		mkdirSync(projectPath, { recursive: true });
+		initGitRepository(projectPath);
+
+		const port = await getAvailablePort();
+		const server = await startKanbanServer({
+			cwd: projectPath,
+			homeDir: tempHome,
+			port,
+		});
+
+		let stream: RuntimeStreamClient | null = null;
+		try {
+			const runtimeUrl = new URL(server.runtimeUrl);
+			const workspaceId = decodeURIComponent(runtimeUrl.pathname.slice(1));
+			expect(workspaceId).not.toBe("");
+
+			const initialState = await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId,
+			});
+			expect(initialState.status).toBe(200);
+			const saveState = await requestJson<RuntimeWorkspaceStateResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.saveState",
+				type: "mutation",
+				workspaceId,
+				payload: {
+					board: createInProgressBoard("saved-task", "Persisted unavailable workspace task"),
+					sessions: {},
+					expectedRevision: initialState.payload.revision,
+				},
+			});
+			expect(saveState.status).toBe(200);
+
+			rmSync(join(projectPath, ".git"), { recursive: true, force: true });
+
+			const projects = await requestJson<RuntimeProjectsResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "projects.list",
+				type: "query",
+			});
+			expect(projects.status).toBe(200);
+			expect(projects.payload.projects.map((project) => project.id)).toContain(workspaceId);
+
+			const unavailableScope = await requestJson<unknown>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId,
+			});
+			expect(unavailableScope.status).toBe(404);
+			expect(JSON.stringify(unavailableScope.payload)).toContain("still registered but unavailable");
+
+			const unknownScope = await requestJson<unknown>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "workspace.getState",
+				type: "query",
+				workspaceId: "workspace-that-does-not-exist",
+			});
+			expect(unknownScope.status).toBe(404);
+			expect(JSON.stringify(unknownScope.payload)).toContain("Unknown workspace ID");
+
+			stream = await connectRuntimeStream(
+				`ws://127.0.0.1:${port}/api/runtime/ws?workspaceId=${encodeURIComponent(workspaceId)}`,
+			);
+			const snapshot = (await stream.waitForMessage(
+				(message): message is RuntimeStateStreamSnapshotMessage => message.type === "snapshot",
+			)) as RuntimeStateStreamSnapshotMessage;
+			const persistedProject = snapshot.projectBoards.find((project) => project.project.id === workspaceId);
+			expect(persistedProject?.board.columns.flatMap((column) => column.cards).map((card) => card.id)).toContain(
+				"saved-task",
+			);
+			const error = (await stream.waitForMessage(
+				(message): message is Extract<RuntimeStateStreamMessage, { type: "error" }> => message.type === "error",
+			)) as Extract<RuntimeStateStreamMessage, { type: "error" }>;
+			expect(error.message).toContain("still registered");
+			expect(error.message).toContain("Persisted board and session data has been kept.");
+		} finally {
+			if (stream) {
+				await stream.close();
+			}
+			await server.stop();
 			cleanupRoot();
 			cleanupHome();
 		}

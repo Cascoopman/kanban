@@ -2,7 +2,6 @@
 // Keep request and response contracts plus workspace-scoped procedures here,
 // and delegate domain behavior to runtime-api.ts and lower-level services.
 import { initTRPC, TRPCError } from "@trpc/server";
-import { z } from "zod";
 
 import type {
 	RuntimeCommandRunRequest,
@@ -99,6 +98,7 @@ export interface RuntimeTrpcWorkspaceScope {
 export interface RuntimeTrpcContext {
 	requestedWorkspaceId: string | null;
 	workspaceScope: RuntimeTrpcWorkspaceScope | null;
+	workspaceScopeError?: string;
 	runtimeApi: {
 		loadConfig: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeConfigResponse>;
 		saveConfig: (
@@ -228,7 +228,7 @@ const workspaceProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.workspaceScope) {
 		throw new TRPCError({
 			code: "NOT_FOUND",
-			message: `Unknown workspace ID: ${ctx.requestedWorkspaceId}`,
+			message: ctx.workspaceScopeError ?? `Unknown workspace ID: ${ctx.requestedWorkspaceId}`,
 		});
 	}
 	return next({

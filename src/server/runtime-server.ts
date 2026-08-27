@@ -26,7 +26,7 @@ import {
 	validatePasscode,
 	validateSession,
 } from "../security/passcode-manager";
-import { loadWorkspaceContextById } from "../state/workspace-state";
+import { resolveWorkspaceContextById } from "../state/workspace-state";
 import type { TerminalSessionManager } from "../terminal/session-manager";
 import { createTerminalWebSocketBridge } from "../terminal/ws-server";
 import { type RuntimeTrpcContext, type RuntimeTrpcWorkspaceScope, runtimeAppRouter } from "../trpc/app-router";
@@ -106,6 +106,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 	): Promise<{
 		requestedWorkspaceId: string | null;
 		workspaceScope: RuntimeTrpcWorkspaceScope | null;
+		workspaceScopeError?: string;
 	}> => {
 		const requestedWorkspaceId = readWorkspaceIdFromRequest(request, requestUrl);
 		if (!requestedWorkspaceId) {
@@ -114,18 +115,26 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 				workspaceScope: null,
 			};
 		}
-		const requestedWorkspaceContext = await loadWorkspaceContextById(requestedWorkspaceId);
-		if (!requestedWorkspaceContext) {
+		const requestedWorkspace = await resolveWorkspaceContextById(requestedWorkspaceId);
+		if (requestedWorkspace.kind === "unknown") {
 			return {
 				requestedWorkspaceId,
 				workspaceScope: null,
+				workspaceScopeError: `Unknown workspace ID: ${requestedWorkspaceId}`,
+			};
+		}
+		if (requestedWorkspace.kind === "unavailable") {
+			return {
+				requestedWorkspaceId,
+				workspaceScope: null,
+				workspaceScopeError: requestedWorkspace.message,
 			};
 		}
 		return {
 			requestedWorkspaceId,
 			workspaceScope: {
-				workspaceId: requestedWorkspaceContext.workspaceId,
-				workspacePath: requestedWorkspaceContext.repoPath,
+				workspaceId: requestedWorkspace.context.workspaceId,
+				workspacePath: requestedWorkspace.context.repoPath,
 			},
 		};
 	};
@@ -155,6 +164,7 @@ export async function createRuntimeServer(deps: CreateRuntimeServerDependencies)
 		return {
 			requestedWorkspaceId: scope.requestedWorkspaceId,
 			workspaceScope: scope.workspaceScope,
+			workspaceScopeError: scope.workspaceScopeError,
 			runtimeApi: createRuntimeApi({
 				getActiveWorkspaceId: deps.workspaceRegistry.getActiveWorkspaceId,
 				getActiveRuntimeConfig: deps.workspaceRegistry.getActiveRuntimeConfig,

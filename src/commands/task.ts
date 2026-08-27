@@ -17,7 +17,7 @@ import {
 	updateTask,
 } from "../core/task-board-mutations";
 import { resolveProjectInputPath } from "../projects/project-path";
-import { loadWorkspaceContext, loadWorkspaceContextById, mutateWorkspaceState } from "../state/workspace-state";
+import { loadWorkspaceContext, mutateWorkspaceState, resolveWorkspaceContextById } from "../state/workspace-state";
 import { readTaskSessionContextFromEnv } from "../terminal/hook-runtime-context";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
@@ -127,11 +127,14 @@ async function resolveRuntimeWorkspace(
 	if (!normalizedProjectPath) {
 		const { workspaceId } = readTaskSessionContextFromEnv();
 		if (workspaceId) {
-			const workspace = await loadWorkspaceContextById(workspaceId);
-			if (!workspace) {
+			const workspace = await resolveWorkspaceContextById(workspaceId);
+			if (workspace.kind === "unknown") {
 				throw new Error(`Kanban task session workspace "${workspaceId}" is no longer registered.`);
 			}
-			return workspace;
+			if (workspace.kind === "unavailable") {
+				throw new Error(workspace.message);
+			}
+			return workspace.context;
 		}
 	}
 	const resolvedPath = normalizedProjectPath ? resolveProjectInputPath(normalizedProjectPath, cwd) : cwd;

@@ -265,17 +265,8 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 				typeof (context as { requestedWorkspaceId?: unknown }).requestedWorkspaceId === "string"
 					? (context as { requestedWorkspaceId: string }).requestedWorkspaceId || null
 					: null;
-			const workspace: ResolvedWorkspaceStreamTarget = await deps.workspaceRegistry.resolveWorkspaceForStream(
-				requestedWorkspaceId,
-				{
-					onRemovedWorkspace: ({ workspaceId, message }) => {
-						disposeWorkspace(workspaceId, {
-							disconnectClients: true,
-							closeClientErrorMessage: message,
-						});
-					},
-				},
-			);
+			const workspace: ResolvedWorkspaceStreamTarget =
+				await deps.workspaceRegistry.resolveWorkspaceForStream(requestedWorkspaceId);
 			if (client.readyState !== WebSocket.OPEN) {
 				cleanupRuntimeStateClient(client);
 				return;
@@ -373,14 +364,11 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 					runtimeStateClientsByWorkspaceId.set(monitorWorkspaceId, workspaceClients);
 					runtimeStateWorkspaceIdByClient.set(client, monitorWorkspaceId);
 				}
-				if (workspace.removedRequestedWorkspacePath) {
+				if (workspace.requestedWorkspaceError) {
 					sendRuntimeStateMessage(client, {
 						type: "error",
-						message: `Project no longer exists on disk and was removed: ${workspace.removedRequestedWorkspacePath}`,
+						message: workspace.requestedWorkspaceError,
 					} satisfies RuntimeStateStreamErrorMessage);
-				}
-				if (workspace.didPruneProjects) {
-					void broadcastRuntimeProjectsUpdated(workspace.workspaceId);
 				}
 			} catch (error) {
 				if (didConnectWorkspaceMonitor && monitorWorkspaceId) {

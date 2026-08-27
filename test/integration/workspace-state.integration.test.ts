@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -11,11 +11,13 @@ import {
 	ensureWorkspaceIndexCompatibility,
 	getWorkspacesRootPath,
 	listWorkspaceIndexEntries,
+	loadPersistedWorkspaceStateById,
 	loadWorkspaceContext,
 	loadWorkspaceContextById,
 	loadWorkspaceState,
 	reconcileWorkspaceSessionSummary,
 	removeWorkspaceIndexEntry,
+	resolveWorkspaceContextById,
 	saveWorkspaceState,
 } from "../../src/state/workspace-state";
 import { createGitTestEnv } from "../utilities/git-env";
@@ -368,6 +370,52 @@ describe.sequential("workspace-state integration", () => {
 					autoCreateIfMissing: false,
 				});
 				expect(existing.workspaceId).toBe(created.workspaceId);
+			} finally {
+				cleanup();
+			}
+		});
+	});
+
+	it("keeps registered board and session data when its Git checkout becomes unavailable", async () => {
+		await withTemporaryHome(async () => {
+			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspace-unavailable-");
+			try {
+				const workspacePath = join(sandboxRoot, "project");
+				mkdirSync(workspacePath, { recursive: true });
+				initGitRepository(workspacePath);
+
+				const initial = await loadWorkspaceState(workspacePath);
+				const session = createSessionSummary("task-1");
+				await saveWorkspaceState(workspacePath, {
+					board: createBoard("Survives unavailable Git"),
+					sessions: { "task-1": session },
+					expectedRevision: initial.revision,
+				});
+				const context = await loadWorkspaceContext(workspacePath);
+
+				rmSync(join(workspacePath, ".git"), { recursive: true, force: true });
+
+				const lookup = await resolveWorkspaceContextById(context.workspaceId);
+				expect(lookup).toMatchObject({
+					kind: "unavailable",
+					workspaceId: context.workspaceId,
+					repoPath: context.repoPath,
+				});
+				if (lookup.kind !== "unavailable") {
+					throw new Error("Expected the registered workspace to be unavailable.");
+				}
+				expect(lookup.message).toContain("Persisted board and session data has been kept.");
+				expect(await loadWorkspaceContextById(context.workspaceId)).toBeNull();
+
+				const persisted = await loadPersistedWorkspaceStateById(context.workspaceId);
+				expect(persisted.board.columns[0]?.cards[0]?.title).toBe("Survives unavailable Git");
+				expect(persisted.sessions["task-1"]).toEqual(session);
+				expect(await listWorkspaceIndexEntries()).toEqual([
+					{
+						workspaceId: context.workspaceId,
+						repoPath: context.repoPath,
+					},
+				]);
 			} finally {
 				cleanup();
 			}
