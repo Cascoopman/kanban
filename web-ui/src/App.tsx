@@ -2,7 +2,6 @@
 // Keep this file focused on wiring top-level hooks and surfaces together, and
 // push runtime-specific orchestration down into hooks and service modules.
 import type { DropResult } from "@hello-pangea/dnd";
-import { addTaskDependency, removeTaskDependency } from "@runtime-task-dependencies";
 import { ChevronRight, FolderOpen, Settings } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -599,37 +598,6 @@ export default function App(): ReactElement {
 			null
 		);
 	}, [selectedCard]);
-	const handleAddTaskDependency = useCallback(
-		(dependsOnTaskId: string) => {
-			if (!selectedCard || !isSelectedProjectReady) return;
-			const result = addTaskDependency(board, selectedCard.card.id, dependsOnTaskId);
-			if (!result.added) {
-				const messageByReason = {
-					missing_task: "One of the tasks no longer exists.",
-					self_dependency: "A task cannot depend on itself.",
-					duplicate: "That dependency already exists.",
-					cycle: "That dependency would create a cycle.",
-				} as const;
-				showAppToast({ intent: "warning", message: messageByReason[result.reason] });
-				return;
-			}
-			setBoard(result.board);
-		},
-		[board, isSelectedProjectReady, selectedCard],
-	);
-	const handleRemoveTaskDependency = useCallback(
-		(dependencyId: string) => {
-			if (!isSelectedProjectReady) return;
-			setBoard((currentBoard) => removeTaskDependency(currentBoard, dependencyId));
-		},
-		[isSelectedProjectReady],
-	);
-	const handleSelectDependencyTask = useCallback(
-		(taskId: string) => {
-			if (selectedProjectId) handleProjectTaskSelect(selectedProjectId, taskId);
-		},
-		[handleProjectTaskSelect, selectedProjectId],
-	);
 
 	if (isRuntimeDisconnected) {
 		return <RuntimeDisconnectedFallback />;
@@ -791,10 +759,6 @@ export default function App(): ReactElement {
 									isBottomTerminalExpanded={isDetailTerminalExpanded}
 									onBottomTerminalToggleExpand={handleToggleExpandDetailTerminal}
 									canMutateTasks={isSelectedProjectReady}
-									dependencyBoard={board}
-									onAddDependency={handleAddTaskDependency}
-									onRemoveDependency={handleRemoveTaskDependency}
-									onSelectDependencyTask={handleSelectDependencyTask}
 								/>
 							</div>
 						) : null}

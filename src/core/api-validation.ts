@@ -4,7 +4,6 @@ import {
 	type RuntimeCommandRunRequest,
 	type RuntimeConfigSaveRequest,
 	type RuntimeDirectoryListRequest,
-	type RuntimeGitCheckoutRequest,
 	type RuntimeHookIngestRequest,
 	type RuntimeProjectAddRequest,
 	type RuntimeProjectRemoveRequest,
@@ -20,7 +19,6 @@ import {
 	runtimeCommandRunRequestSchema,
 	runtimeConfigSaveRequestSchema,
 	runtimeDirectoryListRequestSchema,
-	runtimeGitCheckoutRequestSchema,
 	runtimeHookIngestRequestSchema,
 	runtimeProjectAddRequestSchema,
 	runtimeProjectRemoveRequestSchema,
@@ -66,17 +64,6 @@ export function parseWorkspaceFileSearchRequest(query: URLSearchParams): Runtime
 		query: normalizedQuery,
 		limit: parsedLimit.data,
 	});
-}
-
-export function parseGitCheckoutRequest(value: unknown): RuntimeGitCheckoutRequest {
-	const parsed = parseWithSchema(runtimeGitCheckoutRequestSchema, value);
-	const branch = parsed.branch.trim();
-	if (!branch) {
-		throw new Error("Branch cannot be empty.");
-	}
-	return {
-		branch,
-	};
 }
 
 export function parseWorktreeEnsureRequest(value: unknown): RuntimeWorktreeEnsureRequest {

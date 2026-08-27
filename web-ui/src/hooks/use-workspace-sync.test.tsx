@@ -33,7 +33,6 @@ function createBoard(taskId: string): BoardData {
 			{ id: "review", title: "Review", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 

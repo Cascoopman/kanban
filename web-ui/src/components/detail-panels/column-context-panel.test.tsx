@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ColumnContextPanel } from "@/components/detail-panels/column-context-panel";
-import type { BoardColumn, BoardData, CardSelection } from "@/types";
+import type { BoardColumn, CardSelection } from "@/types";
 
 vi.mock("@/components/board-card", () => ({
 	BoardCard: ({ card, selected }: { card: { id: string; title: string }; selected?: boolean }): React.ReactElement => {
@@ -46,7 +46,6 @@ function createSelection(columns: BoardColumn[], taskId: string): CardSelection 
 				card,
 				column,
 				allColumns: columns,
-				allDependencies: [],
 			};
 		}
 	}
@@ -99,7 +98,6 @@ describe("ColumnContextPanel", () => {
 			{ id: "review", title: "Review", cards: [createCard("task-3", "Review task")] },
 			{ id: "trash", title: "Done", cards: [] },
 		];
-		const dependencyBoard: BoardData = { columns, dependencies: [] };
 
 		await act(async () => {
 			root.render(
@@ -108,10 +106,6 @@ describe("ColumnContextPanel", () => {
 					onCardSelect={() => {}}
 					taskSessions={{}}
 					onTaskDragEnd={() => {}}
-					dependencyBoard={dependencyBoard}
-					onAddDependency={() => {}}
-					onRemoveDependency={() => {}}
-					onSelectDependencyTask={() => {}}
 				/>,
 			);
 		});
@@ -129,10 +123,6 @@ describe("ColumnContextPanel", () => {
 					onCardSelect={() => {}}
 					taskSessions={{}}
 					onTaskDragEnd={() => {}}
-					dependencyBoard={dependencyBoard}
-					onAddDependency={() => {}}
-					onRemoveDependency={() => {}}
-					onSelectDependencyTask={() => {}}
 				/>,
 			);
 		});

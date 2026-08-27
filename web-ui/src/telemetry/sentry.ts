@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/react";
 
-const sentryDsn = "https://061e8f494493d1cf3c7c918563cc0783@o4511098366263296.ingest.us.sentry.io/4511098568769536";
+const sentryDsn = import.meta.env.VITE_SENTRY_DSN?.trim();
 const sentryEnvironment = import.meta.env.MODE;
 
 let initialized = false;
@@ -20,6 +20,16 @@ export function initializeSentry(): void {
 				app: "kanban",
 				runtime_surface: "web",
 			},
+		},
+		beforeSend(event) {
+			return {
+				...event,
+				breadcrumbs: event.breadcrumbs?.map(({ data: _data, ...breadcrumb }) => breadcrumb),
+				contexts: undefined,
+				extra: undefined,
+				request: undefined,
+				user: undefined,
+			};
 		},
 	});
 

@@ -19,7 +19,6 @@ function createBoard(): RuntimeBoardData {
 			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 

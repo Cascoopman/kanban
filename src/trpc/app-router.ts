@@ -12,17 +12,7 @@ import type {
 	RuntimeDebugResetAllStateResponse,
 	RuntimeDirectoryListRequest,
 	RuntimeDirectoryListResponse,
-	RuntimeGitCheckoutRequest,
-	RuntimeGitCheckoutResponse,
-	RuntimeGitCommitDiffRequest,
-	RuntimeGitCommitDiffResponse,
-	RuntimeGitDiscardResponse,
-	RuntimeGitLogRequest,
-	RuntimeGitLogResponse,
-	RuntimeGitRefsResponse,
 	RuntimeGitSummaryResponse,
-	RuntimeGitSyncAction,
-	RuntimeGitSyncResponse,
 	RuntimeHookIngestRequest,
 	RuntimeHookIngestResponse,
 	RuntimeOpenFileRequest,
@@ -47,8 +37,6 @@ import type {
 	RuntimeTaskWorkspaceInfoResponse,
 	RuntimeVsCodeWebRequest,
 	RuntimeVsCodeWebResponse,
-	RuntimeWorkspaceChangesRequest,
-	RuntimeWorkspaceChangesResponse,
 	RuntimeWorkspaceFileSearchRequest,
 	RuntimeWorkspaceFileSearchResponse,
 	RuntimeWorkspaceStateNotifyResponse,
@@ -67,17 +55,7 @@ import {
 	runtimeDebugResetAllStateResponseSchema,
 	runtimeDirectoryListRequestSchema,
 	runtimeDirectoryListResponseSchema,
-	runtimeGitCheckoutRequestSchema,
-	runtimeGitCheckoutResponseSchema,
-	runtimeGitCommitDiffRequestSchema,
-	runtimeGitCommitDiffResponseSchema,
-	runtimeGitDiscardResponseSchema,
-	runtimeGitLogRequestSchema,
-	runtimeGitLogResponseSchema,
-	runtimeGitRefsResponseSchema,
 	runtimeGitSummaryResponseSchema,
-	runtimeGitSyncActionSchema,
-	runtimeGitSyncResponseSchema,
 	runtimeHookIngestRequestSchema,
 	runtimeHookIngestResponseSchema,
 	runtimeOpenFileRequestSchema,
@@ -102,8 +80,6 @@ import {
 	runtimeTaskWorkspaceInfoResponseSchema,
 	runtimeVsCodeWebRequestSchema,
 	runtimeVsCodeWebResponseSchema,
-	runtimeWorkspaceChangesRequestSchema,
-	runtimeWorkspaceChangesResponseSchema,
 	runtimeWorkspaceFileSearchRequestSchema,
 	runtimeWorkspaceFileSearchResponseSchema,
 	runtimeWorkspaceStateNotifyResponseSchema,
@@ -165,22 +141,6 @@ export interface RuntimeTrpcContext {
 			scope: RuntimeTrpcWorkspaceScope,
 			input: RuntimeTaskWorkspaceInfoRequest | null,
 		) => Promise<RuntimeGitSummaryResponse>;
-		runGitSyncAction: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: { action: RuntimeGitSyncAction },
-		) => Promise<RuntimeGitSyncResponse>;
-		checkoutGitBranch: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: RuntimeGitCheckoutRequest,
-		) => Promise<RuntimeGitCheckoutResponse>;
-		discardGitChanges: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: RuntimeTaskWorkspaceInfoRequest | null,
-		) => Promise<RuntimeGitDiscardResponse>;
-		loadChanges: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: RuntimeWorkspaceChangesRequest,
-		) => Promise<RuntimeWorkspaceChangesResponse>;
 		ensureWorktree: (
 			scope: RuntimeTrpcWorkspaceScope,
 			input: RuntimeWorktreeEnsureRequest,
@@ -207,16 +167,6 @@ export interface RuntimeTrpcContext {
 			scope: RuntimeTrpcWorkspaceScope,
 			input: RuntimeWorkspaceStateSaveRequest,
 		) => Promise<RuntimeWorkspaceStateResponse>;
-		loadWorkspaceChanges: (scope: RuntimeTrpcWorkspaceScope) => Promise<RuntimeWorkspaceChangesResponse>;
-		loadGitLog: (scope: RuntimeTrpcWorkspaceScope, input: RuntimeGitLogRequest) => Promise<RuntimeGitLogResponse>;
-		loadGitRefs: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: RuntimeTaskWorkspaceInfoRequest | null,
-		) => Promise<RuntimeGitRefsResponse>;
-		loadCommitDiff: (
-			scope: RuntimeTrpcWorkspaceScope,
-			input: RuntimeGitCommitDiffRequest,
-		) => Promise<RuntimeGitCommitDiffResponse>;
 	};
 	projectsApi: {
 		listProjects: (preferredWorkspaceId: string | null) => Promise<RuntimeProjectsResponse>;
@@ -290,10 +240,6 @@ const workspaceProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 const optionalTaskWorkspaceInfoRequestSchema = runtimeTaskWorkspaceInfoRequestSchema.nullable().optional();
-const gitSyncActionInputSchema = z.object({
-	action: runtimeGitSyncActionSchema,
-});
-
 export const runtimeAppRouter = t.router({
 	runtime: t.router({
 		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
@@ -364,30 +310,6 @@ export const runtimeAppRouter = t.router({
 			.query(async ({ ctx, input }) => {
 				return await ctx.workspaceApi.loadGitSummary(ctx.workspaceScope, input ?? null);
 			}),
-		runGitSyncAction: workspaceProcedure
-			.input(gitSyncActionInputSchema)
-			.output(runtimeGitSyncResponseSchema)
-			.mutation(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.runGitSyncAction(ctx.workspaceScope, input);
-			}),
-		checkoutGitBranch: workspaceProcedure
-			.input(runtimeGitCheckoutRequestSchema)
-			.output(runtimeGitCheckoutResponseSchema)
-			.mutation(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.checkoutGitBranch(ctx.workspaceScope, input);
-			}),
-		discardGitChanges: workspaceProcedure
-			.input(optionalTaskWorkspaceInfoRequestSchema)
-			.output(runtimeGitDiscardResponseSchema)
-			.mutation(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.discardGitChanges(ctx.workspaceScope, input ?? null);
-			}),
-		getChanges: workspaceProcedure
-			.input(runtimeWorkspaceChangesRequestSchema)
-			.output(runtimeWorkspaceChangesResponseSchema)
-			.query(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.loadChanges(ctx.workspaceScope, input);
-			}),
 		ensureWorktree: workspaceProcedure
 			.input(runtimeWorktreeEnsureRequestSchema)
 			.output(runtimeWorktreeEnsureResponseSchema)
@@ -431,27 +353,6 @@ export const runtimeAppRouter = t.router({
 			.output(runtimeWorkspaceStateResponseSchema)
 			.mutation(async ({ ctx, input }) => {
 				return await ctx.workspaceApi.saveState(ctx.workspaceScope, input);
-			}),
-		getWorkspaceChanges: workspaceProcedure.output(runtimeWorkspaceChangesResponseSchema).query(async ({ ctx }) => {
-			return await ctx.workspaceApi.loadWorkspaceChanges(ctx.workspaceScope);
-		}),
-		getGitLog: workspaceProcedure
-			.input(runtimeGitLogRequestSchema)
-			.output(runtimeGitLogResponseSchema)
-			.query(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.loadGitLog(ctx.workspaceScope, input);
-			}),
-		getGitRefs: workspaceProcedure
-			.input(optionalTaskWorkspaceInfoRequestSchema)
-			.output(runtimeGitRefsResponseSchema)
-			.query(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.loadGitRefs(ctx.workspaceScope, input ?? null);
-			}),
-		getCommitDiff: workspaceProcedure
-			.input(runtimeGitCommitDiffRequestSchema)
-			.output(runtimeGitCommitDiffResponseSchema)
-			.query(async ({ ctx, input }) => {
-				return await ctx.workspaceApi.loadCommitDiff(ctx.workspaceScope, input);
 			}),
 	}),
 	projects: t.router({

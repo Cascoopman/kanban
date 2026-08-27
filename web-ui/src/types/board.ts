@@ -1,8 +1,6 @@
-import type { RuntimeAgentId, RuntimeBoardColumnId, RuntimeTaskImage } from "@/runtime/types";
+import type { RuntimeAgentId, RuntimeBoardColumnId } from "@/runtime/types";
 
 export type BoardColumnId = RuntimeBoardColumnId;
-export type TaskImage = RuntimeTaskImage;
-
 export function isReviewLikeColumnId(columnId: BoardColumnId | string): boolean {
 	return columnId === "review" || columnId === "on_hold";
 }
@@ -27,17 +25,8 @@ export interface BoardColumn {
 	cards: BoardCard[];
 }
 
-export interface BoardDependency {
-	id: string;
-	taskId: string;
-	dependsOnTaskId: string;
-	createdAt: number;
-	projectId?: string;
-}
-
 export interface BoardData {
 	columns: BoardColumn[];
-	dependencies: BoardDependency[];
 }
 
 export interface ReviewTaskWorkspaceSnapshot {
@@ -55,5 +44,4 @@ export interface CardSelection {
 	card: BoardCard;
 	column: BoardColumn;
 	allColumns: BoardColumn[];
-	allDependencies: BoardDependency[];
 }

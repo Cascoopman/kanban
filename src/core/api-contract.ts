@@ -1,44 +1,4 @@
 import { z } from "zod";
-import { validateTaskDependencyGraph } from "./task-dependency-graph";
-
-export const runtimeWorkspaceFileStatusSchema = z.enum([
-	"modified",
-	"added",
-	"deleted",
-	"renamed",
-	"copied",
-	"untracked",
-	"unknown",
-]);
-export type RuntimeWorkspaceFileStatus = z.infer<typeof runtimeWorkspaceFileStatusSchema>;
-
-export const runtimeWorkspaceFileChangeSchema = z.object({
-	path: z.string(),
-	previousPath: z.string().optional(),
-	status: runtimeWorkspaceFileStatusSchema,
-	additions: z.number(),
-	deletions: z.number(),
-	oldText: z.string().nullable(),
-	newText: z.string().nullable(),
-});
-export type RuntimeWorkspaceFileChange = z.infer<typeof runtimeWorkspaceFileChangeSchema>;
-
-export const runtimeWorkspaceChangesRequestSchema = z.object({
-	taskId: z.string(),
-	baseRef: z.string(),
-	mode: z.enum(["working_copy", "last_turn"]).optional(),
-});
-export type RuntimeWorkspaceChangesRequest = z.infer<typeof runtimeWorkspaceChangesRequestSchema>;
-
-export const runtimeWorkspaceChangesModeSchema = z.enum(["working_copy", "last_turn"]);
-export type RuntimeWorkspaceChangesMode = z.infer<typeof runtimeWorkspaceChangesModeSchema>;
-
-export const runtimeWorkspaceChangesResponseSchema = z.object({
-	repoRoot: z.string(),
-	generatedAt: z.number(),
-	files: z.array(runtimeWorkspaceFileChangeSchema),
-});
-export type RuntimeWorkspaceChangesResponse = z.infer<typeof runtimeWorkspaceChangesResponseSchema>;
 
 export const runtimeWorkspaceFileSearchRequestSchema = z.object({
 	query: z.string(),
@@ -73,14 +33,6 @@ export const runtimeBoardColumnIdSchema = z.union([
 ]);
 export type RuntimeBoardColumnId = z.infer<typeof runtimeBoardColumnIdEnum>;
 
-export const runtimeTaskImageSchema = z.object({
-	id: z.string(),
-	data: z.string(),
-	mimeType: z.string(),
-	name: z.string().optional(),
-});
-export type RuntimeTaskImage = z.infer<typeof runtimeTaskImageSchema>;
-
 export const runtimeBoardCardSchema = z.object({
 	id: z.string(),
 	title: z.string().trim().min(1),
@@ -93,14 +45,6 @@ export const runtimeBoardCardSchema = z.object({
 });
 export type RuntimeBoardCard = z.infer<typeof runtimeBoardCardSchema>;
 
-export const runtimeTaskDependencySchema = z.object({
-	id: z.string().trim().min(1),
-	taskId: z.string().trim().min(1),
-	dependsOnTaskId: z.string().trim().min(1),
-	createdAt: z.number(),
-});
-export type RuntimeTaskDependency = z.infer<typeof runtimeTaskDependencySchema>;
-
 export const runtimeBoardColumnSchema = z.object({
 	id: runtimeBoardColumnIdSchema,
 	title: z.string(),
@@ -108,42 +52,9 @@ export const runtimeBoardColumnSchema = z.object({
 });
 export type RuntimeBoardColumn = z.infer<typeof runtimeBoardColumnSchema>;
 
-export const runtimeBoardDataSchema = z
-	.object({
-		columns: z.array(runtimeBoardColumnSchema),
-		dependencies: z.array(runtimeTaskDependencySchema).default([]),
-	})
-	.superRefine((board, context) => {
-		const taskIds = new Set(board.columns.flatMap((column) => column.cards.map((card) => card.id)));
-		for (const issue of validateTaskDependencyGraph(taskIds, board.dependencies)) {
-			const path = ["dependencies", issue.dependencyIndex];
-			switch (issue.code) {
-				case "duplicate_id":
-					context.addIssue({
-						code: "custom",
-						path: [...path, "id"],
-						message: `Duplicate dependency ID "${issue.dependencyId}".`,
-					});
-					break;
-				case "duplicate_link":
-					context.addIssue({ code: "custom", path, message: "Duplicate task dependency." });
-					break;
-				case "missing_task":
-					context.addIssue({
-						code: "custom",
-						path,
-						message: `Dependency references missing task "${issue.taskId}".`,
-					});
-					break;
-				case "self_dependency":
-					context.addIssue({ code: "custom", path, message: "A task cannot depend on itself." });
-					break;
-				case "cycle":
-					context.addIssue({ code: "custom", path, message: "Task dependencies cannot contain cycles." });
-					break;
-			}
-		}
-	});
+export const runtimeBoardDataSchema = z.object({
+	columns: z.array(runtimeBoardColumnSchema),
+});
 export type RuntimeBoardData = z.infer<typeof runtimeBoardDataSchema>;
 
 export const runtimeGitRepositoryInfoSchema = z.object({
@@ -152,9 +63,6 @@ export const runtimeGitRepositoryInfoSchema = z.object({
 	branches: z.array(z.string()),
 });
 export type RuntimeGitRepositoryInfo = z.infer<typeof runtimeGitRepositoryInfoSchema>;
-
-export const runtimeGitSyncActionSchema = z.enum(["fetch", "pull", "push"]);
-export type RuntimeGitSyncAction = z.infer<typeof runtimeGitSyncActionSchema>;
 
 export const runtimeGitSyncSummarySchema = z.object({
 	currentBranch: z.string().nullable(),
@@ -173,37 +81,6 @@ export const runtimeGitSummaryResponseSchema = z.object({
 	error: z.string().optional(),
 });
 export type RuntimeGitSummaryResponse = z.infer<typeof runtimeGitSummaryResponseSchema>;
-
-export const runtimeGitSyncResponseSchema = z.object({
-	ok: z.boolean(),
-	action: runtimeGitSyncActionSchema,
-	summary: runtimeGitSyncSummarySchema,
-	output: z.string(),
-	error: z.string().optional(),
-});
-export type RuntimeGitSyncResponse = z.infer<typeof runtimeGitSyncResponseSchema>;
-
-export const runtimeGitCheckoutRequestSchema = z.object({
-	branch: z.string(),
-});
-export type RuntimeGitCheckoutRequest = z.infer<typeof runtimeGitCheckoutRequestSchema>;
-
-export const runtimeGitCheckoutResponseSchema = z.object({
-	ok: z.boolean(),
-	branch: z.string(),
-	summary: runtimeGitSyncSummarySchema,
-	output: z.string(),
-	error: z.string().optional(),
-});
-export type RuntimeGitCheckoutResponse = z.infer<typeof runtimeGitCheckoutResponseSchema>;
-
-export const runtimeGitDiscardResponseSchema = z.object({
-	ok: z.boolean(),
-	summary: runtimeGitSyncSummarySchema,
-	output: z.string(),
-	error: z.string().optional(),
-});
-export type RuntimeGitDiscardResponse = z.infer<typeof runtimeGitDiscardResponseSchema>;
 
 export const runtimeTaskSessionStateSchema = z.enum(["idle", "running", "awaiting_review", "failed", "interrupted"]);
 export type RuntimeTaskSessionState = z.infer<typeof runtimeTaskSessionStateSchema>;
@@ -629,7 +506,6 @@ export type RuntimeConfigSaveRequest = z.infer<typeof runtimeConfigSaveRequestSc
 export const runtimeTaskSessionStartRequestSchema = z.object({
 	taskId: z.string(),
 	prompt: z.string(),
-	images: z.array(runtimeTaskImageSchema).optional(),
 	startInPlanMode: z.boolean().optional(),
 	resumeFromTrash: z.boolean().optional(),
 	resumeExistingSession: z.enum(["running", "awaiting_review"]).optional(),
@@ -757,77 +633,6 @@ export const runtimeTerminalWsServerMessageSchema = z.discriminatedUnion("type",
 	runtimeTerminalWsRestoreMessageSchema,
 ]);
 export type RuntimeTerminalWsServerMessage = z.infer<typeof runtimeTerminalWsServerMessageSchema>;
-
-export const runtimeGitCommitSchema = z.object({
-	hash: z.string(),
-	shortHash: z.string(),
-	authorName: z.string(),
-	authorEmail: z.string(),
-	date: z.string(),
-	message: z.string(),
-	parentHashes: z.array(z.string()),
-	relation: z.enum(["selected", "upstream", "shared"]).optional(),
-});
-export type RuntimeGitCommit = z.infer<typeof runtimeGitCommitSchema>;
-
-export const runtimeGitRefSchema = z.object({
-	name: z.string(),
-	type: z.enum(["branch", "remote", "detached"]),
-	hash: z.string(),
-	isHead: z.boolean(),
-	upstreamName: z.string().optional(),
-	ahead: z.number().optional(),
-	behind: z.number().optional(),
-});
-export type RuntimeGitRef = z.infer<typeof runtimeGitRefSchema>;
-
-export const runtimeGitLogRequestSchema = z.object({
-	ref: z.string().nullable().optional(),
-	refs: z.array(z.string()).optional(),
-	maxCount: z.number().int().positive().optional(),
-	skip: z.number().int().nonnegative().optional(),
-	taskScope: runtimeTaskWorkspaceInfoRequestSchema.nullable().optional(),
-});
-export type RuntimeGitLogRequest = z.infer<typeof runtimeGitLogRequestSchema>;
-
-export const runtimeGitLogResponseSchema = z.object({
-	ok: z.boolean(),
-	commits: z.array(runtimeGitCommitSchema),
-	totalCount: z.number(),
-	error: z.string().optional(),
-});
-export type RuntimeGitLogResponse = z.infer<typeof runtimeGitLogResponseSchema>;
-
-export const runtimeGitCommitDiffFileSchema = z.object({
-	path: z.string(),
-	previousPath: z.string().optional(),
-	status: z.enum(["modified", "added", "deleted", "renamed"]),
-	additions: z.number(),
-	deletions: z.number(),
-	patch: z.string(),
-});
-export type RuntimeGitCommitDiffFile = z.infer<typeof runtimeGitCommitDiffFileSchema>;
-
-export const runtimeGitCommitDiffRequestSchema = z.object({
-	commitHash: z.string(),
-	taskScope: runtimeTaskWorkspaceInfoRequestSchema.nullable().optional(),
-});
-export type RuntimeGitCommitDiffRequest = z.infer<typeof runtimeGitCommitDiffRequestSchema>;
-
-export const runtimeGitCommitDiffResponseSchema = z.object({
-	ok: z.boolean(),
-	commitHash: z.string(),
-	files: z.array(runtimeGitCommitDiffFileSchema),
-	error: z.string().optional(),
-});
-export type RuntimeGitCommitDiffResponse = z.infer<typeof runtimeGitCommitDiffResponseSchema>;
-
-export const runtimeGitRefsResponseSchema = z.object({
-	ok: z.boolean(),
-	refs: z.array(runtimeGitRefSchema),
-	error: z.string().optional(),
-});
-export type RuntimeGitRefsResponse = z.infer<typeof runtimeGitRefsResponseSchema>;
 
 export const runtimeHookEventSchema = z.enum(["to_review", "to_in_progress", "activity"]);
 export type RuntimeHookEvent = z.infer<typeof runtimeHookEventSchema>;

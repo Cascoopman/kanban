@@ -1,13 +1,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 
-import type {
-	RuntimeGitCheckoutResponse,
-	RuntimeGitDiscardResponse,
-	RuntimeGitSyncAction,
-	RuntimeGitSyncResponse,
-	RuntimeGitSyncSummary,
-} from "../core/api-contract";
+import type { RuntimeGitSyncSummary } from "../core/api-contract";
 import { runGit } from "./git-utils";
 
 interface GitPathFingerprint {
@@ -221,11 +215,6 @@ async function countUntrackedAdditions(repoRoot: string, untrackedPaths: string[
 	return counts.reduce((total, value) => total + value, 0);
 }
 
-async function hasGitRef(repoRoot: string, ref: string): Promise<boolean> {
-	const result = await runGit(repoRoot, ["show-ref", "--verify", "--quiet", ref]);
-	return result.ok;
-}
-
 export async function getGitSyncSummary(
 	cwd: string,
 	options?: { probe?: GitWorkspaceProbe },
@@ -243,143 +232,5 @@ export async function getGitSyncSummary(
 		deletions: trackedTotals.deletions,
 		aheadCount: probe.aheadCount,
 		behindCount: probe.behindCount,
-	};
-}
-
-export async function runGitSyncAction(options: {
-	cwd: string;
-	action: RuntimeGitSyncAction;
-}): Promise<RuntimeGitSyncResponse> {
-	const initialSummary = await getGitSyncSummary(options.cwd);
-
-	if (options.action === "pull" && initialSummary.changedFiles > 0) {
-		return {
-			ok: false,
-			action: options.action,
-			summary: initialSummary,
-			output: "",
-			error: "Pull failed: working tree has local changes. Commit, stash, or discard changes first.",
-		};
-	}
-
-	const argsByAction: Record<RuntimeGitSyncAction, string[]> = {
-		fetch: ["fetch", "--all", "--prune"],
-		pull: ["pull", "--ff-only"],
-		push: ["push"],
-	};
-	const commandResult = await runGit(options.cwd, argsByAction[options.action]);
-	const nextSummary = await getGitSyncSummary(options.cwd);
-
-	if (!commandResult.ok) {
-		return {
-			ok: false,
-			action: options.action,
-			summary: nextSummary,
-			output: commandResult.output,
-			error: commandResult.error ?? "Git command failed.",
-		};
-	}
-
-	return {
-		ok: true,
-		action: options.action,
-		summary: nextSummary,
-		output: commandResult.output,
-	};
-}
-
-export async function runGitCheckoutAction(options: {
-	cwd: string;
-	branch: string;
-}): Promise<RuntimeGitCheckoutResponse> {
-	const requestedBranch = options.branch.trim();
-	const initialSummary = await getGitSyncSummary(options.cwd);
-
-	if (!requestedBranch) {
-		return {
-			ok: false,
-			branch: requestedBranch,
-			summary: initialSummary,
-			output: "",
-			error: "Branch name cannot be empty.",
-		};
-	}
-
-	if (initialSummary.currentBranch === requestedBranch) {
-		return {
-			ok: true,
-			branch: requestedBranch,
-			summary: initialSummary,
-			output: `Already on '${requestedBranch}'.`,
-		};
-	}
-
-	const repoRoot = await resolveRepoRoot(options.cwd);
-
-	const hasLocalBranch = await hasGitRef(repoRoot, `refs/heads/${requestedBranch}`);
-	const commandResult = hasLocalBranch
-		? await runGit(repoRoot, ["switch", requestedBranch])
-		: (await hasGitRef(repoRoot, `refs/remotes/origin/${requestedBranch}`))
-			? await runGit(repoRoot, ["switch", "--track", `origin/${requestedBranch}`])
-			: await runGit(repoRoot, ["switch", requestedBranch]);
-	const nextSummary = await getGitSyncSummary(repoRoot);
-
-	if (!commandResult.ok) {
-		return {
-			ok: false,
-			branch: requestedBranch,
-			summary: nextSummary,
-			output: commandResult.output,
-			error: commandResult.error ?? "Git branch switch failed.",
-		};
-	}
-
-	return {
-		ok: true,
-		branch: requestedBranch,
-		summary: nextSummary,
-		output: commandResult.output,
-	};
-}
-
-export async function discardGitChanges(options: { cwd: string }): Promise<RuntimeGitDiscardResponse> {
-	const repoRoot = await resolveRepoRoot(options.cwd);
-	const initialSummary = await getGitSyncSummary(repoRoot);
-
-	if (initialSummary.changedFiles === 0) {
-		return {
-			ok: true,
-			summary: initialSummary,
-			output: "Working tree is already clean.",
-		};
-	}
-
-	const restoreResult = await runGit(repoRoot, ["restore", "--source=HEAD", "--staged", "--worktree", "--", "."]);
-	const cleanResult = restoreResult.ok ? await runGit(repoRoot, ["clean", "-fd", "--", "."]) : null;
-	const nextSummary = await getGitSyncSummary(repoRoot);
-	const output = [restoreResult.output, cleanResult?.output ?? ""].filter(Boolean).join("\n");
-
-	if (!restoreResult.ok) {
-		return {
-			ok: false,
-			summary: nextSummary,
-			output,
-			error: restoreResult.error ?? "Discard failed.",
-		};
-	}
-
-	if (cleanResult && !cleanResult.ok) {
-		return {
-			ok: false,
-			summary: nextSummary,
-			output,
-			error: cleanResult.error ?? "Discard failed while cleaning untracked files.",
-		};
-	}
-
-	return {
-		ok: true,
-		summary: nextSummary,
-		output,
 	};
 }

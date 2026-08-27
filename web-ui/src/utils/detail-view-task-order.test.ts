@@ -15,7 +15,6 @@ function createBoard(): BoardData {
 			{ id: "on_hold", title: "On Hold", cards: [createTask("hold")] },
 			{ id: "trash", title: "Done", cards: [createTask("done")] },
 		],
-		dependencies: [],
 	};
 }
 

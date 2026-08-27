@@ -42,7 +42,6 @@ function createBoard(title: string): RuntimeBoardData {
 			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: [] },
 		],
-		dependencies: [],
 	};
 }
 
@@ -256,65 +255,6 @@ describe.sequential("workspace-state integration", () => {
 		});
 	});
 
-	it("persists dependencies across reload and rejects invalid graphs without changing state", async () => {
-		await withTemporaryHome(async () => {
-			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspace-dependencies-");
-			try {
-				const workspacePath = join(sandboxRoot, "project-dependencies");
-				mkdirSync(workspacePath, { recursive: true });
-				initGitRepository(workspacePath);
-
-				const initial = await loadWorkspaceState(workspacePath);
-				const board = createBoard("Dependent task");
-				board.columns[1]?.cards.push({
-					id: "task-2",
-					title: "Prerequisite task",
-					startInPlanMode: false,
-					baseRef: "main",
-					createdAt: 2,
-					updatedAt: 2,
-				});
-				board.dependencies.push({
-					id: "task-1-task-2",
-					taskId: "task-1",
-					dependsOnTaskId: "task-2",
-					createdAt: 3,
-				});
-				await saveWorkspaceState(workspacePath, {
-					board,
-					sessions: {},
-					expectedRevision: initial.revision,
-				});
-
-				const reloaded = await loadWorkspaceState(workspacePath);
-				expect(reloaded.board.dependencies).toEqual(board.dependencies);
-				const summary = createSessionSummary("task-1");
-				summary.state = "awaiting_review";
-				summary.reviewReason = "hook";
-				const reconciled = await reconcileWorkspaceSessionSummary(workspacePath, summary);
-				expect(reconciled.state.board.dependencies).toEqual(board.dependencies);
-				await expect(
-					saveWorkspaceState(workspacePath, {
-						board: {
-							...reloaded.board,
-							dependencies: [
-								...reloaded.board.dependencies,
-								{ id: "cycle", taskId: "task-2", dependsOnTaskId: "task-1", createdAt: 4 },
-							],
-						},
-						sessions: {},
-						expectedRevision: reconciled.state.revision,
-					}),
-				).rejects.toThrow("cycles");
-				const afterRejectedSave = await loadWorkspaceState(workspacePath);
-				expect(afterRejectedSave.revision).toBe(reconciled.state.revision);
-				expect(afterRejectedSave.board.dependencies).toEqual(board.dependencies);
-			} finally {
-				cleanup();
-			}
-		});
-	});
-
 	it("lists and removes workspace index entries across multiple projects", async () => {
 		await withTemporaryHome(async () => {
 			const { path: sandboxRoot, cleanup } = createTempDir("kanban-workspaces-");
@@ -457,13 +397,6 @@ describe.sequential("workspace-state integration", () => {
 										title: "Legacy task",
 										prompt: "Legacy prompt that must not remain persisted.",
 										startInPlanMode: false,
-										images: [
-											{
-												id: "legacy-image",
-												data: "data:image/png;base64,AA==",
-												mimeType: "image/png",
-											},
-										],
 										baseRef: "main",
 										createdAt: 1,
 										updatedAt: 1,
@@ -485,10 +418,6 @@ describe.sequential("workspace-state integration", () => {
 								],
 							},
 						],
-						dependencies: [
-							{ id: "legacy-link", fromTaskId: "legacy-task", toTaskId: "other", createdAt: 1 },
-							{ id: "dangling-link", fromTaskId: "legacy-task", toTaskId: "missing", createdAt: 2 },
-						],
 					}),
 					"utf8",
 				);
@@ -502,10 +431,6 @@ describe.sequential("workspace-state integration", () => {
 				]);
 				expect(state.board.columns[0]?.cards[0]?.id).toBe("legacy-task");
 				expect(state.board.columns[0]?.cards[0]).not.toHaveProperty("prompt");
-				expect(state.board.columns[0]?.cards[0]).not.toHaveProperty("images");
-				expect(state.board.dependencies).toEqual([
-					{ id: "legacy-link", taskId: "legacy-task", dependsOnTaskId: "other", createdAt: 1 },
-				]);
 			} finally {
 				cleanup();
 			}

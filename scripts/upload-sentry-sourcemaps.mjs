@@ -44,14 +44,13 @@ function shouldCopyToNodeStaging(sourcePath) {
 }
 
 async function main() {
-	const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN?.trim();
-	if (!sentryAuthToken) {
-		console.log("Skipping Sentry sourcemap upload because SENTRY_AUTH_TOKEN is not set.");
+	if (process.env.SENTRY_UPLOAD_SOURCEMAPS !== "1") {
+		console.log("Skipping Sentry sourcemap upload because SENTRY_UPLOAD_SOURCEMAPS is not enabled.");
 		return;
 	}
 	const sentryOrg = process.env.SENTRY_ORG?.trim();
 	if (!sentryOrg) {
-		throw new Error("SENTRY_ORG must be set when SENTRY_AUTH_TOKEN is configured.");
+		throw new Error("SENTRY_ORG must be set when SENTRY_UPLOAD_SOURCEMAPS=1.");
 	}
 
 	await rm(stagingRoot, { force: true, recursive: true });

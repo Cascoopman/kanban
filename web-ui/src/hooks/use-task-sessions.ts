@@ -14,11 +14,10 @@ import type {
 	RuntimeWorktreeDeleteResponse,
 	RuntimeWorktreeEnsureResponse,
 } from "@/runtime/types";
-import { trackTaskResumedFromTrash } from "@/telemetry/events";
 import { getTerminalController } from "@/terminal/terminal-controller-registry";
 import { getTerminalGeometry } from "@/terminal/terminal-geometry-registry";
 import type { SendTerminalInputOptions } from "@/terminal/terminal-input";
-import type { BoardCard, TaskImage } from "@/types";
+import type { BoardCard } from "@/types";
 
 interface UseTaskSessionsInput {
 	currentProjectId: string | null;
@@ -46,7 +45,6 @@ export interface StartTaskSessionOptions {
 	resumeExistingSession?: "running" | "awaiting_review";
 	continuationPrompt?: string;
 	initialPrompt?: string;
-	images?: TaskImage[];
 }
 
 export interface UseTaskSessionsResult {
@@ -152,7 +150,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				const payload = await trpcClient.runtime.startTaskSession.mutate({
 					taskId: task.id,
 					prompt: kickoffPrompt,
-					images: isResumingSession ? undefined : options?.images,
 					startInPlanMode: isResumingSession ? undefined : task.startInPlanMode,
 					resumeFromTrash: options?.resumeFromTrash,
 					resumeExistingSession: options?.resumeExistingSession,
@@ -170,9 +167,6 @@ export function useTaskSessions({ currentProjectId, setSessions }: UseTaskSessio
 				}
 				if (projectId === currentProjectId) {
 					upsertSession(payload.summary);
-				}
-				if (options?.resumeFromTrash) {
-					trackTaskResumedFromTrash();
 				}
 				return { ok: true };
 			} catch (error) {

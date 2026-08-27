@@ -16,7 +16,7 @@ import { useCardDetailLayout } from "@/resize/use-card-detail-layout";
 import { useResizeDrag } from "@/resize/use-resize-drag";
 import type { RuntimeQuickPrompt, RuntimeTaskSessionSummary } from "@/runtime/types";
 import { useTerminalThemeColors } from "@/terminal/theme-colors";
-import { type BoardCard, type BoardData, type CardSelection, isReviewLikeColumnId } from "@/types";
+import { type BoardCard, type CardSelection, isReviewLikeColumnId } from "@/types";
 import { useWindowEvent } from "@/utils/react-use";
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -242,10 +242,6 @@ export function CardDetailView({
 	isBottomTerminalExpanded,
 	onBottomTerminalToggleExpand,
 	canMutateTasks = true,
-	dependencyBoard,
-	onAddDependency,
-	onRemoveDependency,
-	onSelectDependencyTask,
 }: {
 	selection: CardSelection;
 	workspaceId: string | null;
@@ -279,10 +275,6 @@ export function CardDetailView({
 	isBottomTerminalExpanded?: boolean;
 	onBottomTerminalToggleExpand?: () => void;
 	canMutateTasks?: boolean;
-	dependencyBoard: BoardData;
-	onAddDependency: (dependsOnTaskId: string) => void;
-	onRemoveDependency: (dependencyId: string) => void;
-	onSelectDependencyTask: (taskId: string) => void;
 }): React.ReactElement {
 	const isMobile = useIsMobile();
 	const [mobileTabState, setMobileTabState] = useState<{ taskId: string; tab: MobileTab }>(() => ({
@@ -522,10 +514,6 @@ export function CardDetailView({
 							moveToTrashLoadingById={moveToTrashLoadingById}
 							panelWidth="100%"
 							mutableProjectId={canMutateTasks ? workspaceId : null}
-							dependencyBoard={dependencyBoard}
-							onAddDependency={onAddDependency}
-							onRemoveDependency={onRemoveDependency}
-							onSelectDependencyTask={onSelectDependencyTask}
 						/>
 					</div>
 					<ResizeHandle

@@ -65,7 +65,6 @@ describe("useTaskStartActions", () => {
 				{ id: "on_hold", title: "On Hold", cards: [] },
 				{ id: "trash", title: "Done", cards: [] },
 			],
-			dependencies: [],
 		};
 		const handleStartTask = vi.fn();
 		const setSelectedTaskId = vi.fn();

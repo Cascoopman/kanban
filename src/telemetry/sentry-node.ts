@@ -1,7 +1,7 @@
 import * as Sentry from "@sentry/node";
 import packageJson from "../../package.json" with { type: "json" };
 
-const nodeSentryDsn = "https://b597cbea54f43704439be10d843699b0@o4511098366263296.ingest.us.sentry.io/4511098558087168";
+const nodeSentryDsn = process.env.SENTRY_DSN?.trim();
 
 const appVersion = typeof packageJson.version === "string" ? packageJson.version : "0.1.0";
 
@@ -23,6 +23,16 @@ if (nodeSentryDsn) {
 				app: "kanban",
 				runtime_surface: "node",
 			},
+		},
+		beforeSend(event) {
+			return {
+				...event,
+				breadcrumbs: event.breadcrumbs?.map(({ data: _data, ...breadcrumb }) => breadcrumb),
+				contexts: undefined,
+				extra: undefined,
+				request: undefined,
+				user: undefined,
+			};
 		},
 	});
 	initialized = true;

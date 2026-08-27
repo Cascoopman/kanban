@@ -354,7 +354,6 @@ export function KanbanBoard({
 						<BoardColumn
 							key={column.id}
 							column={column}
-							board={data}
 							taskSessions={taskSessions}
 							onCreateTask={column.id === "in_progress" ? onCreateTask : undefined}
 							onBranchTask={column.id !== "trash" ? onBranchTask : undefined}
