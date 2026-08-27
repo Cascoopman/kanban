@@ -6,7 +6,6 @@ import { useTaskSessions } from "@/hooks/use-task-sessions";
 import type { BoardCard } from "@/types";
 
 const startTaskSessionMutateMock = vi.hoisted(() => vi.fn());
-const trackTaskResumedFromTrashMock = vi.hoisted(() => vi.fn());
 const requestedProjectIdMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/runtime/trpc-client", () => ({
@@ -24,10 +23,6 @@ vi.mock("@/runtime/trpc-client", () => ({
 
 vi.mock("@/runtime/task-session-geometry", () => ({
 	estimateTaskSessionGeometry: () => ({ cols: 120, rows: 40 }),
-}));
-
-vi.mock("@/telemetry/events", () => ({
-	trackTaskResumedFromTrash: trackTaskResumedFromTrashMock,
 }));
 
 interface HookSnapshot {
@@ -69,7 +64,6 @@ describe("useTaskSessions", () => {
 
 	beforeEach(() => {
 		startTaskSessionMutateMock.mockReset();
-		trackTaskResumedFromTrashMock.mockReset();
 		requestedProjectIdMock.mockReset();
 		startTaskSessionMutateMock.mockResolvedValue({
 			ok: true,
@@ -109,7 +103,7 @@ describe("useTaskSessions", () => {
 		}
 	});
 
-	it("tracks successful resume-from-trash starts", async () => {
+	it("starts a task from trash", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
 
 		await act(async () => {
@@ -130,41 +124,11 @@ describe("useTaskSessions", () => {
 			await latestSnapshot?.startTaskSession(createTask(), { resumeFromTrash: true });
 		});
 
-		expect(trackTaskResumedFromTrashMock).toHaveBeenCalledTimes(1);
+		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(expect.objectContaining({ resumeFromTrash: true }));
 	});
 
-	it("does not track regular task starts", async () => {
+	it("forwards the initial prompt when starting a newly created task", async () => {
 		let latestSnapshot: HookSnapshot | null = null;
-
-		await act(async () => {
-			root.render(
-				<HookHarness
-					onSnapshot={(snapshot) => {
-						latestSnapshot = snapshot;
-					}}
-				/>,
-			);
-		});
-
-		if (latestSnapshot === null) {
-			throw new Error("Expected a hook snapshot.");
-		}
-
-		await act(async () => {
-			await latestSnapshot?.startTaskSession(createTask());
-		});
-
-		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
-	});
-
-	it("forwards the initial prompt and images when starting a newly created task", async () => {
-		let latestSnapshot: HookSnapshot | null = null;
-		const image = {
-			id: "image-1",
-			data: "aGVsbG8=",
-			mimeType: "image/png",
-			name: "reference.png",
-		};
 
 		await act(async () => {
 			root.render(
@@ -179,14 +143,12 @@ describe("useTaskSessions", () => {
 		await act(async () => {
 			await latestSnapshot?.startTaskSession(createTask(), {
 				initialPrompt: "Implement the prompt-first task flow",
-				images: [image],
 			});
 		});
 
 		expect(startTaskSessionMutateMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				prompt: "Implement the prompt-first task flow",
-				images: [image],
 			}),
 		);
 	});
@@ -258,7 +220,6 @@ describe("useTaskSessions", () => {
 				resumeExistingSession: "running",
 			}),
 		);
-		expect(trackTaskResumedFromTrashMock).not.toHaveBeenCalled();
 	});
 
 	it("forwards start-in-plan-mode from the task card when starting a task", async () => {

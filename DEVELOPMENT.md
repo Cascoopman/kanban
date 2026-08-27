@@ -222,15 +222,6 @@ For a full technical breakdown, see:
 
 - `docs/runtime-hooks-architecture.md`
 
-## PostHog telemetry config
+## Sentry error reporting
 
-The web UI reads PostHog settings at build time:
-
-- `POSTHOG_KEY`
-- `POSTHOG_HOST`
-
-Local development:
-- Set these in `web-ui/.env.local` (see `web-ui/.env.example`).
-- If `POSTHOG_KEY` or `POSTHOG_HOST` is missing, telemetry does not initialize.
-
-Source builds have telemetry disabled unless both values are explicitly provided.
+Set `VITE_SENTRY_DSN` for browser error reporting and `SENTRY_DSN` for runtime error reporting. Source-map uploads are opt-in: set `SENTRY_UPLOAD_SOURCEMAPS=1` and `SENTRY_ORG=<organization-slug>`; local uploads use your existing Sentry CLI login, while CI should provide `SENTRY_AUTH_TOKEN` securely.

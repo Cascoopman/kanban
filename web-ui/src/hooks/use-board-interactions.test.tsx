@@ -39,7 +39,6 @@ function createBoard({ inProgress = [], trash = [] }: { inProgress?: BoardCard[]
 			{ id: "on_hold", title: "On Hold", cards: [] },
 			{ id: "trash", title: "Done", cards: trash },
 		],
-		dependencies: [],
 	};
 }
 

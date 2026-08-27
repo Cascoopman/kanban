@@ -13,14 +13,12 @@ import {
 	type RuntimeWorkspaceStateSaveRequest,
 	runtimeBoardCardSchema,
 	runtimeBoardColumnSchema,
-	runtimeTaskDependencySchema,
 	runtimeTaskSessionSummarySchema,
 	runtimeWorkspaceStateSaveRequestSchema,
 } from "../core/api-contract";
 import { createGitProcessEnv } from "../core/git-process-env";
 import { getRuntimeHomePath } from "../core/runtime-home";
 import { getTaskColumnId, moveTaskToColumn } from "../core/task-board-mutations";
-import { sanitizeTaskDependencies } from "../core/task-dependency-graph";
 import { type LockRequest, lockedFileSystem } from "../fs/locked-file-system";
 
 export { getRuntimeHomePath } from "../core/runtime-home";
@@ -150,7 +148,6 @@ function createEmptyBoard(): RuntimeBoardData {
 			title: column.title,
 			cards: [],
 		})),
-		dependencies: [],
 	};
 }
 
@@ -160,16 +157,8 @@ const legacyBoardColumnSchema = z.object({
 	cards: z.array(runtimeBoardCardSchema),
 });
 
-const legacyTaskDependencySchema = z.object({
-	id: z.string().trim().min(1),
-	fromTaskId: z.string().trim().min(1),
-	toTaskId: z.string().trim().min(1),
-	createdAt: z.number(),
-});
-
 const persistedBoardSchema = z.object({
 	columns: z.array(z.union([runtimeBoardColumnSchema, legacyBoardColumnSchema])),
-	dependencies: z.array(z.union([runtimeTaskDependencySchema, legacyTaskDependencySchema])).optional(),
 });
 
 function normalizePersistedBoard(board: z.infer<typeof persistedBoardSchema>): RuntimeBoardData {
@@ -184,21 +173,7 @@ function normalizePersistedBoard(board: z.infer<typeof persistedBoardSchema>): R
 		...column,
 		cards: cardsByColumn.get(column.id) ?? [],
 	}));
-	const taskIds = new Set(columns.flatMap((column) => column.cards.map((card) => card.id)));
-	const dependencies = sanitizeTaskDependencies(
-		taskIds,
-		(board.dependencies ?? []).map((dependency) =>
-			"taskId" in dependency
-				? dependency
-				: {
-						id: dependency.id,
-						taskId: dependency.fromTaskId,
-						dependsOnTaskId: dependency.toTaskId,
-						createdAt: dependency.createdAt,
-					},
-		),
-	);
-	return { columns, dependencies };
+	return { columns };
 }
 
 function createEmptyWorkspaceIndex(): WorkspaceIndexFile {

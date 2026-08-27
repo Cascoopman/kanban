@@ -7,12 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ColumnIndicator } from "@/components/ui/column-indicator";
 import type { RuntimeTaskSessionSummary } from "@/runtime/types";
 import { isCardDropDisabled, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import { getTaskDependencies, getUnresolvedTaskDependencies } from "@/state/task-dependency-state";
 import type { BoardCard as BoardCardModel, BoardColumnId, BoardColumn as BoardColumnModel, BoardData } from "@/types";
 
 export function BoardColumn({
 	column,
-	board,
 	taskSessions,
 	onCreateTask,
 	onBranchTask,
@@ -29,7 +27,6 @@ export function BoardColumn({
 	hideCardActions = false,
 }: {
 	column: BoardColumnModel;
-	board: BoardData;
 	taskSessions: Record<string, RuntimeTaskSessionSummary>;
 	onCreateTask?: () => void;
 	onBranchTask?: (task: BoardCardModel) => void;
@@ -140,10 +137,6 @@ export function BoardColumn({
 											isMoveToTrashLoading={moveToTrashLoadingById?.[card.id] ?? false}
 											isDragDisabled={isDragDisabled}
 											hideActions={hideCardActions}
-											dependencySummary={{
-												total: getTaskDependencies(board, card).length,
-												unresolved: getUnresolvedTaskDependencies(board, card).length,
-											}}
 											onClick={() => onCardClick?.(card)}
 										/>,
 									);

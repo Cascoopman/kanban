@@ -1,23 +1,13 @@
-import { ImagePlus, Paperclip } from "lucide-react";
-import type { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, ReactElement } from "react";
+import type { KeyboardEvent, ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type InlineCompletionItem, InlineCompletionPicker } from "@/components/inline-completion-picker";
-import {
-	ACCEPTED_TASK_IMAGE_INPUT_ACCEPT,
-	collectImageFilesFromDataTransfer,
-	extractImagesFromDataTransfer,
-	fileToTaskImage,
-} from "@/components/task-image-input-utils";
-import { TaskImageStrip } from "@/components/task-image-strip";
 import {
 	applyTaskPromptCompletion,
 	buildMentionInsertText,
 	detectActiveTaskPromptMention,
 } from "@/components/task-prompt-composer-completion";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { getRuntimeTrpcClient } from "@/runtime/trpc-client";
-import type { TaskImage } from "@/types";
 import { useDebouncedEffect } from "@/utils/react-use";
 
 const FILE_MENTION_LIMIT = 8;
@@ -28,8 +18,6 @@ interface TaskPromptComposerProps {
 	id?: string;
 	value: string;
 	onValueChange: (value: string) => void;
-	images?: TaskImage[];
-	onImagesChange?: (images: TaskImage[]) => void;
 	onSubmit?: () => void;
 	onSubmitAndStart?: () => void;
 	onEscape?: () => void;
@@ -38,15 +26,12 @@ interface TaskPromptComposerProps {
 	enabled?: boolean;
 	autoFocus?: boolean;
 	workspaceId?: string | null;
-	showAttachImageButton?: boolean;
 }
 
 export function TaskPromptComposer({
 	id,
 	value,
 	onValueChange,
-	images = [],
-	onImagesChange,
 	onSubmit,
 	onSubmitAndStart,
 	onEscape,
@@ -55,10 +40,8 @@ export function TaskPromptComposer({
 	enabled = true,
 	autoFocus = false,
 	workspaceId = null,
-	showAttachImageButton = true,
 }: TaskPromptComposerProps): ReactElement {
 	const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const mentionSearchRequestIdRef = useRef(0);
 	const [cursorIndex, setCursorIndex] = useState(0);
 	const [mentionItems, setMentionItems] = useState<InlineCompletionItem[]>([]);
@@ -66,7 +49,6 @@ export function TaskPromptComposer({
 	const [isMentionSearchLoading, setIsMentionSearchLoading] = useState(false);
 	const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
 	const [isSuggestionPickerOpen, setIsSuggestionPickerOpen] = useState(false);
-	const [isDragOver, setIsDragOver] = useState(false);
 
 	const autoResizeTextarea = useCallback(() => {
 		const textarea = textareaRef.current;
@@ -242,114 +224,11 @@ export function TaskPromptComposer({
 		],
 	);
 
-	const appendImages = useCallback(
-		(newImages: TaskImage[]) => {
-			if (!onImagesChange || newImages.length === 0) {
-				return;
-			}
-			onImagesChange([...images, ...newImages]);
-		},
-		[images, onImagesChange],
-	);
-
-	const handlePaste = useCallback(
-		(event: ClipboardEvent<HTMLTextAreaElement>) => {
-			if (!onImagesChange || !event.clipboardData) {
-				return;
-			}
-			const imageFiles = collectImageFilesFromDataTransfer(event.clipboardData);
-			if (imageFiles.length === 0) {
-				return;
-			}
-			event.preventDefault();
-			void (async () => {
-				const newImages = await extractImagesFromDataTransfer(event.clipboardData);
-				appendImages(newImages);
-			})();
-		},
-		[appendImages, onImagesChange],
-	);
-
-	const handleDrop = useCallback(
-		(event: DragEvent<HTMLDivElement>) => {
-			setIsDragOver(false);
-			if (!onImagesChange || !event.dataTransfer) {
-				return;
-			}
-			const imageFiles = collectImageFilesFromDataTransfer(event.dataTransfer);
-			if (imageFiles.length === 0) {
-				return;
-			}
-			event.preventDefault();
-			void (async () => {
-				const newImages = await extractImagesFromDataTransfer(event.dataTransfer);
-				appendImages(newImages);
-			})();
-		},
-		[appendImages, onImagesChange],
-	);
-
-	const handleDragOver = useCallback(
-		(event: DragEvent<HTMLDivElement>) => {
-			if (!onImagesChange) {
-				return;
-			}
-			const hasFiles = event.dataTransfer.types.includes("Files");
-			if (!hasFiles) {
-				return;
-			}
-			event.preventDefault();
-			setIsDragOver(true);
-		},
-		[onImagesChange],
-	);
-
-	const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
-		// Only clear drag state when leaving the drop zone container,
-		// not when moving between child elements within it.
-		if (event.currentTarget.contains(event.relatedTarget as Node)) {
-			return;
-		}
-		setIsDragOver(false);
-	}, []);
-
-	const handleRemoveImage = useCallback(
-		(imageId: string) => {
-			onImagesChange?.(images.filter((image) => image.id !== imageId));
-		},
-		[images, onImagesChange],
-	);
-
-	const handleAttachClick = useCallback(() => {
-		fileInputRef.current?.click();
-	}, []);
-
-	const handleFileInputChange = useCallback(
-		(event: ChangeEvent<HTMLInputElement>) => {
-			if (!onImagesChange || !event.currentTarget.files) {
-				return;
-			}
-			const files = Array.from(event.currentTarget.files);
-			void (async () => {
-				const newImages: TaskImage[] = [];
-				for (const file of files) {
-					const image = await fileToTaskImage(file);
-					if (image) {
-						newImages.push(image);
-					}
-				}
-				appendImages(newImages);
-				event.currentTarget.value = "";
-			})();
-		},
-		[appendImages, onImagesChange],
-	);
-
 	const showSuggestions = Boolean(enabled && isSuggestionPickerOpen && activeToken);
 
 	return (
 		<div>
-			<div className="relative" onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}>
+			<div className="relative">
 				<InlineCompletionPicker
 					open={showSuggestions}
 					items={suggestions}
@@ -375,12 +254,10 @@ export function TaskPromptComposer({
 						onKeyUp={(event) =>
 							setCursorIndex(event.currentTarget.selectionStart ?? event.currentTarget.value.length)
 						}
-						onPaste={handlePaste}
 						placeholder={placeholder ?? "Describe the task"}
 						disabled={disabled}
 						className={cn(
-							"w-full rounded-md border bg-surface-3 p-3 text-[13px] text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none",
-							isDragOver ? "border-accent border-dashed" : "border-border-bright",
+							"w-full rounded-md border border-border-bright bg-surface-3 p-3 text-[13px] text-text-primary placeholder:text-text-tertiary focus:border-border-focus focus:outline-none",
 						)}
 						style={{
 							minHeight: 80,
@@ -390,43 +267,7 @@ export function TaskPromptComposer({
 						}}
 					/>
 				</InlineCompletionPicker>
-				{isDragOver ? (
-					<div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md bg-accent/5">
-						<div className="flex items-center gap-1.5 text-[12px] text-accent font-medium">
-							<ImagePlus size={14} />
-							<span>Drop image here</span>
-						</div>
-					</div>
-				) : null}
 			</div>
-
-			{images.length > 0 ? (
-				<TaskImageStrip images={images} onRemoveImage={handleRemoveImage} className="mt-1.5" />
-			) : null}
-
-			{onImagesChange && showAttachImageButton ? (
-				<>
-					<input
-						ref={fileInputRef}
-						type="file"
-						accept={ACCEPTED_TASK_IMAGE_INPUT_ACCEPT}
-						multiple
-						className="hidden"
-						onChange={handleFileInputChange}
-					/>
-					<div className={images.length > 0 ? "mt-1" : "mt-1.5"}>
-						<Button
-							variant="ghost"
-							size="sm"
-							icon={<Paperclip size={14} />}
-							onClick={handleAttachClick}
-							disabled={disabled || !enabled}
-						>
-							Attach image
-						</Button>
-					</div>
-				</>
-			) : null}
 		</div>
 	);
 }

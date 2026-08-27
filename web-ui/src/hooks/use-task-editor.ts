@@ -3,7 +3,6 @@ import { useCallback } from "react";
 
 import type { RuntimeAgentId } from "@/runtime/types";
 import { addTaskToColumnWithResult } from "@/state/board-state";
-import { toTelemetrySelectedAgentId, trackTaskCreated } from "@/telemetry/events";
 import type { BoardData } from "@/types";
 
 interface UseTaskEditorInput {
@@ -38,10 +37,6 @@ export function useTaskEditor({
 			baseRef: defaultTaskBranchRef,
 		});
 		setBoard(created.board);
-		trackTaskCreated({
-			selected_agent_id: toTelemetrySelectedAgentId(selectedAgentId),
-			start_in_plan_mode: false,
-		});
 		return { taskId: created.task.id };
 	}, [board, defaultTaskBranchRef, selectedAgentId, setBoard]);
 

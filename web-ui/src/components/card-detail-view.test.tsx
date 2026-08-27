@@ -85,7 +85,7 @@ function createSelection(taskId: string): CardSelection {
 		title: "In Progress",
 		cards: [card],
 	};
-	return { card, column, allColumns: [column], allDependencies: [] };
+	return { card, column, allColumns: [column] };
 }
 
 describe("CardDetailView VS Code visibility", () => {
@@ -135,10 +135,6 @@ describe("CardDetailView VS Code visibility", () => {
 					bottomTerminalTaskId={null}
 					bottomTerminalSummary={null}
 					onBottomTerminalClose={() => {}}
-					dependencyBoard={{ columns: selection.allColumns, dependencies: [] }}
-					onAddDependency={() => {}}
-					onRemoveDependency={() => {}}
-					onSelectDependencyTask={() => {}}
 				/>,
 			);
 		});

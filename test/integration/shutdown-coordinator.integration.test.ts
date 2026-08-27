@@ -87,7 +87,6 @@ function createBoard(taskIds: {
 				cards: (taskIds.trash ?? []).map((taskId) => createCard(taskId)),
 			},
 		],
-		dependencies: [],
 	};
 }
 

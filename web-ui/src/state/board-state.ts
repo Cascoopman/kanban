@@ -1,6 +1,4 @@
 import type { DropResult } from "@hello-pangea/dnd";
-import { removeTaskDependenciesForTasks } from "@runtime-task-dependencies";
-import { sanitizeTaskDependencies } from "@runtime-task-dependency-graph";
 import { createShortTaskId } from "@runtime-task-id";
 import * as runtimeTaskState from "@runtime-task-state";
 import { validateTaskTitle } from "@runtime-task-title";
@@ -9,7 +7,7 @@ import { createInitialBoardData } from "@/data/board-data";
 import { isSupportedAgentId } from "@/runtime/supported-agents";
 import type { RuntimeAgentId } from "@/runtime/types";
 import { isAllowedCrossColumnCardMove, type ProgrammaticCardMoveInFlight } from "@/state/drag-rules";
-import type { BoardCard, BoardColumn, BoardColumnId, BoardData, BoardDependency, CardSelection } from "@/types";
+import type { BoardCard, BoardColumn, BoardColumnId, BoardData, CardSelection } from "@/types";
 
 export interface TaskDraft {
 	taskId?: string;
@@ -102,37 +100,6 @@ function normalizeCard(rawCard: unknown): BoardCard | null {
 	};
 }
 
-function normalizeDependency(rawDependency: unknown): BoardDependency | null {
-	if (!rawDependency || typeof rawDependency !== "object") return null;
-	const dependency = rawDependency as {
-		id?: unknown;
-		taskId?: unknown;
-		dependsOnTaskId?: unknown;
-		fromTaskId?: unknown;
-		toTaskId?: unknown;
-		createdAt?: unknown;
-	};
-	const taskId = typeof dependency.taskId === "string" ? dependency.taskId : dependency.fromTaskId;
-	const dependsOnTaskId =
-		typeof dependency.dependsOnTaskId === "string" ? dependency.dependsOnTaskId : dependency.toTaskId;
-	if (
-		typeof dependency.id !== "string" ||
-		!dependency.id.trim() ||
-		typeof taskId !== "string" ||
-		!taskId.trim() ||
-		typeof dependsOnTaskId !== "string" ||
-		!dependsOnTaskId.trim()
-	) {
-		return null;
-	}
-	return {
-		id: dependency.id.trim(),
-		taskId: taskId.trim(),
-		dependsOnTaskId: dependsOnTaskId.trim(),
-		createdAt: typeof dependency.createdAt === "number" ? dependency.createdAt : Date.now(),
-	};
-}
-
 export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 	if (!rawBoard || typeof rawBoard !== "object") {
 		return null;
@@ -172,14 +139,7 @@ export function normalizeBoardData(rawBoard: unknown): BoardData | null {
 		}
 	}
 
-	const taskIds = new Set(normalizedColumns.flatMap((column) => column.cards.map((card) => card.id)));
-	const rawDependencies = (rawBoard as { dependencies?: unknown }).dependencies;
-	const parsedDependencies = Array.isArray(rawDependencies)
-		? rawDependencies
-				.map(normalizeDependency)
-				.filter((dependency): dependency is BoardDependency => Boolean(dependency))
-		: [];
-	return { columns: normalizedColumns, dependencies: sanitizeTaskDependencies(taskIds, parsedDependencies) };
+	return { columns: normalizedColumns };
 }
 
 export function addTaskToColumn(board: BoardData, columnId: BoardColumnId, draft: TaskDraft): BoardData {
@@ -402,10 +362,7 @@ export function clearColumnTasks(
 
 	const clearedTaskIds = targetColumn.cards.map((card) => card.id);
 	const columns = board.columns.map((column) => (column.id === columnId ? { ...column, cards: [] } : column));
-	return {
-		board: removeTaskDependenciesForTasks(withUpdatedColumns(board, columns), new Set(clearedTaskIds)),
-		clearedTaskIds,
-	};
+	return { board: withUpdatedColumns(board, columns), clearedTaskIds };
 }
 
 export function findCardSelection(board: BoardData, taskId: string): CardSelection | null {
@@ -416,7 +373,6 @@ export function findCardSelection(board: BoardData, taskId: string): CardSelecti
 				card,
 				column,
 				allColumns: board.columns,
-				allDependencies: board.dependencies,
 			};
 		}
 	}
