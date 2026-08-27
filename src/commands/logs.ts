@@ -1,9 +1,8 @@
 import { open, stat } from "node:fs/promises";
-import { Argument, type Command, InvalidArgumentError } from "commander";
 
-import { getLogFilePath, LOG_SOURCES, type LogSource } from "../logging/log-files";
+import { getLogFilePath, type LogSource } from "../logging/log-files";
 
-interface StoredLogLine {
+export interface StoredLogLine {
 	source: LogSource;
 	line: string;
 	timestamp: string;
@@ -18,14 +17,6 @@ interface LogCursor {
 interface LogSnapshot {
 	lines: StoredLogLine[];
 	offsets: ReadonlyMap<LogSource, number>;
-}
-
-function parseTailCount(value: string): number {
-	const parsed = Number.parseInt(value, 10);
-	if (!Number.isSafeInteger(parsed) || parsed < 0) {
-		throw new InvalidArgumentError("Expected a non-negative integer.");
-	}
-	return parsed;
 }
 
 function parseStoredLines(source: LogSource, content: string): StoredLogLine[] {
@@ -191,48 +182,4 @@ export async function followLogLines(
 			onLines(lines);
 		}
 	}
-}
-
-export function registerLogsCommand(program: Command): void {
-	program
-		.command("logs")
-		.description("Read persisted Kanban frontend and backend logs.")
-		.addArgument(new Argument("[source]", "Log source to read.").choices([...LOG_SOURCES]))
-		.option("--all", "Read both frontend and backend logs.")
-		.option("-n, --tail <lines>", "Show only the last number of lines.", parseTailCount)
-		.option("-f, --follow", "Continue printing new log lines.")
-		.action(
-			async (
-				source: LogSource | undefined,
-				options: { all?: boolean; tail?: number; follow?: boolean },
-			): Promise<void> => {
-				if (source && options.all) {
-					throw new Error("Choose a log source or --all, not both.");
-				}
-				const sources: readonly LogSource[] = source ? [source] : LOG_SOURCES;
-				const showSource = sources.length > 1;
-				const writeLines = (lines: StoredLogLine[]) => {
-					if (lines.length > 0) {
-						process.stdout.write(`${lines.map((line) => formatLogLine(line, showSource)).join("\n")}\n`);
-					}
-				};
-
-				const snapshot = await readLogSnapshot(sources, options.tail ?? null);
-				writeLines(snapshot.lines);
-				if (!options.follow) {
-					return;
-				}
-
-				const controller = new AbortController();
-				const stopFollowing = () => controller.abort();
-				process.once("SIGINT", stopFollowing);
-				process.once("SIGTERM", stopFollowing);
-				try {
-					await followLogLines(sources, writeLines, controller.signal, 250, snapshot.offsets);
-				} finally {
-					process.removeListener("SIGINT", stopFollowing);
-					process.removeListener("SIGTERM", stopFollowing);
-				}
-			},
-		);
 }

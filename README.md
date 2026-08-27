@@ -30,6 +30,18 @@ Run this from the root of any git repo. Kanban detects Claude Code or OpenAI Cod
 ### 2. Create tasks
 Create a task with the new-task shortcut or board controls. Kanban immediately creates a placeholder task on the current branch, opens the configured agent's live terminal, and focuses it so your first prompt or native slash command is typed directly into Codex or Claude.
 
+### Agent MCP
+
+Kanban's agent-facing interface is the local stdio MCP server, not CLI subcommands. After installing or linking Kanban, register it once with Codex:
+
+```bash
+codex mcp add kanban -- kanban-mcp
+```
+
+The server exposes task lifecycle tools (`kanban_task_list`, `kanban_task_current`, `kanban_task_create`, `kanban_task_branch`, `kanban_task_update`, `kanban_task_start`, `kanban_task_trash`, and `kanban_task_delete`), `kanban_notify`, and `kanban_logs`. In a Kanban task session, omit `task_id` to operate on the current task. Outside one, pass `project_path` to select the workspace. `kanban_task_trash` removes task worktrees and `kanban_task_delete` permanently removes task records and worktrees, so agents must obtain explicit user confirmation first.
+
+`kanban` remains the local board launcher and `kanban-hooks` is internal runtime plumbing; neither is the agent API. See [MCP setup and tool reference](docs/mcp.md).
+
 ### 3. Work in parallel
 Every task gets its own worktree so agents can work in parallel without merge conflicts. Under the hood, Kanban also symlinks gitignored files like `node_modules` so you don't have to worry about slow `npm install`s for each copy of your project.
 
@@ -80,13 +92,7 @@ backend.log
 frontend.log
 ```
 
-Read them through the CLI:
-
-```bash
-kanban logs backend
-kanban logs frontend --tail 200
-kanban logs --all --follow
-```
+Read a bounded snapshot through `kanban_logs` (`source`: `frontend`, `backend`, or `all`; `tail`: up to 1,000 lines).
 
 ---
 

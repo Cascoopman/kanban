@@ -1,5 +1,4 @@
 import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
-import type { Command } from "commander";
 
 import type {
 	RuntimeAgentId,
@@ -7,9 +6,8 @@ import type {
 	RuntimeBoardColumnId,
 	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
-import { runtimeAgentIdSchema } from "../core/api-contract";
 import { sendMacOsNotification } from "../core/macos-notification";
-import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin, getRuntimeFetch } from "../core/runtime-endpoint";
+import { buildKanbanRuntimeUrl, getRuntimeFetch } from "../core/runtime-endpoint";
 import {
 	addTaskToColumn,
 	deleteTasksFromBoard,
@@ -22,8 +20,8 @@ import { loadWorkspaceContext, loadWorkspaceContextById, mutateWorkspaceState } 
 import { readTaskSessionContextFromEnv } from "../terminal/hook-runtime-context";
 import type { RuntimeAppRouter } from "../trpc/app-router";
 
-const LIST_TASK_COLUMNS = ["in_progress", "review", "on_hold", "trash"] as const;
-type ListTaskColumn = (typeof LIST_TASK_COLUMNS)[number];
+export const LIST_TASK_COLUMNS = ["in_progress", "review", "on_hold", "trash"] as const;
+export type ListTaskColumn = (typeof LIST_TASK_COLUMNS)[number];
 type TaskCommandTarget = { taskId?: string; column?: ListTaskColumn };
 
 type ResolvedTaskCommandTarget =
@@ -41,7 +39,7 @@ interface RuntimeWorkspaceMutationResult<T> {
 	value: T;
 }
 
-type JsonRecord = Record<string, unknown>;
+export type JsonRecord = Record<string, unknown>;
 
 function toErrorMessage(error: unknown): string {
 	if (error instanceof Error && error.message.trim().length > 0) {
@@ -50,11 +48,7 @@ function toErrorMessage(error: unknown): string {
 	return String(error);
 }
 
-function printJson(payload: unknown): void {
-	process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
-}
-
-function parseListColumn(value: string | undefined): ListTaskColumn | undefined {
+export function parseListColumn(value: string | undefined): ListTaskColumn | undefined {
 	if (value === undefined) {
 		return undefined;
 	}
@@ -65,22 +59,6 @@ function parseListColumn(value: string | undefined): ListTaskColumn | undefined 
 		return value;
 	}
 	throw new Error(`Invalid column "${value}". Expected one of: ${LIST_TASK_COLUMNS.join(", ")}, done.`);
-}
-
-const VALID_AGENT_IDS = runtimeAgentIdSchema.options;
-
-function parseAgentId(value: string | undefined): RuntimeAgentId | null | undefined {
-	if (value === undefined) {
-		return undefined;
-	}
-	if (value === "default") {
-		return null;
-	}
-	const result = runtimeAgentIdSchema.safeParse(value);
-	if (result.success) {
-		return result.data;
-	}
-	throw new Error(`Invalid agent ID "${value}". Expected one of: ${VALID_AGENT_IDS.join(", ")}, default.`);
 }
 
 function resolveTaskCommandTarget(input: TaskCommandTarget, commandName: string): ResolvedTaskCommandTarget {
@@ -141,7 +119,7 @@ async function resolveRuntimeWorkspace(
 	});
 }
 
-function resolveCurrentTaskId(explicitTaskId: string | undefined, commandName: string): string {
+export function resolveCurrentTaskId(explicitTaskId: string | undefined, commandName: string): string {
 	const taskId = explicitTaskId?.trim() || readTaskSessionContextFromEnv().taskId;
 	if (!taskId) {
 		throw new Error(`${commandName} requires --task-id outside a Kanban task session.`);
@@ -246,7 +224,7 @@ function formatTaskRecord(
 	};
 }
 
-async function getCurrentTask(input: { cwd: string; projectPath?: string }): Promise<JsonRecord> {
+export async function getCurrentTask(input: { cwd: string; projectPath?: string }): Promise<JsonRecord> {
 	const taskId = resolveCurrentTaskId(undefined, "task current");
 	const workspace = await resolveRuntimeWorkspace(input.projectPath, input.cwd, {
 		autoCreateIfMissing: false,
@@ -279,7 +257,11 @@ function findTasksInColumn(
 	}));
 }
 
-async function listTasks(input: { cwd: string; projectPath?: string; column?: ListTaskColumn }): Promise<JsonRecord> {
+export async function listTasks(input: {
+	cwd: string;
+	projectPath?: string;
+	column?: ListTaskColumn;
+}): Promise<JsonRecord> {
 	const workspace = await resolveRuntimeWorkspace(input.projectPath, input.cwd, {
 		autoCreateIfMissing: false,
 	});
@@ -336,7 +318,7 @@ async function deleteTaskWorkspace(
 	}
 }
 
-async function createTask(input: {
+export async function createTask(input: {
 	cwd: string;
 	title: string;
 	projectPath?: string;
@@ -384,7 +366,7 @@ async function createTask(input: {
 	};
 }
 
-async function branchTaskCommand(input: {
+export async function branchTask(input: {
 	cwd: string;
 	taskId: string;
 	title: string;
@@ -464,7 +446,7 @@ async function branchTaskCommand(input: {
 	};
 }
 
-async function updateTaskCommand(input: {
+export async function updateTaskCommand(input: {
 	cwd: string;
 	taskId: string;
 	title?: string;
@@ -518,7 +500,7 @@ async function updateTaskCommand(input: {
 	};
 }
 
-async function startTask(input: {
+export async function startTask(input: {
 	cwd: string;
 	taskId: string;
 	projectPath?: string;
@@ -671,7 +653,7 @@ async function trashTaskById(input: {
 	};
 }
 
-async function trashTask(input: {
+export async function trashTask(input: {
 	cwd: string;
 	taskId?: string;
 	column?: ListTaskColumn;
@@ -752,7 +734,7 @@ async function trashTask(input: {
 	};
 }
 
-async function deleteTaskCommand(input: {
+export async function deleteTask(input: {
 	cwd: string;
 	taskId?: string;
 	column?: ListTaskColumn;
@@ -853,43 +835,7 @@ async function deleteTaskCommand(input: {
 	};
 }
 
-function parseOptionalBooleanOption(value: unknown, flagName: string): boolean | undefined {
-	if (value === undefined) {
-		return undefined;
-	}
-	if (value === true || value === false) {
-		return value;
-	}
-	if (typeof value !== "string") {
-		throw new Error(`Invalid boolean value for ${flagName}. Use true or false.`);
-	}
-	const normalized = value.trim().toLowerCase();
-	if (normalized === "true" || normalized === "1" || normalized === "yes") {
-		return true;
-	}
-	if (normalized === "false" || normalized === "0" || normalized === "no") {
-		return false;
-	}
-	throw new Error(`Invalid boolean value for ${flagName}: "${value}". Use true or false.`);
-}
-
-async function runTaskCommand(
-	handler: () => Promise<JsonRecord>,
-	options: { includeRuntimeOrigin?: boolean } = {},
-): Promise<void> {
-	try {
-		printJson(await handler());
-	} catch (error) {
-		const runtimeContext = options.includeRuntimeOrigin === false ? "" : ` at ${getKanbanRuntimeOrigin()}`;
-		printJson({
-			ok: false,
-			error: `Task command failed${runtimeContext}: ${toErrorMessage(error)}`,
-		});
-		process.exitCode = 1;
-	}
-}
-
-function sendUrgentTaskNotification(input: {
+export function sendUrgentTaskNotification(input: {
 	message: string;
 	title?: string;
 	subtitle?: string;
@@ -900,212 +846,4 @@ function sendUrgentTaskNotification(input: {
 		ok: true,
 		notification: sendMacOsNotification(input),
 	};
-}
-
-export function registerTaskCommand(program: Command): void {
-	const task = program.command("task").alias("tasks").description("Manage Kanban board tasks from the CLI.");
-
-	task
-		.command("list")
-		.description("List Kanban tasks for a workspace.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.option(
-			"--column <column>",
-			"Filter column: in_progress | review | on_hold | done. trash is also accepted.",
-			parseListColumn,
-		)
-		.action(async (options: { projectPath?: string; column?: ListTaskColumn }) => {
-			await runTaskCommand(
-				async () =>
-					await listTasks({
-						cwd: process.cwd(),
-						projectPath: options.projectPath,
-						column: options.column,
-					}),
-			);
-		});
-
-	task
-		.command("current")
-		.alias("whoami")
-		.description("Show the task associated with the current agent session.")
-		.option("--project-path <path>", "Workspace path. Defaults to the current task workspace.")
-		.action(async (options: { projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await getCurrentTask({
-						cwd: process.cwd(),
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
-		.command("create")
-		.description("Create a task and start its agent session.")
-		.requiredOption("--title <text>", "Task title.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.option("--base-ref <branch>", "Task base branch/ref.")
-		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
-		.option("--agent-id <id>", "Agent override: claude | codex | default.")
-		.action(
-			async (options: {
-				title: string;
-				projectPath?: string;
-				baseRef?: string;
-				startInPlanMode?: unknown;
-				agentId?: string;
-			}) => {
-				await runTaskCommand(
-					async () =>
-						await createTask({
-							cwd: process.cwd(),
-							title: options.title,
-							projectPath: options.projectPath,
-							baseRef: options.baseRef,
-							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
-							agentId: parseAgentId(options.agentId) ?? undefined,
-						}),
-				);
-			},
-		);
-
-	task
-		.command("branch")
-		.alias("fork")
-		.description("Branch a task's worktree and agent conversation into a new running task.")
-		.requiredOption("--title <text>", "New task title.")
-		.option("--task-id <id>", "Source task ID. Defaults to the current agent task.")
-		.option("--prompt <text>", "Optional first prompt for the forked agent session.")
-		.option("--project-path <path>", "Workspace path. Defaults to the current task workspace.")
-		.action(async (options: { title: string; taskId?: string; prompt?: string; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await branchTaskCommand({
-						cwd: process.cwd(),
-						taskId: resolveCurrentTaskId(options.taskId, "task branch"),
-						title: options.title,
-						prompt: options.prompt,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
-		.command("update")
-		.description("Update an existing task.")
-		.option("--task-id <id>", "Task ID. Defaults to the current agent task.")
-		.option("--title <text>", "Replacement task title.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.option("--base-ref <branch>", "Replacement base branch/ref.")
-		.option("--start-in-plan-mode [value]", "Set plan mode (true|false). Flag-only implies true.")
-		.option("--agent-id <id>", 'Agent override: claude | codex. Use "default" to clear.')
-		.action(
-			async (options: {
-				taskId?: string;
-				title?: string;
-				projectPath?: string;
-				baseRef?: string;
-				startInPlanMode?: unknown;
-				agentId?: string;
-			}) => {
-				await runTaskCommand(
-					async () =>
-						await updateTaskCommand({
-							cwd: process.cwd(),
-							taskId: resolveCurrentTaskId(options.taskId, "task update"),
-							title: options.title,
-							projectPath: options.projectPath,
-							baseRef: options.baseRef,
-							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
-							agentId: parseAgentId(options.agentId),
-						}),
-				);
-			},
-		);
-
-	task
-		.command("notify")
-		.description("Send an urgent macOS Notification Center alert to the user.")
-		.requiredOption("--message <text>", "Notification body with the concrete action and deadline.")
-		.option("--title <text>", 'Notification title. Defaults to "Urgent Kanban alert".')
-		.option("--subtitle <text>", 'Notification subtitle. Defaults to "Action needed".')
-		.option("--sound <name>", 'macOS alert sound. Defaults to "Basso"; use "none" to mute.')
-		.option("--no-modal", "Do not show the Focus-resistant modal alert.")
-		.action(
-			async (options: { message: string; title?: string; subtitle?: string; sound?: string; modal: boolean }) => {
-				await runTaskCommand(
-					async () =>
-						sendUrgentTaskNotification({
-							message: options.message,
-							title: options.title,
-							subtitle: options.subtitle,
-							sound: options.sound,
-							modal: options.modal,
-						}),
-					{ includeRuntimeOrigin: false },
-				);
-			},
-		);
-
-	task
-		.command("trash")
-		.alias("done")
-		.description("Move a task or an entire column to done and clean up task workspaces.")
-		.option("--task-id <id>", "Task ID.")
-		.option(
-			"--column <column>",
-			"Column to move to done: in_progress | review | on_hold | done. trash is also accepted.",
-			parseListColumn,
-		)
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.action(async (options: { taskId?: string; column?: ListTaskColumn; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await trashTask({
-						cwd: process.cwd(),
-						taskId: options.taskId,
-						column: options.column,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
-		.command("delete")
-		.description("Permanently delete a task or every task in a column.")
-		.option("--task-id <id>", "Task ID to permanently delete.")
-		.option(
-			"--column <column>",
-			"Column to bulk-delete: in_progress | review | on_hold | done. trash is also accepted.",
-			parseListColumn,
-		)
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.action(async (options: { taskId?: string; column?: ListTaskColumn; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await deleteTaskCommand({
-						cwd: process.cwd(),
-						taskId: options.taskId,
-						column: options.column,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
-
-	task
-		.command("start")
-		.description("Start or restart an in-progress task session.")
-		.requiredOption("--task-id <id>", "Task ID.")
-		.option("--project-path <path>", "Workspace path. Defaults to current directory workspace.")
-		.action(async (options: { taskId: string; projectPath?: string }) => {
-			await runTaskCommand(
-				async () =>
-					await startTask({
-						cwd: process.cwd(),
-						taskId: options.taskId,
-						projectPath: options.projectPath,
-					}),
-			);
-		});
 }

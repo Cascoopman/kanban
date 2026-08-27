@@ -58,7 +58,7 @@ npm run dev:full -- --with-shutdown-cleanup
 
 If `node_modules` has not been installed in this worktree, `dev:full` auto-runs `npm ci` before launch.
 
-Use `npm run dogfood` when you want to validate the latest built CLI behavior more realistically. It builds the current checkout and launches `dist/cli.js`, which is better for checking packaged behavior, startup and shutdown flows, multi-instance dogfooding, and launch behavior against a target project.
+Use `npm run dogfood` when you want to validate the latest built board-launcher behavior more realistically. It builds the current checkout and launches `dist/cli.js`, which is better for checking packaged startup, shutdown, multi-instance dogfooding, and launch behavior against a target project.
 
 ## VS Code F5 debugging
 
@@ -71,7 +71,7 @@ Shutdown cleanup flags:
 
 - `--skip-shutdown-cleanup`: do not move sessions to trash or delete task worktrees on shutdown
 
-## Build and run packaged CLI
+## Build and run packaged board launcher
 
 ```bash
 npm run build
@@ -148,7 +148,7 @@ kanban
 
 After local code changes, run `npm run build` again before using the linked command.
 
-When switching between worktrees, re-run `npm run link` from the worktree you want to test so the global `kanban` binary points at the right `dist/cli.js`.
+When switching between worktrees, re-run `npm run link` from the worktree you want to test so the global executables point at that worktree's `dist` entrypoints.
 
 Remove the global link:
 
@@ -191,8 +191,8 @@ Internal runtime session states are named `running` and `awaiting_review`, and h
 How it works end to end:
 
 1. `prepareAgentLaunch` wires each agent with hook commands or hook-aware wrappers.
-2. Hook handlers call `kanban hooks ...` subcommands.
-3. `kanban hooks ingest --event <to_review|to_in_progress>` reads hook context from env:
+2. Hook handlers call the internal `kanban-hooks` executable.
+3. `kanban-hooks ingest --event <to_review|to_in_progress>` reads hook context from env:
    - `KANBAN_HOOK_TASK_ID`
    - `KANBAN_HOOK_WORKSPACE_ID`
    - `KANBAN_HOOK_PORT`
@@ -216,7 +216,7 @@ Important behavior details:
 - Hooks are best-effort and should not crash or block the underlying agent process.
 - Hook notify paths are asynchronous to keep agent UX responsive.
 - Runtime transition guards are authoritative and prevent state flapping from duplicate events.
-- Hook transport is implemented in Node and invoked through `kanban hooks ...`, so the behavior is consistent across Windows and non-Windows environments.
+- Hook transport is implemented in Node and invoked through `kanban-hooks`, so the behavior is consistent across Windows and non-Windows environments.
 
 For a full technical breakdown, see:
 

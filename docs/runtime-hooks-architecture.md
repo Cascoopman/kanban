@@ -7,7 +7,7 @@ This document explains how Kanban tracks agent session state using runtime hooks
 It focuses on:
 
 1. Launch-time wiring for each agent.
-2. The `kanban hooks ...` subcommand pipeline.
+2. The internal `kanban-hooks ...` command pipeline.
 3. State transition rules (`running` <-> `awaiting_review`).
 4. Generated files under the runtime home directory.
 5. Platform behavior differences and why the transport is implemented in Node.
@@ -59,9 +59,9 @@ Terminal session starts
   -> prepareAgentLaunch() builds per-agent command/env/config
   -> agent process emits hook-relevant signals
   -> agent hook/wrapper calls:
-       kanban hooks notify --event <to_review|to_in_progress>
+       kanban-hooks notify --event <to_review|to_in_progress>
   -> notify path dispatches best-effort ingest
-       kanban hooks ingest --event <to_review|to_in_progress>
+       kanban-hooks ingest --event <to_review|to_in_progress>
   -> hooks ingest calls runtime TRPC hooks.ingest
   -> hooks API validates transition eligibility
   -> session manager applies reducer transition event
@@ -93,7 +93,7 @@ Generated files by agent:
    2. `~/.kanban/hooks/opencode/opencode.json`
 4. Codex
    1. No persistent wrapper script file is generated now.
-   2. Codex uses `kanban hooks codex-wrapper` as the wrapper command.
+   2. Codex uses `kanban-hooks codex-wrapper` as the wrapper command.
 
 Generated hook files are written through idempotent text writes. Files only update when content changes.
 
@@ -105,9 +105,9 @@ When hook context is available, launch wiring injects:
 2. `KANBAN_HOOK_TASK_ID` and `KANBAN_HOOK_WORKSPACE_ID` for hook compatibility
 3. `KANBAN_HOOK_PORT`
 
-The hook-specific values and port are required by `kanban hooks ingest` to route an event to the correct session and runtime process.
-The agent-facing aliases allow `kanban task current`, `kanban task update --title "..."`,
-`kanban task notify --message "..."`, and `kanban task branch --title "..." --prompt "..."` to
+The hook-specific values and port are required by `kanban-hooks ingest` to route an event to the correct session and runtime process.
+The agent-facing MCP tools allow `kanban_task_current`, `kanban_task_update`,
+`kanban_notify`, and `kanban_task_branch` to
 target the current card or alert the user without copying an ID or resolving the main worktree path.
 Urgent notifications create a Notification Center entry and a short-lived modal alert so Focus modes
 do not hide the immediate call to action.
@@ -116,7 +116,7 @@ and, when available, a fork of the source Claude Code or Codex conversation.
 
 ## Command resolution and cross-platform behavior
 
-Hook commands are not hardcoded as `node dist/cli.js ...`.
+Hook commands are not hardcoded as `node dist/hooks.js ...`.
 
 Instead, command parts are built from current runtime invocation context:
 
@@ -169,7 +169,7 @@ Wiring:
 2. Replace spawn target with:
 
 ```text
-kanban hooks codex-wrapper --real-binary <configured-codex-binary> -- <codex args...>
+kanban-hooks codex-wrapper --real-binary <configured-codex-binary> -- <codex args...>
 ```
 
 3. Keep prompt-detection fallback for returning from review when Codex prompt reappears.
@@ -201,7 +201,7 @@ Wiring:
 4. Hook commands in Gemini settings call:
 
 ```text
-kanban hooks gemini-hook
+kanban-hooks gemini-hook
 ```
 
 Gemini hook handler behavior:
@@ -346,13 +346,13 @@ When transitions are missing:
 
 1. Confirm hook env variables exist inside launched agent process.
 2. Confirm expected generated files exist under `~/.kanban/hooks`.
-3. Run `kanban hooks ingest --event to_review` manually with env vars set.
+3. Run `kanban-hooks ingest --event to_review` manually with env vars set.
 4. For Codex:
    1. Check `CODEX_TUI_SESSION_LOG_PATH`.
    2. Confirm log lines contain `dir=to_tui` and `kind=codex_event`.
 5. For Gemini:
    1. Confirm `GEMINI_CLI_SYSTEM_SETTINGS_PATH` points to generated settings.
-   2. Confirm hook command is `kanban hooks gemini-hook`.
+   2. Confirm hook command is `kanban-hooks gemini-hook`.
 6. For OpenCode:
    1. Confirm `OPENCODE_CONFIG` points to generated config.
    2. Confirm plugin file URL references generated plugin.

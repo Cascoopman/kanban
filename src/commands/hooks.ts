@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createTRPCProxyClient, httpBatchLink, TRPCClientError } from "@trpc/client";
 import type { Command } from "commander";
 import type { RuntimeHookEvent, RuntimeTaskHookActivity } from "../core/api-contract";
-import { buildKanbanCommandParts } from "../core/kanban-command";
+import { buildKanbanHooksCommandParts } from "../core/kanban-command";
 import { buildKanbanRuntimeUrl, getRuntimeFetch } from "../core/runtime-endpoint";
 import { buildWindowsCmdArgsArray, resolveWindowsComSpec, shouldUseWindowsCmdLaunch } from "../core/windows-cmd-launch";
 import { parseHookRuntimeContextFromEnv } from "../terminal/hook-runtime-context";
@@ -384,7 +384,7 @@ async function ingestHookEvent(args: HooksIngestArgs): Promise<void> {
 
 function spawnBackgroundKanban(args: string[]): void {
 	try {
-		const commandParts = buildKanbanCommandParts(args);
+		const commandParts = buildKanbanHooksCommandParts(args);
 		const child = spawn(commandParts[0], commandParts.slice(1), {
 			detached: false,
 			stdio: "ignore",
@@ -422,7 +422,7 @@ function appendMetadataFlags(args: string[], metadata?: Partial<RuntimeTaskHookA
 }
 
 function notifyCodexSessionWatcherEvent(mapped: CodexMappedHookEvent): void {
-	spawnBackgroundKanban(appendMetadataFlags(["hooks", "notify", "--event", mapped.event], mapped.metadata));
+	spawnBackgroundKanban(appendMetadataFlags(["notify", "--event", mapped.event], mapped.metadata));
 }
 
 async function enrichCodexReviewMetadata(args: HooksIngestArgs, cwd: string): Promise<HooksIngestArgs> {
@@ -663,8 +663,10 @@ async function runHooksIngest(
 	}
 }
 
-export function registerHooksCommand(program: Command): void {
-	const hooks = program.command("hooks").description("Runtime hook helpers for agent integrations.");
+export function registerHooksCommand(program: Command, options: { standalone?: boolean } = {}): void {
+	const hooks = options.standalone
+		? program.description("Internal Kanban runtime hook helpers.")
+		: program.command("hooks").description("Runtime hook helpers for agent integrations.");
 
 	hooks
 		.command("ingest [payload]")

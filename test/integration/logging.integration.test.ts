@@ -5,6 +5,8 @@ import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { describe, expect, it } from "vitest";
 
 import { createGitTestEnv } from "../utilities/git-env";
@@ -142,9 +144,44 @@ async function stopRuntime(child: ChildProcess): Promise<void> {
 	await collectProcess(child, 15_000);
 }
 
+function toMcpEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+	return Object.fromEntries(
+		Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+	);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function readMcpLogs(
+	projectPath: string,
+	env: NodeJS.ProcessEnv,
+	args: { source: "frontend" | "backend" | "all"; tail: number },
+): Promise<Record<string, unknown>> {
+	const transport = new StdioClientTransport({
+		command: process.execPath,
+		args: ["--import", resolveTsxLoaderImportSpecifier(), resolve(process.cwd(), "src/mcp.ts")],
+		cwd: projectPath,
+		env: toMcpEnvironment(env),
+		stderr: "pipe",
+	});
+	const client = new Client({ name: "kanban-mcp-logging-test", version: "1.0.0" });
+	await client.connect(transport);
+	try {
+		const result = await client.callTool({ name: "kanban_logs", arguments: args });
+		if (result.isError || !isRecord(result.structuredContent)) {
+			throw new Error(`kanban_logs failed: ${JSON.stringify(result)}`);
+		}
+		return result.structuredContent;
+	} finally {
+		await client.close();
+	}
+}
+
 describe("persisted frontend and backend logs", () => {
 	it(
-		"captures runtime output, accepts frontend console entries, and exposes both through the CLI",
+		"captures runtime output, accepts frontend console entries, and exposes bounded snapshots through MCP",
 		{ timeout: 40_000 },
 		async () => {
 			const { path: runtimeHome, cleanup: cleanupRuntimeHome } = createTempDir("kanban-logging-home-");
@@ -188,35 +225,12 @@ describe("persisted frontend and backend logs", () => {
 				});
 				expect(invalidResponse.status).toBe(400);
 
-				const frontendCli = await collectProcess(spawnSourceCli(["logs", "frontend"], projectPath, env));
-				expect(frontendCli.exitCode).toBe(0);
-				expect(frontendCli.stderr).not.toContain("Failed to start Kanban");
-				expect(frontendCli.stdout).toContain("2026-08-22T20:00:00.000Z [warn] browser websocket disconnected");
+				const frontendLogs = await readMcpLogs(projectPath, env, { source: "frontend", tail: 10 });
+				expect(JSON.stringify(frontendLogs)).toContain("browser websocket disconnected");
 
-				const combinedCli = await collectProcess(
-					spawnSourceCli(["logs", "--all", "--tail", "10"], projectPath, env),
-				);
-				expect(combinedCli.exitCode).toBe(0);
-				expect(combinedCli.stdout).toContain("[backend]");
-				expect(combinedCli.stdout).toContain("[frontend] [warn] browser websocket disconnected");
-
-				const followingCli = spawnSourceCli(["logs", "frontend", "--tail", "1", "--follow"], projectPath, env);
-				await waitForProcessOutput(followingCli, "browser websocket disconnected");
-				const followedMarker = `followed browser entry ${Date.now()}`;
-				const followedOutput = waitForProcessOutput(followingCli, followedMarker);
-				const followedResponse = await fetch(`http://127.0.0.1:${port}/api/logs/frontend`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						timestamp: new Date().toISOString(),
-						level: "info",
-						message: followedMarker,
-					}),
-				});
-				expect(followedResponse.status).toBe(204);
-				await followedOutput;
-				followingCli.kill("SIGINT");
-				expect((await collectProcess(followingCli)).exitCode).toBe(0);
+				const allLogs = await readMcpLogs(projectPath, env, { source: "all", tail: 10 });
+				expect(JSON.stringify(allLogs)).toContain("Kanban running at");
+				expect(JSON.stringify(allLogs)).toContain("browser websocket disconnected");
 			} finally {
 				await stopRuntime(runtime);
 				cleanupProject();
