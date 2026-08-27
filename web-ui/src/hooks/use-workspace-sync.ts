@@ -89,6 +89,7 @@ export function useWorkspaceSync({
 		board: null,
 	});
 	const workspaceRefreshRequestIdRef = useRef(0);
+	const hasProcessedCurrentRuntimeSnapshotRef = useRef(false);
 
 	const isWorkspaceMetadataPending = currentProjectId !== null && appliedWorkspaceProjectId !== currentProjectId;
 
@@ -273,7 +274,15 @@ export function useWorkspaceSync({
 	}, [applyWorkspaceState, hasNoProjects, streamedWorkspaceState]);
 
 	useEffect(() => {
-		if (!hasReceivedSnapshot || !isDocumentVisible) {
+		if (!hasReceivedSnapshot) {
+			hasProcessedCurrentRuntimeSnapshotRef.current = false;
+			return;
+		}
+		if (!hasProcessedCurrentRuntimeSnapshotRef.current) {
+			hasProcessedCurrentRuntimeSnapshotRef.current = true;
+			return;
+		}
+		if (!isDocumentVisible) {
 			return;
 		}
 		void refreshWorkspaceState();

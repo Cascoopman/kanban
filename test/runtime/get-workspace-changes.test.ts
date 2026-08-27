@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { createGitProcessEnv } from "../../src/core/git-process-env";
 import { getWorkspaceChanges, getWorkspaceChangesBetweenRefs } from "../../src/workspace/get-workspace-changes";
 
 const execFileAsync = promisify(execFile);
@@ -15,11 +16,10 @@ async function runGit(repoRoot: string, args: string[]): Promise<string> {
 	const { stdout } = await execFileAsync("git", ["-c", "core.quotepath=false", ...args], {
 		cwd: repoRoot,
 		encoding: "utf8",
-		env: {
-			...process.env,
+		env: createGitProcessEnv({
 			GIT_CONFIG_GLOBAL: "/dev/null",
 			GIT_CONFIG_NOSYSTEM: "1",
-		},
+		}),
 	});
 	return stdout.trim();
 }

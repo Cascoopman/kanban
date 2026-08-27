@@ -1,9 +1,14 @@
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 
-import type { RuntimeProjectsResponse, RuntimeWorkspaceStateResponse } from "../src/runtime/types";
+import type {
+	RuntimeProjectAddResponse,
+	RuntimeProjectsResponse,
+	RuntimeWorkspaceStateResponse,
+} from "../src/runtime/types";
 import type { BoardCard, BoardColumnId, BoardData } from "../src/types";
 
 const ONBOARDING_DIALOG_SHOWN_KEY = "kanban.onboarding.dialog.shown";
@@ -79,6 +84,23 @@ function findTask(board: BoardData, taskId: string): { columnId: BoardColumnId; 
 	return null;
 }
 
+function createGitProject(path: string): void {
+	mkdirSync(path, { recursive: true });
+	writeFileSync(join(path, "README.md"), "# Secondary Playwright fixture\n", "utf8");
+	for (const args of [
+		["init", "--initial-branch=main"],
+		["config", "user.name", "Kanban Playwright"],
+		["config", "user.email", "playwright@localhost"],
+		["add", "README.md"],
+		["-c", "commit.gpgSign=false", "commit", "-m", "Initialize secondary Playwright fixture"],
+	] as const) {
+		const result = spawnSync("git", args, { cwd: path, encoding: "utf8" });
+		if (result.status !== 0) {
+			throw new Error(result.stderr || `git ${args.join(" ")} failed`);
+		}
+	}
+}
+
 test("renders kanban top bar and columns", async ({ page }) => {
 	await page.goto("/");
 	await expect(page).toHaveTitle(/Kanban/);
@@ -89,6 +111,68 @@ test("renders kanban top bar and columns", async ({ page }) => {
 	await expect(page.getByText("On Hold", { exact: true })).toBeVisible();
 	await expect(page.getByText("Done", { exact: true })).toBeVisible();
 	await expect(page.getByRole("button", { name: /New task/ })).toBeVisible();
+});
+
+test("does not fetch workspace state after the initial runtime snapshot", async ({ page }) => {
+	const stateRequestAfterSnapshot = page.waitForRequest(
+		(requestToInspect) => requestToInspect.url().includes("/api/trpc/workspace.getState"),
+		{ timeout: 500 },
+	);
+
+	await page.goto("/");
+	await expect(page.getByText("All projects", { exact: true })).toBeVisible();
+	await expect(stateRequestAfterSnapshot).rejects.toThrow();
+});
+
+test("switches projects without opening another runtime WebSocket", async ({ page, request }, testInfo) => {
+	const runtimeHome = testInfo.config.metadata.runtimeHome;
+	if (typeof runtimeHome !== "string" || !runtimeHome) {
+		throw new Error("The Playwright configuration did not provide its runtime home.");
+	}
+	const secondaryProjectPath = join(dirname(runtimeHome), "secondary-project");
+	createGitProject(secondaryProjectPath);
+
+	const runtimeStreamUrls: string[] = [];
+	page.on("websocket", (socket) => {
+		if (socket.url().includes("/api/runtime/ws")) {
+			runtimeStreamUrls.push(socket.url());
+		}
+	});
+
+	await page.goto("/");
+	const projects = await requestTrpc<RuntimeProjectsResponse>({
+		request,
+		procedure: "projects.list",
+		type: "query",
+	});
+	const workspaceId = projects.currentProjectId ?? projects.projects[0]?.id;
+	if (!workspaceId) throw new Error("Expected an isolated workspace.");
+	const added = await requestTrpc<RuntimeProjectAddResponse>({
+		request,
+		procedure: "projects.add",
+		type: "mutation",
+		workspaceId,
+		payload: { path: secondaryProjectPath },
+	});
+	const secondaryProjectId = added.project?.id;
+	if (!added.ok || !secondaryProjectId) {
+		throw new Error("Expected the secondary isolated project to be added.");
+	}
+
+	await expect(page).toHaveURL(new RegExp(`/${encodeURIComponent(workspaceId)}$`));
+	await page.evaluate((projectId) => {
+		window.history.pushState({}, "", `/${encodeURIComponent(projectId)}`);
+		window.dispatchEvent(new PopStateEvent("popstate"));
+	}, secondaryProjectId);
+	await expect(page).toHaveURL(new RegExp(`/${encodeURIComponent(secondaryProjectId)}$`));
+	await expect.poll(() => runtimeStreamUrls.length).toBe(1);
+	await requestTrpc<{ ok: boolean }>({
+		request,
+		procedure: "projects.remove",
+		type: "mutation",
+		workspaceId: secondaryProjectId,
+		payload: { projectId: secondaryProjectId },
+	});
 });
 
 test("persists existing browser console output in the frontend log", async ({ page }, testInfo) => {

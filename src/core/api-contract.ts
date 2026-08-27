@@ -334,6 +334,17 @@ export const runtimeStateStreamSnapshotMessageSchema = z.object({
 });
 export type RuntimeStateStreamSnapshotMessage = z.infer<typeof runtimeStateStreamSnapshotMessageSchema>;
 
+export const runtimeStateStreamWorkspaceSelectedMessageSchema = z.object({
+	type: z.literal("workspace_selected"),
+	requestId: z.number().int().nonnegative(),
+	currentProjectId: z.string().nullable(),
+	workspaceState: runtimeWorkspaceStateResponseSchema.nullable(),
+	workspaceMetadata: runtimeWorkspaceMetadataSchema.nullable(),
+});
+export type RuntimeStateStreamWorkspaceSelectedMessage = z.infer<
+	typeof runtimeStateStreamWorkspaceSelectedMessageSchema
+>;
+
 export const runtimeStateStreamWorkspaceStateMessageSchema = z.object({
 	type: z.literal("workspace_state_updated"),
 	workspaceId: z.string(),
@@ -381,8 +392,16 @@ export const runtimeStateStreamErrorMessageSchema = z.object({
 });
 export type RuntimeStateStreamErrorMessage = z.infer<typeof runtimeStateStreamErrorMessageSchema>;
 
+export const runtimeStateStreamSelectWorkspaceMessageSchema = z.object({
+	type: z.literal("select_workspace"),
+	requestId: z.number().int().nonnegative(),
+	workspaceId: z.string().nullable(),
+});
+export type RuntimeStateStreamSelectWorkspaceMessage = z.infer<typeof runtimeStateStreamSelectWorkspaceMessageSchema>;
+
 export const runtimeStateStreamMessageSchema = z.discriminatedUnion("type", [
 	runtimeStateStreamSnapshotMessageSchema,
+	runtimeStateStreamWorkspaceSelectedMessageSchema,
 	runtimeStateStreamWorkspaceStateMessageSchema,
 	runtimeStateStreamTaskSessionsMessageSchema,
 	runtimeStateStreamProjectsMessageSchema,
@@ -391,6 +410,7 @@ export const runtimeStateStreamMessageSchema = z.discriminatedUnion("type", [
 	runtimeStateStreamErrorMessageSchema,
 ]);
 export type RuntimeStateStreamMessage = z.infer<typeof runtimeStateStreamMessageSchema>;
+export type RuntimeStateStreamClientMessage = RuntimeStateStreamSelectWorkspaceMessage;
 
 export const runtimeProjectsResponseSchema = z.object({
 	currentProjectId: z.string().nullable(),

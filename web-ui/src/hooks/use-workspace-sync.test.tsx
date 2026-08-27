@@ -412,6 +412,60 @@ describe("useWorkspaceSync", () => {
 		expect(latestSnapshot).not.toBeNull();
 	});
 
+	it("does not re-fetch state when the first visible runtime snapshot already contains it", async () => {
+		fetchWorkspaceStateMock.mockResolvedValue(createWorkspaceState("redundant-refresh", 2));
+		let latestSnapshot: HookSnapshot | null = null;
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={createWorkspaceState("streamed-task", 1)}
+					isDocumentVisible={true}
+					onSnapshot={(snapshot) => {
+						latestSnapshot = snapshot;
+					}}
+				/>,
+			);
+		});
+
+		expect(fetchWorkspaceStateMock).not.toHaveBeenCalled();
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.id).toBe("streamed-task");
+	});
+
+	it("refreshes when the document becomes visible after receiving a runtime snapshot", async () => {
+		fetchWorkspaceStateMock.mockResolvedValue(createWorkspaceState("refreshed-task", 2));
+		let latestSnapshot: HookSnapshot | null = null;
+		const onSnapshot = (snapshot: HookSnapshot) => {
+			latestSnapshot = snapshot;
+		};
+		const streamedWorkspaceState = createWorkspaceState("streamed-task", 1);
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={streamedWorkspaceState}
+					isDocumentVisible={false}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+
+		expect(fetchWorkspaceStateMock).not.toHaveBeenCalled();
+
+		await act(async () => {
+			root.render(
+				<HookHarness
+					streamedWorkspaceState={streamedWorkspaceState}
+					isDocumentVisible={true}
+					onSnapshot={onSnapshot}
+				/>,
+			);
+		});
+
+		expect(fetchWorkspaceStateMock).toHaveBeenCalledTimes(1);
+		expect(requireSnapshot(latestSnapshot).board.columns[0]?.cards[0]?.id).toBe("refreshed-task");
+	});
+
 	it("preserves a local title edit when a streamed lifecycle update moves the task", async () => {
 		const initialState = createWorkspaceState("task-1", 1);
 		const remoteLifecycleState = {

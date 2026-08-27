@@ -21,6 +21,7 @@ import type {
 	RuntimeStateStreamProjectsMessage,
 	RuntimeStateStreamSnapshotMessage,
 	RuntimeStateStreamTaskReadyForReviewMessage,
+	RuntimeStateStreamWorkspaceSelectedMessage,
 	RuntimeStateStreamWorkspaceStateMessage,
 	RuntimeTaskWorkspaceInfoResponse,
 	RuntimeWorkspaceStateResponse,
@@ -1564,6 +1565,78 @@ describe.sequential("runtime state stream integration", () => {
 			cleanupHome();
 		}
 	}, 45_000);
+
+	it("switches selected workspaces over the existing runtime stream", async () => {
+		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-stream-select-");
+		const { path: tempRoot, cleanup: cleanupRoot } = createTempDir("kanban-projects-stream-select-");
+
+		const projectAPath = join(tempRoot, "project-a");
+		const projectBPath = join(tempRoot, "project-b");
+		mkdirSync(projectAPath, { recursive: true });
+		mkdirSync(projectBPath, { recursive: true });
+		initGitRepository(projectAPath);
+		initGitRepository(projectBPath);
+
+		const port = await getAvailablePort();
+		const server = await startKanbanServer({
+			cwd: projectAPath,
+			homeDir: tempHome,
+			port,
+		});
+		let stream: RuntimeStreamClient | null = null;
+
+		try {
+			const runtimeUrl = new URL(server.runtimeUrl);
+			const workspaceAId = decodeURIComponent(runtimeUrl.pathname.slice(1));
+			const expectedProjectBPath = await realpath(projectBPath).catch(() => resolve(projectBPath));
+
+			const addProjectResponse = await requestJson<RuntimeProjectAddResponse>({
+				baseUrl: `http://127.0.0.1:${port}`,
+				procedure: "projects.add",
+				type: "mutation",
+				workspaceId: workspaceAId,
+				payload: { path: projectBPath },
+			});
+			expect(addProjectResponse.payload.ok).toBe(true);
+			const workspaceBId = addProjectResponse.payload.project?.id;
+			expect(workspaceBId).toBeTruthy();
+			if (!workspaceBId) {
+				throw new Error("Missing project id for added workspace.");
+			}
+
+			stream = await connectRuntimeStream(
+				`ws://127.0.0.1:${port}/api/runtime/ws?workspaceId=${encodeURIComponent(workspaceAId)}`,
+			);
+			const initialSnapshot = (await stream.waitForMessage(
+				(message): message is RuntimeStateStreamSnapshotMessage => message.type === "snapshot",
+			)) as RuntimeStateStreamSnapshotMessage;
+			expect(initialSnapshot.currentProjectId).toBe(workspaceAId);
+
+			stream.socket.send(
+				JSON.stringify({
+					type: "select_workspace",
+					requestId: 1,
+					workspaceId: workspaceBId,
+				}),
+			);
+			const selected = (await stream.waitForMessage(
+				(message): message is RuntimeStateStreamWorkspaceSelectedMessage =>
+					message.type === "workspace_selected" && message.requestId === 1,
+			)) as RuntimeStateStreamWorkspaceSelectedMessage;
+
+			expect(stream.socket.readyState).toBe(WebSocket.OPEN);
+			expect(selected.currentProjectId).toBe(workspaceBId);
+			expect(selected.workspaceState?.repoPath).toBe(expectedProjectBPath);
+			expect(await stream.collectFor(250)).not.toContainEqual(expect.objectContaining({ type: "snapshot" }));
+		} finally {
+			if (stream) {
+				await stream.close();
+			}
+			await server.stop();
+			cleanupRoot();
+			cleanupHome();
+		}
+	}, 30_000);
 
 	it("falls back to remaining project when removing the active project", async () => {
 		const { path: tempHome, cleanup: cleanupHome } = createTempDir("kanban-home-remove-");

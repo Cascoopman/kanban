@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 import type {
 	RuntimeProjectBoardSnapshot,
@@ -7,6 +7,7 @@ import type {
 	RuntimeStateStreamProjectsMessage,
 	RuntimeStateStreamSnapshotMessage,
 	RuntimeStateStreamTaskReadyForReviewMessage,
+	RuntimeStateStreamWorkspaceSelectedMessage,
 	RuntimeTaskSessionSummary,
 	RuntimeWorkspaceMetadata,
 	RuntimeWorkspaceStateResponse,
@@ -69,6 +70,7 @@ type RuntimeStateStreamAction =
 	| { type: "requested_workspace_changed" }
 	| { type: "stream_connected" }
 	| { type: "snapshot"; payload: RuntimeStateStreamSnapshotMessage }
+	| { type: "workspace_selected"; payload: RuntimeStateStreamWorkspaceSelectedMessage }
 	| {
 			type: "projects_updated";
 			payload: RuntimeStateStreamProjectsMessage;
@@ -179,6 +181,24 @@ function runtimeStateStreamReducer(
 			hasReceivedSnapshot: true,
 		};
 	}
+	if (action.type === "workspace_selected") {
+		const nextWorkspaceState = action.payload.workspaceState
+			? {
+					...action.payload.workspaceState,
+					sessions: mergeTaskSessionSummaries({}, Object.values(action.payload.workspaceState.sessions ?? {})),
+				}
+			: null;
+		return {
+			...state,
+			currentProjectId: action.payload.currentProjectId,
+			workspaceState: nextWorkspaceState,
+			workspaceMetadata: action.payload.workspaceMetadata,
+			latestTaskReadyForReview: null,
+			streamError: null,
+			isRuntimeDisconnected: false,
+			hasReceivedSnapshot: true,
+		};
+	}
 	if (action.type === "projects_updated") {
 		const didProjectChange = action.nextProjectId !== state.currentProjectId;
 		return {
@@ -256,24 +276,48 @@ export function useRuntimeStateStream(requestedWorkspaceId: string | null): UseR
 		requestedWorkspaceId,
 		createInitialRuntimeStateStreamStore,
 	);
+	const requestedWorkspaceIdRef = useRef(requestedWorkspaceId);
+	const activeWorkspaceIdRef = useRef(requestedWorkspaceId);
+	const socketRef = useRef<WebSocket | null>(null);
+	const nextSelectionRequestIdRef = useRef(0);
+	const latestSelectionRequestIdRef = useRef<number | null>(null);
+	const pendingWorkspaceSelectionRef = useRef<{ requestId: number; workspaceId: string | null } | null>(null);
+	const selectWorkspaceRef = useRef<(workspaceId: string | null) => void>(() => undefined);
+	const previousRequestedWorkspaceIdRef = useRef(requestedWorkspaceId);
+
 	useEffect(() => {
 		let cancelled = false;
-		let socket: WebSocket | null = null;
 		let reconnectTimer: number | null = null;
 		let reconnectAttempt = 0;
-		let activeWorkspaceId = requestedWorkspaceId;
-		let requestedWorkspaceForConnection = requestedWorkspaceId;
-
-		dispatch({ type: "requested_workspace_changed" });
 
 		const cleanupSocket = () => {
+			const socket = socketRef.current;
 			if (socket) {
 				socket.onopen = null;
 				socket.onmessage = null;
 				socket.onerror = null;
 				socket.onclose = null;
 				socket.close();
-				socket = null;
+				socketRef.current = null;
+			}
+		};
+
+		const sendPendingWorkspaceSelection = () => {
+			const socket = socketRef.current;
+			const pendingSelection = pendingWorkspaceSelectionRef.current;
+			if (!socket || socket.readyState !== WebSocket.OPEN || !pendingSelection) {
+				return;
+			}
+			try {
+				socket.send(
+					JSON.stringify({
+						type: "select_workspace",
+						requestId: pendingSelection.requestId,
+						workspaceId: pendingSelection.workspaceId,
+					}),
+				);
+			} catch {
+				// A reconnect will retry the pending workspace selection.
 			}
 		};
 
@@ -301,7 +345,109 @@ export function useRuntimeStateStream(requestedWorkspaceId: string | null): UseR
 			}
 			cleanupSocket();
 			try {
-				socket = new WebSocket(getRuntimeStreamUrl(requestedWorkspaceForConnection));
+				const socket = new WebSocket(getRuntimeStreamUrl(requestedWorkspaceIdRef.current));
+				socketRef.current = socket;
+				socket.onopen = () => {
+					reconnectAttempt = 0;
+					dispatch({ type: "stream_connected" });
+					sendPendingWorkspaceSelection();
+				};
+				socket.onmessage = (event) => {
+					try {
+						const payload = JSON.parse(String(event.data)) as RuntimeStateStreamMessage;
+						if (payload.type === "snapshot") {
+							activeWorkspaceIdRef.current = payload.currentProjectId;
+							dispatch({ type: "snapshot", payload });
+							return;
+						}
+						if (payload.type === "workspace_selected") {
+							if (payload.requestId !== latestSelectionRequestIdRef.current) {
+								return;
+							}
+							pendingWorkspaceSelectionRef.current = null;
+							activeWorkspaceIdRef.current = payload.currentProjectId;
+							dispatch({ type: "workspace_selected", payload });
+							return;
+						}
+						if (payload.type === "projects_updated") {
+							const previousWorkspaceId = activeWorkspaceIdRef.current;
+							const nextProjectId = resolveProjectIdAfterProjectsUpdate(previousWorkspaceId, payload);
+							dispatch({
+								type: "projects_updated",
+								payload,
+								nextProjectId,
+							});
+							if (nextProjectId !== previousWorkspaceId) {
+								requestedWorkspaceIdRef.current = nextProjectId;
+								selectWorkspaceRef.current(nextProjectId);
+							}
+							return;
+						}
+						if (payload.type === "workspace_state_updated") {
+							dispatch({
+								type: "workspace_state_updated",
+								workspaceId: payload.workspaceId,
+								workspaceState: payload.workspaceState,
+							});
+							return;
+						}
+						if (payload.type === "workspace_metadata_updated") {
+							if (payload.workspaceId !== activeWorkspaceIdRef.current) {
+								return;
+							}
+							dispatch({
+								type: "workspace_metadata_updated",
+								workspaceMetadata: payload.workspaceMetadata,
+							});
+							return;
+						}
+						if (payload.type === "task_sessions_updated") {
+							dispatch({
+								type: "task_sessions_updated",
+								workspaceId: payload.workspaceId,
+								summaries: payload.summaries,
+							});
+							return;
+						}
+						if (payload.type === "task_ready_for_review") {
+							dispatch({
+								type: "task_ready_for_review",
+								payload,
+							});
+							return;
+						}
+						if (payload.type === "error") {
+							dispatch({
+								type: "stream_error",
+								message: payload.message,
+							});
+						}
+					} catch {
+						// Ignore malformed stream messages.
+					}
+				};
+				socket.onclose = () => {
+					if (socketRef.current === socket) {
+						socketRef.current = null;
+					}
+					if (cancelled) {
+						return;
+					}
+					dispatch({
+						type: "stream_disconnected",
+						message: "Runtime stream disconnected.",
+					});
+					scheduleReconnect();
+				};
+				socket.onerror = () => {
+					if (cancelled) {
+						return;
+					}
+					dispatch({
+						type: "stream_disconnected",
+						message: "Runtime stream connection failed.",
+					});
+				};
 			} catch (error) {
 				dispatch({
 					type: "stream_disconnected",
@@ -310,96 +456,22 @@ export function useRuntimeStateStream(requestedWorkspaceId: string | null): UseR
 				scheduleReconnect();
 				return;
 			}
-			socket.onopen = () => {
-				reconnectAttempt = 0;
-				dispatch({ type: "stream_connected" });
-			};
-			socket.onmessage = (event) => {
-				try {
-					const payload = JSON.parse(String(event.data)) as RuntimeStateStreamMessage;
-					if (payload.type === "snapshot") {
-						activeWorkspaceId = payload.currentProjectId;
-						dispatch({ type: "snapshot", payload });
-						return;
-					}
-					if (payload.type === "projects_updated") {
-						const previousWorkspaceId = activeWorkspaceId;
-						const nextProjectId = resolveProjectIdAfterProjectsUpdate(activeWorkspaceId, payload);
-						activeWorkspaceId = nextProjectId;
-						dispatch({
-							type: "projects_updated",
-							payload,
-							nextProjectId,
-						});
-						if (nextProjectId && nextProjectId !== previousWorkspaceId) {
-							requestedWorkspaceForConnection = nextProjectId;
-							dispatch({ type: "requested_workspace_changed" });
-							connect();
-						}
-						return;
-					}
-					if (payload.type === "workspace_state_updated") {
-						dispatch({
-							type: "workspace_state_updated",
-							workspaceId: payload.workspaceId,
-							workspaceState: payload.workspaceState,
-						});
-						return;
-					}
-					if (payload.type === "workspace_metadata_updated") {
-						if (payload.workspaceId !== activeWorkspaceId) {
-							return;
-						}
-						dispatch({
-							type: "workspace_metadata_updated",
-							workspaceMetadata: payload.workspaceMetadata,
-						});
-						return;
-					}
-					if (payload.type === "task_sessions_updated") {
-						dispatch({
-							type: "task_sessions_updated",
-							workspaceId: payload.workspaceId,
-							summaries: payload.summaries,
-						});
-						return;
-					}
-					if (payload.type === "task_ready_for_review") {
-						dispatch({
-							type: "task_ready_for_review",
-							payload,
-						});
-						return;
-					}
-					if (payload.type === "error") {
-						dispatch({
-							type: "stream_error",
-							message: payload.message,
-						});
-					}
-				} catch {
-					// Ignore malformed stream messages.
-				}
-			};
-			socket.onclose = () => {
-				if (cancelled) {
-					return;
-				}
-				dispatch({
-					type: "stream_disconnected",
-					message: "Runtime stream disconnected.",
-				});
-				scheduleReconnect();
-			};
-			socket.onerror = () => {
-				if (cancelled) {
-					return;
-				}
-				dispatch({
-					type: "stream_disconnected",
-					message: "Runtime stream connection failed.",
-				});
-			};
+		};
+
+		selectWorkspaceRef.current = (workspaceId) => {
+			const pendingSelection = pendingWorkspaceSelectionRef.current;
+			if (
+				pendingSelection?.workspaceId === workspaceId ||
+				(!pendingSelection && activeWorkspaceIdRef.current === workspaceId)
+			) {
+				return;
+			}
+			const requestId = nextSelectionRequestIdRef.current + 1;
+			nextSelectionRequestIdRef.current = requestId;
+			latestSelectionRequestIdRef.current = requestId;
+			pendingWorkspaceSelectionRef.current = { requestId, workspaceId };
+			dispatch({ type: "requested_workspace_changed" });
+			sendPendingWorkspaceSelection();
 		};
 
 		connect();
@@ -410,7 +482,17 @@ export function useRuntimeStateStream(requestedWorkspaceId: string | null): UseR
 				window.clearTimeout(reconnectTimer);
 			}
 			cleanupSocket();
+			selectWorkspaceRef.current = () => undefined;
 		};
+	}, []);
+
+	useEffect(() => {
+		if (previousRequestedWorkspaceIdRef.current === requestedWorkspaceId) {
+			return;
+		}
+		previousRequestedWorkspaceIdRef.current = requestedWorkspaceId;
+		requestedWorkspaceIdRef.current = requestedWorkspaceId;
+		selectWorkspaceRef.current(requestedWorkspaceId);
 	}, [requestedWorkspaceId]);
 
 	return {

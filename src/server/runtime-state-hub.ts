@@ -11,9 +11,11 @@ import type {
 	RuntimeStateStreamTaskReadyForReviewMessage,
 	RuntimeStateStreamTaskSessionsMessage,
 	RuntimeStateStreamWorkspaceMetadataMessage,
+	RuntimeStateStreamWorkspaceSelectedMessage,
 	RuntimeStateStreamWorkspaceStateMessage,
 	RuntimeTaskSessionSummary,
 } from "../core/api-contract";
+import { runtimeStateStreamSelectWorkspaceMessageSchema } from "../core/api-contract";
 import type { TerminalSessionManager } from "../terminal/session-manager";
 import { createWorkspaceMetadataMonitor } from "./workspace-metadata-monitor";
 import type { ResolvedWorkspaceStreamTarget, WorkspaceRegistry } from "./workspace-registry";
@@ -60,6 +62,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 	const runtimeStateClientsByWorkspaceId = new Map<string, Set<WebSocket>>();
 	const runtimeStateClients = new Set<WebSocket>();
 	const runtimeStateWorkspaceIdByClient = new Map<WebSocket, string>();
+	const workspaceSelectionQueueByClient = new Map<WebSocket, Promise<void>>();
 	const runtimeStateWebSocketServer = new WebSocketServer({ noServer: true });
 	const workspaceMetadataMonitor = createWorkspaceMetadataMonitor({
 		onMetadataUpdated: (workspaceId, workspaceMetadata) => {
@@ -156,7 +159,7 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 		pendingTaskSessionSummariesByWorkspaceId.delete(workspaceId);
 	};
 
-	const cleanupRuntimeStateClient = (client: WebSocket) => {
+	const unsubscribeClientWorkspace = (client: WebSocket) => {
 		const workspaceId = runtimeStateWorkspaceIdByClient.get(client);
 		if (workspaceId) {
 			workspaceMetadataMonitor.disconnectWorkspace(workspaceId);
@@ -169,7 +172,12 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 			}
 		}
 		runtimeStateWorkspaceIdByClient.delete(client);
+	};
+
+	const cleanupRuntimeStateClient = (client: WebSocket) => {
+		unsubscribeClientWorkspace(client);
 		runtimeStateClients.delete(client);
+		workspaceSelectionQueueByClient.delete(client);
 	};
 
 	const disposeWorkspace = (workspaceId: string, options?: DisposeRuntimeStateWorkspaceOptions) => {
@@ -253,9 +261,109 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 		}
 	};
 
+	const selectWorkspaceForClient = async (client: WebSocket, workspaceId: string | null, requestId: number) => {
+		try {
+			const workspace = await deps.workspaceRegistry.resolveWorkspaceForStream(workspaceId, {
+				onRemovedWorkspace: ({ workspaceId: removedWorkspaceId, message }) => {
+					disposeWorkspace(removedWorkspaceId, {
+						disconnectClients: true,
+						closeClientErrorMessage: message,
+					});
+				},
+			});
+			if (client.readyState !== WebSocket.OPEN) {
+				return;
+			}
+
+			unsubscribeClientWorkspace(client);
+			let monitoredWorkspaceId: string | null = null;
+			try {
+				let workspaceState: RuntimeStateStreamWorkspaceSelectedMessage["workspaceState"] = null;
+				let workspaceMetadata: RuntimeStateStreamWorkspaceSelectedMessage["workspaceMetadata"] = null;
+				if (workspace.workspaceId && workspace.workspacePath) {
+					monitoredWorkspaceId = workspace.workspaceId;
+					workspaceState = await deps.workspaceRegistry.buildWorkspaceStateSnapshot(
+						workspace.workspaceId,
+						workspace.workspacePath,
+					);
+					workspaceMetadata = await workspaceMetadataMonitor.connectWorkspace({
+						workspaceId: workspace.workspaceId,
+						workspacePath: workspace.workspacePath,
+						board: workspaceState.board,
+					});
+				}
+				if (client.readyState !== WebSocket.OPEN) {
+					if (monitoredWorkspaceId) {
+						workspaceMetadataMonitor.disconnectWorkspace(monitoredWorkspaceId);
+					}
+					return;
+				}
+				sendRuntimeStateMessage(client, {
+					type: "workspace_selected",
+					requestId,
+					currentProjectId: workspace.workspaceId,
+					workspaceState,
+					workspaceMetadata,
+				} satisfies RuntimeStateStreamWorkspaceSelectedMessage);
+				if (monitoredWorkspaceId) {
+					const clients = runtimeStateClientsByWorkspaceId.get(monitoredWorkspaceId) ?? new Set<WebSocket>();
+					clients.add(client);
+					runtimeStateClientsByWorkspaceId.set(monitoredWorkspaceId, clients);
+					runtimeStateWorkspaceIdByClient.set(client, monitoredWorkspaceId);
+				}
+				if (workspace.didPruneProjects) {
+					void broadcastRuntimeProjectsUpdated(workspace.workspaceId);
+				}
+			} catch (error) {
+				if (monitoredWorkspaceId) {
+					workspaceMetadataMonitor.disconnectWorkspace(monitoredWorkspaceId);
+				}
+				throw error;
+			}
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			sendRuntimeStateMessage(client, {
+				type: "error",
+				message,
+			} satisfies RuntimeStateStreamErrorMessage);
+		}
+	};
+
+	const enqueueWorkspaceSelection = (client: WebSocket, workspaceId: string | null, requestId: number) => {
+		const previous = workspaceSelectionQueueByClient.get(client) ?? Promise.resolve();
+		const next = previous
+			.catch(() => undefined)
+			.then(async () => {
+				await selectWorkspaceForClient(client, workspaceId, requestId);
+			});
+		workspaceSelectionQueueByClient.set(client, next);
+	};
+
 	runtimeStateWebSocketServer.on("connection", async (client: WebSocket, context: unknown) => {
+		let isInitialSnapshotReady = false;
+		const pendingWorkspaceSelections: Array<{ workspaceId: string | null; requestId: number }> = [];
+		const enqueueInitialOrRequestedWorkspaceSelection = (workspaceId: string | null, requestId: number) => {
+			if (!isInitialSnapshotReady) {
+				pendingWorkspaceSelections.push({ workspaceId, requestId });
+				return;
+			}
+			enqueueWorkspaceSelection(client, workspaceId, requestId);
+		};
 		client.on("close", () => {
 			cleanupRuntimeStateClient(client);
+		});
+		client.on("message", (raw) => {
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(String(raw));
+			} catch {
+				return;
+			}
+			const selection = runtimeStateStreamSelectWorkspaceMessageSchema.safeParse(parsed);
+			if (!selection.success) {
+				return;
+			}
+			enqueueInitialOrRequestedWorkspaceSelection(selection.data.workspaceId, selection.data.requestId);
 		});
 		try {
 			const requestedWorkspaceId =
@@ -381,6 +489,10 @@ export function createRuntimeStateHub(deps: CreateRuntimeStateHubDependencies): 
 				}
 				if (workspace.didPruneProjects) {
 					void broadcastRuntimeProjectsUpdated(workspace.workspaceId);
+				}
+				isInitialSnapshotReady = true;
+				for (const selection of pendingWorkspaceSelections.splice(0)) {
+					enqueueWorkspaceSelection(client, selection.workspaceId, selection.requestId);
 				}
 			} catch (error) {
 				if (didConnectWorkspaceMonitor && monitorWorkspaceId) {
