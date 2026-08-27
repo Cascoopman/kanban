@@ -10,7 +10,7 @@ import { buildKanbanCommandParts } from "../core/kanban-command";
 import { quoteShellArg } from "../core/shell";
 import { lockedFileSystem } from "../fs/locked-file-system";
 import { getRuntimeHomePath } from "../state/workspace-state";
-import { loadAgentInstructionsFile, loadGlobalAgentInstructionsFile } from "../workspace/agent-instructions";
+import { loadAgentInstructionsFile } from "../workspace/agent-instructions";
 import { configureCodexHooks, hasCodexConfigOverride } from "./codex-hook-config";
 import { createHookRuntimeEnv } from "./hook-runtime-context";
 import { stripAnsi } from "./output-utils";
@@ -193,10 +193,7 @@ function joinAgentInstructions(...contents: Array<string | undefined>): string |
 }
 
 async function resolveAgentInstructions(input: AgentAdapterLaunchInput): Promise<string | undefined> {
-	const [globalInstructions, taskProjectInstructions] = await Promise.all([
-		loadGlobalAgentInstructionsFile(),
-		loadAgentInstructionsFile(input.cwd),
-	]);
+	const taskProjectInstructions = await loadAgentInstructionsFile(input.cwd);
 	const sourceProjectInstructions =
 		!taskProjectInstructions.exists && input.projectCwd && input.projectCwd !== input.cwd
 			? await loadAgentInstructionsFile(input.projectCwd)
@@ -204,9 +201,9 @@ async function resolveAgentInstructions(input: AgentAdapterLaunchInput): Promise
 	const projectInstructions = taskProjectInstructions.exists ? taskProjectInstructions : sourceProjectInstructions;
 
 	if (input.agentId === "codex" && taskProjectInstructions.exists) {
-		return joinAgentInstructions(globalInstructions.content);
+		return undefined;
 	}
-	return joinAgentInstructions(globalInstructions.content, projectInstructions?.content);
+	return joinAgentInstructions(projectInstructions?.content);
 }
 
 async function writeClaudeAgentInstructions(taskId: string, content: string): Promise<string> {

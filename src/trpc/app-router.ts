@@ -5,8 +5,6 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import type {
-	RuntimeAgentInstructionsResponse,
-	RuntimeAgentInstructionsSaveRequest,
 	RuntimeCommandRunRequest,
 	RuntimeCommandRunResponse,
 	RuntimeConfigResponse,
@@ -62,8 +60,6 @@ import type {
 	RuntimeWorktreeEnsureResponse,
 } from "../core/api-contract";
 import {
-	runtimeAgentInstructionsResponseSchema,
-	runtimeAgentInstructionsSaveRequestSchema,
 	runtimeCommandRunRequestSchema,
 	runtimeCommandRunResponseSchema,
 	runtimeConfigResponseSchema,
@@ -128,10 +124,6 @@ export interface RuntimeTrpcContext {
 	requestedWorkspaceId: string | null;
 	workspaceScope: RuntimeTrpcWorkspaceScope | null;
 	runtimeApi: {
-		loadGlobalAgentInstructions: () => Promise<RuntimeAgentInstructionsResponse>;
-		saveGlobalAgentInstructions: (
-			input: RuntimeAgentInstructionsSaveRequest,
-		) => Promise<RuntimeAgentInstructionsResponse>;
 		loadConfig: (scope: RuntimeTrpcWorkspaceScope | null) => Promise<RuntimeConfigResponse>;
 		saveConfig: (
 			scope: RuntimeTrpcWorkspaceScope | null,
@@ -304,15 +296,6 @@ const gitSyncActionInputSchema = z.object({
 
 export const runtimeAppRouter = t.router({
 	runtime: t.router({
-		getGlobalAgentInstructions: t.procedure.output(runtimeAgentInstructionsResponseSchema).query(async ({ ctx }) => {
-			return await ctx.runtimeApi.loadGlobalAgentInstructions();
-		}),
-		saveGlobalAgentInstructions: t.procedure
-			.input(runtimeAgentInstructionsSaveRequestSchema)
-			.output(runtimeAgentInstructionsResponseSchema)
-			.mutation(async ({ ctx, input }) => {
-				return await ctx.runtimeApi.saveGlobalAgentInstructions(input);
-			}),
 		getConfig: t.procedure.output(runtimeConfigResponseSchema).query(async ({ ctx }) => {
 			return await ctx.runtimeApi.loadConfig(ctx.workspaceScope);
 		}),

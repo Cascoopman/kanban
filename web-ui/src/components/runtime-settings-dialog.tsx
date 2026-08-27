@@ -10,7 +10,6 @@ import {
 	Circle,
 	CircleDot,
 	ExternalLink,
-	FileText,
 	FolderOpen,
 	MessageSquareText,
 	Palette,
@@ -25,7 +24,6 @@ import { Dialog, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { previewThemeId, readStoredThemeId, saveThemeId, THEME_GROUPS, THEMES, type ThemeId } from "@/hooks/use-theme";
 import { areRuntimeQuickPromptsEqual } from "@/quick-prompts/quick-prompt-utils";
 import { useLayoutCustomizations } from "@/resize/layout-customizations";
-import { formatAgentInstructionsLoadError } from "@/runtime/agent-instructions-error";
 import { openFileOnHost } from "@/runtime/runtime-config-query";
 import {
 	filterSupportedAgentDefinitions,
@@ -33,7 +31,6 @@ import {
 	resolveSupportedAgentId,
 } from "@/runtime/supported-agents";
 import type { RuntimeAgentId, RuntimeConfigResponse, RuntimeQuickPrompt } from "@/runtime/types";
-import { useGlobalAgentInstructions } from "@/runtime/use-agent-instructions";
 import { useRuntimeConfig } from "@/runtime/use-runtime-config";
 import {
 	type BrowserNotificationPermission,
@@ -66,7 +63,7 @@ export type RuntimeSettingsSection = "quick-prompts";
 
 const SETTINGS_AGENT_ORDER: readonly RuntimeAgentId[] = ["claude", "codex"];
 
-type SettingsNavId = "general" | "quick-prompts" | "notifications" | "appearance" | "agents" | "project";
+type SettingsNavId = "general" | "quick-prompts" | "notifications" | "appearance" | "project";
 
 const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	id: SettingsNavId;
@@ -77,7 +74,6 @@ const SETTINGS_NAV_ITEMS: ReadonlyArray<{
 	{ id: "quick-prompts", label: "Quick Prompts", icon: <MessageSquareText size={16} /> },
 	{ id: "notifications", label: "Notifications", icon: <Bell size={16} /> },
 	{ id: "appearance", label: "Appearance", icon: <Palette size={16} /> },
-	{ id: "agents", label: "AGENTS.md", icon: <FileText size={16} /> },
 	{ id: "project", label: "Project", icon: <FolderOpen size={16} /> },
 ];
 
@@ -248,13 +244,6 @@ export function RuntimeSettingsDialog({
 	initialSection?: RuntimeSettingsSection | null;
 }): React.ReactElement {
 	const { config, isLoading, isSaving, save } = useRuntimeConfig(open, workspaceId, initialConfig);
-	const {
-		instructions: globalAgentInstructions,
-		isLoading: areGlobalAgentInstructionsLoading,
-		isSaving: areGlobalAgentInstructionsSaving,
-		loadError: globalAgentInstructionsLoadError,
-		save: saveGlobalAgentInstructions,
-	} = useGlobalAgentInstructions(open);
 	const { resetLayoutCustomizations } = useLayoutCustomizations();
 	const [selectedAgentId, setSelectedAgentId] = useState<RuntimeAgentId>("claude");
 	const [agentAutonomousModeEnabled, setAgentAutonomousModeEnabled] = useState(true);
@@ -263,7 +252,6 @@ export function RuntimeSettingsDialog({
 	const [draftThemeId, setDraftThemeId] = useState<ThemeId>(readStoredThemeId);
 	const [notificationPermission, setNotificationPermission] = useState<BrowserNotificationPermission>("unsupported");
 	const [quickPrompts, setQuickPrompts] = useState<RuntimeQuickPrompt[]>([]);
-	const [globalAgentInstructionsContent, setGlobalAgentInstructionsContent] = useState("");
 	const [saveError, setSaveError] = useState<string | null>(null);
 	const quickPromptsSectionRef = useRef<HTMLDivElement | null>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
@@ -329,10 +317,7 @@ export function RuntimeSettingsDialog({
 		readyForReviewNotificationsEnabled,
 		selectedAgentId,
 	]);
-	const hasGlobalAgentInstructionsChanges =
-		globalAgentInstructions !== null && globalAgentInstructionsContent !== globalAgentInstructions.content;
-	const hasUnsavedChanges =
-		hasRuntimeConfigChanges || draftThemeId !== initialThemeId || hasGlobalAgentInstructionsChanges;
+	const hasUnsavedChanges = hasRuntimeConfigChanges || draftThemeId !== initialThemeId;
 
 	useEffect(() => {
 		if (!open) {
@@ -360,13 +345,6 @@ export function RuntimeSettingsDialog({
 		setInitialThemeId(persistedThemeId);
 		setDraftThemeId(persistedThemeId);
 	}, [open]);
-
-	useEffect(() => {
-		if (!open || !globalAgentInstructions) {
-			return;
-		}
-		setGlobalAgentInstructionsContent(globalAgentInstructions.content);
-	}, [globalAgentInstructions, open]);
 
 	useEffect(() => {
 		if (!open) {
@@ -459,15 +437,6 @@ export function RuntimeSettingsDialog({
 			});
 			if (!saved) {
 				setSaveError("Could not save runtime settings. Check runtime logs and try again.");
-				return;
-			}
-		}
-		if (hasGlobalAgentInstructionsChanges) {
-			try {
-				await saveGlobalAgentInstructions(globalAgentInstructionsContent);
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				setSaveError(`Could not save Kanban-wide AGENTS.md: ${message}`);
 				return;
 			}
 		}
@@ -724,63 +693,6 @@ export function RuntimeSettingsDialog({
 						</p>
 					</div>
 
-					{/* ---- Agent instructions ---- */}
-					<div data-settings-section="agents" />
-					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
-						<h2 className="flex items-center gap-2 text-base font-semibold text-text-primary m-0">
-							<FileText size={16} className="text-text-secondary" />
-							AGENTS.md
-						</h2>
-					</div>
-					<div className="rounded-lg border border-border bg-surface-0 px-4 py-3 mb-4">
-						<p className="text-text-secondary text-[13px] mt-0 mb-2">
-							These Kanban-wide instructions are loaded before each repository's own AGENTS.md. Repository
-							instructions remain under the agent's responsibility.
-						</p>
-						<p
-							className="text-text-secondary font-mono text-xs m-0 mb-2 break-all"
-							style={{ cursor: globalAgentInstructions?.exists ? "pointer" : undefined }}
-							onClick={() => {
-								if (globalAgentInstructions?.exists) {
-									handleOpenFilePath(globalAgentInstructions.path);
-								}
-							}}
-						>
-							{globalAgentInstructions?.path
-								? formatPathForDisplay(globalAgentInstructions.path)
-								: "~/.kanban/AGENTS.md"}
-							{globalAgentInstructions?.exists ? (
-								<ExternalLink size={12} className="inline ml-1.5 align-middle" />
-							) : null}
-						</p>
-						<textarea
-							aria-label="Kanban-wide AGENTS.md contents"
-							rows={10}
-							value={globalAgentInstructionsContent}
-							onChange={(event) => setGlobalAgentInstructionsContent(event.target.value)}
-							placeholder="# Kanban-wide instructions"
-							spellCheck={false}
-							disabled={
-								areGlobalAgentInstructionsLoading ||
-								areGlobalAgentInstructionsSaving ||
-								globalAgentInstructions === null
-							}
-							className="w-full rounded-md border border-border bg-surface-2 p-3 text-[13px] leading-5 text-text-primary font-mono placeholder:text-text-tertiary focus:border-border-focus focus:outline-none resize-y disabled:opacity-40"
-						/>
-						{globalAgentInstructionsLoadError ? (
-							<p className="text-status-red text-[13px] mt-2 mb-0">
-								Could not load Kanban-wide AGENTS.md:{" "}
-								{formatAgentInstructionsLoadError(globalAgentInstructionsLoadError)}
-							</p>
-						) : areGlobalAgentInstructionsLoading ? (
-							<p className="text-text-secondary text-[13px] mt-2 mb-0">Loading Kanban-wide AGENTS.md...</p>
-						) : globalAgentInstructions && !globalAgentInstructions.exists ? (
-							<p className="text-text-secondary text-[13px] mt-2 mb-0">
-								No Kanban-wide AGENTS.md exists yet. Saving will create it.
-							</p>
-						) : null}
-					</div>
-
 					{/* ---- Project ---- */}
 					<div data-settings-section="project" />
 					<div className="sticky top-0 -mx-5 px-5 pt-4 pb-2 bg-surface-1 z-10">
@@ -820,16 +732,13 @@ export function RuntimeSettingsDialog({
 				>
 					Read the docs
 				</Button>
-				<Button
-					onClick={() => handleDialogOpenChange(false)}
-					disabled={controlsDisabled || areGlobalAgentInstructionsSaving}
-				>
+				<Button onClick={() => handleDialogOpenChange(false)} disabled={controlsDisabled}>
 					Cancel
 				</Button>
 				<Button
 					variant="primary"
 					onClick={() => void handleSave()}
-					disabled={controlsDisabled || areGlobalAgentInstructionsSaving || !hasUnsavedChanges}
+					disabled={controlsDisabled || !hasUnsavedChanges}
 				>
 					Save
 				</Button>

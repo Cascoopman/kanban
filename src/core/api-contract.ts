@@ -577,18 +577,6 @@ export const runtimeVsCodeWebResponseSchema = z.object({
 });
 export type RuntimeVsCodeWebResponse = z.infer<typeof runtimeVsCodeWebResponseSchema>;
 
-export const runtimeAgentInstructionsResponseSchema = z.object({
-	path: z.string(),
-	content: z.string(),
-	exists: z.boolean(),
-});
-export type RuntimeAgentInstructionsResponse = z.infer<typeof runtimeAgentInstructionsResponseSchema>;
-
-export const runtimeAgentInstructionsSaveRequestSchema = z.object({
-	content: z.string().max(1_000_000, "AGENTS.md must be smaller than 1 MB."),
-});
-export type RuntimeAgentInstructionsSaveRequest = z.infer<typeof runtimeAgentInstructionsSaveRequestSchema>;
-
 export const runtimeDebugResetAllStateResponseSchema = z.object({
 	ok: z.boolean(),
 	clearedPaths: z.array(z.string()),

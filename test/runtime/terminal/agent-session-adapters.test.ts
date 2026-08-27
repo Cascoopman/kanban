@@ -19,14 +19,6 @@ function setupTempHome(): string {
 	return tempHome;
 }
 
-function writeGlobalAgentInstructions(content: string): string {
-	const home = setupTempHome();
-	const path = join(home, ".kanban", "AGENTS.md");
-	mkdirSync(join(home, ".kanban"), { recursive: true });
-	writeFileSync(path, content);
-	return path;
-}
-
 function setKanbanProcessContext(): void {
 	process.argv = ["node", "/Users/example/repo/dist/cli.js"];
 	process.execArgv = [];
@@ -141,44 +133,30 @@ describe("prepareAgentLaunch", () => {
 		expect(getCodexConfigOverrideValues(launch.args, "check_for_update_on_startup")).toEqual(["true"]);
 	});
 
-	it("loads Kanban-wide instructions before project instructions for Codex", async () => {
-		writeGlobalAgentInstructions("# Shared rules\n\nRun focused tests.\n");
-		const launch = await prepareAgentLaunch({
-			taskId: "task-codex-global-instructions",
+	it("does not load legacy Kanban-wide instructions", async () => {
+		const home = setupTempHome();
+		mkdirSync(join(home, ".kanban"), { recursive: true });
+		writeFileSync(join(home, ".kanban", "AGENTS.md"), "# Legacy global rules\n");
+
+		const codexLaunch = await prepareAgentLaunch({
+			taskId: "task-codex-no-legacy-global-instructions",
 			agentId: "codex",
 			binary: "codex",
 			args: [],
 			cwd: "/tmp",
-			prompt: "Fix the bug",
-			resumeFromTrash: true,
+			prompt: "",
 		});
+		expect(getCodexConfigOverrideValues(codexLaunch.args, "developer_instructions")).toEqual([]);
 
-		expect(getCodexConfigOverrideValues(launch.args, "developer_instructions")).toEqual([
-			JSON.stringify("# Shared rules\n\nRun focused tests.\n"),
-		]);
-		expect(launch.args.indexOf("-c")).toBeLessThan(launch.args.indexOf("resume"));
-		expect(launch.args.slice(-3)).toEqual(["resume", "--last", "Fix the bug"]);
-	});
-
-	it("loads Kanban-wide instructions from a file for Claude", async () => {
-		writeGlobalAgentInstructions("# Shared rules\n");
-		const launch = await prepareAgentLaunch({
-			taskId: "task-claude-global-instructions",
+		const claudeLaunch = await prepareAgentLaunch({
+			taskId: "task-claude-no-legacy-global-instructions",
 			agentId: "claude",
 			binary: "claude",
 			args: [],
 			cwd: "/tmp",
-			prompt: "Fix the bug",
+			prompt: "",
 		});
-
-		const instructionFlagIndex = launch.args.indexOf("--append-system-prompt-file");
-		const instructionsPath = launch.args[instructionFlagIndex + 1];
-		expect(instructionsPath).toBe(
-			join(homedir(), ".kanban", "hooks", "claude", "instructions", "task-claude-global-instructions.md"),
-		);
-		expect(readFileSync(instructionsPath, "utf8")).toBe("# Shared rules\n");
-		expect(launch.args).not.toContain("Fix the bug");
-		expect(launch.deferredStartupInput).toBe("\u001b[200~Fix the bug\u001b[201~\r");
+		expect(claudeLaunch.args).not.toContain("--append-system-prompt-file");
 	});
 
 	it("uses project instructions from the source workspace when the task worktree does not contain them", async () => {
@@ -213,28 +191,6 @@ describe("prepareAgentLaunch", () => {
 		});
 		const instructionFlagIndex = claudeLaunch.args.indexOf("--append-system-prompt-file");
 		expect(readFileSync(claudeLaunch.args[instructionFlagIndex + 1], "utf8")).toBe("# Project rules\n");
-	});
-
-	it("prepends global instructions without duplicating a task worktree AGENTS.md for Codex", async () => {
-		const home = setupTempHome();
-		const taskCwd = join(home, "task");
-		mkdirSync(join(home, ".kanban"), { recursive: true });
-		mkdirSync(taskCwd, { recursive: true });
-		writeFileSync(join(home, ".kanban", "AGENTS.md"), "# Global rules\n");
-		writeFileSync(join(taskCwd, "AGENTS.md"), "# Project rules\n");
-
-		const codexLaunch = await prepareAgentLaunch({
-			taskId: "task-codex-native-project-instructions",
-			agentId: "codex",
-			binary: "codex",
-			args: [],
-			cwd: taskCwd,
-			prompt: "",
-		});
-
-		expect(getCodexConfigOverrideValues(codexLaunch.args, "developer_instructions")).toEqual([
-			JSON.stringify("# Global rules\n"),
-		]);
 	});
 
 	it("writes Claude settings with explicit permission hooks", async () => {
