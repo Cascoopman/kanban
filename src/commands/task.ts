@@ -8,7 +8,6 @@ import type {
 	RuntimeWorkspaceStateResponse,
 } from "../core/api-contract";
 import { runtimeAgentIdSchema } from "../core/api-contract";
-import { sendMacOsNotification } from "../core/macos-notification";
 import { buildKanbanRuntimeUrl, getKanbanRuntimeOrigin, getRuntimeFetch } from "../core/runtime-endpoint";
 import {
 	addTaskToColumn,
@@ -889,19 +888,6 @@ async function runTaskCommand(
 	}
 }
 
-function sendUrgentTaskNotification(input: {
-	message: string;
-	title?: string;
-	subtitle?: string;
-	sound?: string;
-	modal?: boolean;
-}): JsonRecord {
-	return {
-		ok: true,
-		notification: sendMacOsNotification(input),
-	};
-}
-
 export function registerTaskCommand(program: Command): void {
 	const task = program.command("task").alias("tasks").description("Manage Kanban board tasks from the CLI.");
 
@@ -1020,30 +1006,6 @@ export function registerTaskCommand(program: Command): void {
 							startInPlanMode: parseOptionalBooleanOption(options.startInPlanMode, "--start-in-plan-mode"),
 							agentId: parseAgentId(options.agentId),
 						}),
-				);
-			},
-		);
-
-	task
-		.command("notify")
-		.description("Send an urgent macOS Notification Center alert to the user.")
-		.requiredOption("--message <text>", "Notification body with the concrete action and deadline.")
-		.option("--title <text>", 'Notification title. Defaults to "Urgent Kanban alert".')
-		.option("--subtitle <text>", 'Notification subtitle. Defaults to "Action needed".')
-		.option("--sound <name>", 'macOS alert sound. Defaults to "Basso"; use "none" to mute.')
-		.option("--no-modal", "Do not show the Focus-resistant modal alert.")
-		.action(
-			async (options: { message: string; title?: string; subtitle?: string; sound?: string; modal: boolean }) => {
-				await runTaskCommand(
-					async () =>
-						sendUrgentTaskNotification({
-							message: options.message,
-							title: options.title,
-							subtitle: options.subtitle,
-							sound: options.sound,
-							modal: options.modal,
-						}),
-					{ includeRuntimeOrigin: false },
 				);
 			},
 		);

@@ -34,4 +34,16 @@ describe("cli compatibility flags", () => {
 		expect(result.stdout).not.toContain("--agent");
 		expect(result.stdout).not.toContain("Agent IDs:");
 	});
+
+	it("does not expose urgent notifications through the task CLI", () => {
+		const result = spawnSync(
+			process.execPath,
+			["--import", resolveTsxLoaderImportSpecifier(), resolve(process.cwd(), "src/cli.ts"), "task", "--help"],
+			{ encoding: "utf8" },
+		);
+
+		expect(result.status).toBe(0);
+		expect(result.stderr).toBe("");
+		expect(result.stdout).not.toContain("notify");
+	});
 });
