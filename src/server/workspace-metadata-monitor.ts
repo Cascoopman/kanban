@@ -354,7 +354,7 @@ export function createWorkspaceMetadataMonitor(
 			// Authenticate and warm remote refs while the application is opening the
 			// workspace. Later task fetches remain fresh while reusing that project's
 			// isolated multiplexed SSH connection.
-			void refreshTaskBaseRefs(workspacePath);
+			void refreshTaskBaseRefs(workspacePath, { priority: "background" });
 			return await refreshWorkspace(workspaceId);
 		},
 		updateWorkspaceState: async ({ workspaceId, workspacePath, board }) => {

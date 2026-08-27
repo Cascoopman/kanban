@@ -2,38 +2,146 @@ import { resolve } from "node:path";
 
 import { runGit } from "./git-utils";
 
-const activeTaskBaseRefRefreshes = new Map<string, Promise<Awaited<ReturnType<typeof runGit>>>>();
-let taskBaseRefRefreshQueue: Promise<void> = Promise.resolve();
+const TASK_BASE_REF_FRESHNESS_MS = 30_000;
 
-function enqueueTaskBaseRefRefresh(repoPath: string): Promise<Awaited<ReturnType<typeof runGit>>> {
-	const refresh = taskBaseRefRefreshQueue.then(async () => await runGit(repoPath, ["fetch", "--all", "--prune"]));
-	taskBaseRefRefreshQueue = refresh.then(
-		() => undefined,
-		() => undefined,
-	);
-	return refresh;
+export type TaskBaseRefRefreshPriority = "background" | "interactive";
+
+interface TaskBaseRefRefreshOptions {
+	priority?: TaskBaseRefRefreshPriority;
 }
 
-export async function refreshTaskBaseRefs(repoPath: string): Promise<Awaited<ReturnType<typeof runGit>>> {
-	const cacheKey = resolve(repoPath);
-	const existingRefresh = activeTaskBaseRefRefreshes.get(cacheKey);
-	if (existingRefresh) {
-		return await existingRefresh;
-	}
+type TaskBaseRefRefreshResult = Awaited<ReturnType<typeof runGit>>;
 
-	// Indexed workspaces subscribe together at startup. Serializing their first
-	// fetch prevents multiple repositories on the same SSH host from racing to
-	// establish the shared ControlMaster connection and showing duplicate key
-	// authentication prompts.
-	const refresh = enqueueTaskBaseRefRefresh(cacheKey);
-	activeTaskBaseRefRefreshes.set(cacheKey, refresh);
-	try {
-		return await refresh;
-	} finally {
-		if (activeTaskBaseRefRefreshes.get(cacheKey) === refresh) {
-			activeTaskBaseRefRefreshes.delete(cacheKey);
+interface TaskBaseRefRefreshWaiter {
+	resolve: (result: TaskBaseRefRefreshResult) => void;
+	reject: (error: unknown) => void;
+}
+
+interface QueuedTaskBaseRefRefresh {
+	repoPath: string;
+	priority: TaskBaseRefRefreshPriority;
+	waiters: TaskBaseRefRefreshWaiter[];
+}
+
+interface RecentTaskBaseRefRefresh {
+	completedAt: number;
+	result: TaskBaseRefRefreshResult;
+}
+
+export interface TaskBaseRefRefreshScheduler {
+	refresh: (repoPath: string, options?: TaskBaseRefRefreshOptions) => Promise<TaskBaseRefRefreshResult>;
+}
+
+interface CreateTaskBaseRefRefreshSchedulerOptions {
+	refresh?: (repoPath: string) => Promise<TaskBaseRefRefreshResult>;
+	now?: () => number;
+	freshnessMs?: number;
+}
+
+export function createTaskBaseRefRefreshScheduler(
+	options: CreateTaskBaseRefRefreshSchedulerOptions = {},
+): TaskBaseRefRefreshScheduler {
+	const refresh =
+		options.refresh ?? (async (repoPath: string) => await runGit(repoPath, ["fetch", "--all", "--prune"]));
+	const now = options.now ?? (() => Date.now());
+	const freshnessMs = options.freshnessMs ?? TASK_BASE_REF_FRESHNESS_MS;
+	const queuedByRepoPath = new Map<string, QueuedTaskBaseRefRefresh>();
+	const interactiveQueue: QueuedTaskBaseRefRefresh[] = [];
+	const backgroundQueue: QueuedTaskBaseRefRefresh[] = [];
+	const recentByRepoPath = new Map<string, RecentTaskBaseRefRefresh>();
+	let activeRefresh: QueuedTaskBaseRefRefresh | null = null;
+
+	const removeFromQueue = (queue: QueuedTaskBaseRefRefresh[], refreshToRemove: QueuedTaskBaseRefRefresh): void => {
+		const index = queue.indexOf(refreshToRemove);
+		if (index !== -1) {
+			queue.splice(index, 1);
 		}
-	}
+	};
+
+	const enqueue = (queuedRefresh: QueuedTaskBaseRefRefresh): void => {
+		if (queuedRefresh.priority === "interactive") {
+			interactiveQueue.push(queuedRefresh);
+			return;
+		}
+		backgroundQueue.push(queuedRefresh);
+	};
+
+	const runNext = (): void => {
+		if (activeRefresh) {
+			return;
+		}
+		const nextRefresh = interactiveQueue.shift() ?? backgroundQueue.shift();
+		if (!nextRefresh) {
+			return;
+		}
+
+		activeRefresh = nextRefresh;
+		void (async () => {
+			try {
+				const result = await refresh(nextRefresh.repoPath);
+				if (result.ok) {
+					recentByRepoPath.set(nextRefresh.repoPath, {
+						completedAt: now(),
+						result,
+					});
+				}
+				for (const waiter of nextRefresh.waiters) {
+					waiter.resolve(result);
+				}
+			} catch (error) {
+				for (const waiter of nextRefresh.waiters) {
+					waiter.reject(error);
+				}
+			} finally {
+				queuedByRepoPath.delete(nextRefresh.repoPath);
+				activeRefresh = null;
+				runNext();
+			}
+		})();
+	};
+
+	return {
+		refresh: async (repoPath: string, refreshOptions: TaskBaseRefRefreshOptions = {}) => {
+			const cacheKey = resolve(repoPath);
+			const priority = refreshOptions.priority ?? "background";
+			const recent = recentByRepoPath.get(cacheKey);
+			if (recent && now() - recent.completedAt <= freshnessMs) {
+				return recent.result;
+			}
+
+			const existingRefresh = queuedByRepoPath.get(cacheKey);
+			if (existingRefresh) {
+				if (priority === "interactive" && existingRefresh.priority === "background") {
+					removeFromQueue(backgroundQueue, existingRefresh);
+					existingRefresh.priority = "interactive";
+					interactiveQueue.push(existingRefresh);
+				}
+				return await new Promise<TaskBaseRefRefreshResult>((resolveExisting, rejectExisting) => {
+					existingRefresh.waiters.push({ resolve: resolveExisting, reject: rejectExisting });
+				});
+			}
+
+			return await new Promise<TaskBaseRefRefreshResult>((resolveRefresh, rejectRefresh) => {
+				const queuedRefresh: QueuedTaskBaseRefRefresh = {
+					repoPath: cacheKey,
+					priority,
+					waiters: [{ resolve: resolveRefresh, reject: rejectRefresh }],
+				};
+				queuedByRepoPath.set(cacheKey, queuedRefresh);
+				enqueue(queuedRefresh);
+				runNext();
+			});
+		},
+	};
+}
+
+const taskBaseRefRefreshScheduler = createTaskBaseRefRefreshScheduler();
+
+export async function refreshTaskBaseRefs(
+	repoPath: string,
+	options: TaskBaseRefRefreshOptions = {},
+): Promise<TaskBaseRefRefreshResult> {
+	return await taskBaseRefRefreshScheduler.refresh(repoPath, options);
 }
 
 function isMissingInitialCommitError(message: string): boolean {
@@ -59,7 +167,7 @@ function getBaseRefResolutionErrorMessage(baseRef: string, errorMessage: string)
 }
 
 export async function resolveLatestTaskBaseCommit(repoPath: string, baseRef: string): Promise<string> {
-	const fetchResult = await refreshTaskBaseRefs(repoPath);
+	const fetchResult = await refreshTaskBaseRefs(repoPath, { priority: "interactive" });
 	if (!fetchResult.ok) {
 		throw new Error(
 			`Could not fetch the latest remote refs before creating the task worktree. ${fetchResult.error ?? fetchResult.output}`,
