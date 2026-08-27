@@ -3,12 +3,9 @@ import { readFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { resolve } from "node:path";
-import { Command, Option } from "commander";
+import { Command } from "commander";
 import ora, { type Ora } from "ora";
 import packageJson from "../package.json" with { type: "json" };
-import { registerHooksCommand } from "./commands/hooks";
-import { registerLogsCommand } from "./commands/logs";
-import { registerTaskCommand } from "./commands/task";
 import { loadGlobalRuntimeConfig, loadRuntimeConfig } from "./config/runtime-config";
 import type { RuntimeCommandRunResponse } from "./core/api-contract";
 import { createGitProcessEnv } from "./core/git-process-env";
@@ -82,45 +79,6 @@ type ShutdownIndicatorResult = "done" | "interrupted" | "failed";
 interface ShutdownIndicator {
 	start: () => void;
 	stop: (result?: ShutdownIndicatorResult) => void;
-}
-
-/**
- * Decide whether this CLI invocation should auto-open a browser tab.
- *
- * This uses a positive allowlist for app-launch shapes like `kanban`,
- * `kanban --agent codex`, and `kanban --port 3484`. Any subcommand or
- * unexpected argument is treated as a command-style invocation instead.
- */
-function shouldAutoOpenBrowserTabForInvocation(argv: string[]): boolean {
-	const launchFlags = new Set(["--open", "--no-open", "--skip-shutdown-cleanup", "--https", "--no-passcode"]);
-	const launchOptionsWithValues = new Set(["--host", "--port", "--agent", "--cert", "--key"]);
-
-	for (let index = 0; index < argv.length; index += 1) {
-		const arg = argv[index];
-		if (!arg) {
-			continue;
-		}
-		if (!arg.startsWith("-")) {
-			return false;
-		}
-		if (launchFlags.has(arg)) {
-			continue;
-		}
-		const optionName = arg.split("=", 1)[0] ?? arg;
-		if (!launchOptionsWithValues.has(optionName)) {
-			return false;
-		}
-		if (arg.includes("=")) {
-			continue;
-		}
-		const optionValue = argv[index + 1];
-		if (!optionValue) {
-			return false;
-		}
-		index += 1;
-	}
-
-	return true;
 }
 
 function createShutdownIndicator(stream: NodeJS.WriteStream = process.stderr): ShutdownIndicator {
@@ -378,7 +336,7 @@ async function startServer(): Promise<{
 }> {
 	/*
 		Server-only modules are loaded lazily because task-oriented subcommands like
-		`kanban task create` and `kanban hooks ingest` do not need the runtime server.
+		Kanban MCP task creation and `kanban-hooks ingest` do not need the runtime server.
 
 		A regression in 25ba59f showed that eagerly importing the runtime stack here
 		could leave the source CLI process alive after the command had already printed
@@ -614,8 +572,7 @@ async function runMainCommand(options: CliOptions, shouldAutoOpenBrowser: boolea
 	});
 }
 
-function createProgram(invocationArgs: string[]): Command {
-	const shouldAutoOpenBrowser = shouldAutoOpenBrowserTabForInvocation(invocationArgs);
+function createProgram(): Command {
 	const program = new Command();
 	program
 		.name("kanban")
@@ -635,19 +592,6 @@ function createProgram(invocationArgs: string[]): Command {
 		.showHelpAfterError()
 		.addHelpText("after", `\nRuntime URL: ${getKanbanRuntimeOrigin()}`);
 
-	program.addOption(new Option("--agent <id>", "Deprecated compatibility flag. Ignored.").hideHelp());
-
-	registerTaskCommand(program);
-	registerHooksCommand(program);
-	registerLogsCommand(program);
-
-	program
-		.command("mcp")
-		.description("Deprecated compatibility command.")
-		.action(() => {
-			console.warn("Deprecated. Please uninstall Kanban MCP.");
-		});
-
 	program.action(async (options: RootCommandOptions) => {
 		await runMainCommand(
 			{
@@ -660,7 +604,7 @@ function createProgram(invocationArgs: string[]): Command {
 				key: options.key ?? null,
 				noPasscode: options.noPasscode === true,
 			},
-			shouldAutoOpenBrowser,
+			true,
 		);
 	});
 
@@ -669,12 +613,8 @@ function createProgram(invocationArgs: string[]): Command {
 
 async function run(): Promise<void> {
 	const argv = process.argv.slice(2);
-	const program = createProgram(argv);
+	const program = createProgram();
 	await program.parseAsync(argv, { from: "user" });
-	if (!shouldAutoOpenBrowserTabForInvocation(argv)) {
-		await flushNodeTelemetry();
-		process.exit(process.exitCode ?? 0);
-	}
 }
 
 void run().catch(async (error) => {

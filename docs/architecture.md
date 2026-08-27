@@ -4,6 +4,8 @@ Kanban is a local Node runtime plus a React app for running Claude Code and Open
 
 The browser is a control surface. The local runtime owns projects, worktrees, PTY sessions, git operations, persisted board state, and live state streaming. Both supported coding agents run as CLI processes attached to PTYs; there is no separate native-agent execution path.
 
+Agents access task lifecycle and persisted logs through the local stdio Kanban MCP (`src/mcp.ts`). The board-launcher CLI and internal hook runner are process infrastructure, not agent APIs. MCP handlers reuse the same task mutation functions and runtime TRPC boundary as the UI.
+
 ## System Diagram
 
 ```text

@@ -64,6 +64,21 @@ await Promise.all([
 		outfile: "dist/codex-hook.js",
 		banner: { js: `#!/usr/bin/env node\n${cjsShimBanner}` },
 	}),
+	// Internal runtime-hook entrypoint. Agent-facing operations use the MCP
+	// server, while hooks remain a lightweight local process protocol.
+	esbuild.build({
+		...shared,
+		entryPoints: ["src/hooks-cli.ts"],
+		outfile: "dist/hooks.js",
+		banner: { js: `#!/usr/bin/env node\n${cjsShimBanner}` },
+	}),
+	// Canonical agent-facing MCP server.
+	esbuild.build({
+		...shared,
+		entryPoints: ["src/mcp.ts"],
+		outfile: "dist/mcp.js",
+		banner: { js: `#!/usr/bin/env node\n${cjsShimBanner}` },
+	}),
 ]);
 
-console.log("esbuild: bundled dist/cli.js, dist/codex-hook.js, and dist/index.js");
+console.log("esbuild: bundled runtime, hooks, MCP, and library entrypoints");

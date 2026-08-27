@@ -11,27 +11,17 @@ function resolveTsxLoaderImportSpecifier(): string {
 	return pathToFileURL(requireFromHere.resolve("tsx")).href;
 }
 
-describe("cli compatibility flags", () => {
-	it("accepts the deprecated --agent flag as a no-op", () => {
+describe("runtime launcher CLI", () => {
+	it("does not expose the removed agent-facing task CLI", () => {
 		const result = spawnSync(
 			process.execPath,
-			[
-				"--import",
-				resolveTsxLoaderImportSpecifier(),
-				resolve(process.cwd(), "src/cli.ts"),
-				"--agent",
-				"legacy-alias-value",
-				"--help",
-			],
+			["--import", resolveTsxLoaderImportSpecifier(), resolve(process.cwd(), "src/cli.ts"), "task"],
 			{
 				encoding: "utf8",
 			},
 		);
 
-		expect(result.status).toBe(0);
-		expect(result.stderr).toBe("");
-		expect(result.stdout).toContain("--port");
-		expect(result.stdout).not.toContain("--agent");
-		expect(result.stdout).not.toContain("Agent IDs:");
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("too many arguments");
 	});
 });

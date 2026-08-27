@@ -17,6 +17,17 @@ function resolveCodexHookEntrypoint(entrypoint: string): string | null {
 	return null;
 }
 
+function resolveHooksEntrypoint(entrypoint: string): string | null {
+	const entrypointBasename = basename(entrypoint).toLowerCase();
+	if (entrypointBasename === "cli.ts") {
+		return join(dirname(entrypoint), "hooks-cli.ts");
+	}
+	if (entrypointBasename === "cli.js") {
+		return join(dirname(entrypoint), "hooks.js");
+	}
+	return null;
+}
+
 function resolveNodeCommandPrefix(context: RuntimeInvocationContext): string[] {
 	const execArgv = context.execArgv ?? [];
 	if (execArgv.length === 0) {
@@ -67,7 +78,7 @@ export function resolveKanbanCommandParts(
 	return [...commandPrefix, entrypoint];
 }
 
-export function buildKanbanCommandParts(
+export function buildKanbanHooksCommandParts(
 	args: string[],
 	context: RuntimeInvocationContext = {
 		execPath: process.execPath,
@@ -75,7 +86,13 @@ export function buildKanbanCommandParts(
 		execArgv: process.execArgv,
 	},
 ): string[] {
-	return [...resolveKanbanCommandParts(context), ...args];
+	const commandParts = resolveKanbanCommandParts(context);
+	const entrypoint = commandParts.at(-1);
+	const hooksEntrypoint = entrypoint ? resolveHooksEntrypoint(entrypoint) : null;
+	if (!hooksEntrypoint) {
+		return ["kanban-hooks", ...args];
+	}
+	return [...commandParts.slice(0, -1), hooksEntrypoint, ...args];
 }
 
 export function buildKanbanCodexHookCommandParts(
@@ -90,7 +107,7 @@ export function buildKanbanCodexHookCommandParts(
 	const entrypoint = commandParts.at(-1);
 	const hookEntrypoint = entrypoint ? resolveCodexHookEntrypoint(entrypoint) : null;
 	if (!hookEntrypoint) {
-		return [...commandParts, "hooks", "codex-hook", ...args];
+		return ["kanban-hooks", "codex-hook", ...args];
 	}
 	return [...commandParts.slice(0, -1), hookEntrypoint, ...args];
 }
