@@ -27,7 +27,6 @@ import { buildRuntimeConfigResponse, resolveAgentCommand } from "../terminal/age
 import { resolveClaudeSessionIdForCwd } from "../terminal/claude-session-resolver";
 import { resolveCodexSessionIdForCwd } from "../terminal/codex-session-resolver";
 import type { TerminalSessionManager } from "../terminal/session-manager";
-import { loadGlobalAgentInstructionsFile, saveGlobalAgentInstructionsFile } from "../workspace/agent-instructions";
 import { getTaskWorkspacePathInfo, resolveTaskCwd } from "../workspace/task-worktree";
 import { captureTaskTurnCheckpoint } from "../workspace/turn-checkpoints";
 import type { RuntimeTrpcContext, RuntimeTrpcWorkspaceScope } from "./app-router";
@@ -73,12 +72,6 @@ export function createRuntimeApi(deps: CreateRuntimeApiDependencies): RuntimeTrp
 	const buildConfigResponse = (runtimeConfig: RuntimeConfigState) => buildRuntimeConfigResponse(runtimeConfig);
 
 	return {
-		loadGlobalAgentInstructions: async () => {
-			return await loadGlobalAgentInstructionsFile();
-		},
-		saveGlobalAgentInstructions: async (input) => {
-			return await saveGlobalAgentInstructionsFile(input.content);
-		},
 		loadConfig: async (workspaceScope) => {
 			const activeRuntimeConfig = deps.getActiveRuntimeConfig?.();
 			if (!workspaceScope && !activeRuntimeConfig) {

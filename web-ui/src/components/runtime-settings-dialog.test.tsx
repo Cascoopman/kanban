@@ -75,11 +75,6 @@ vi.mock("@radix-ui/react-select", () => ({
 }));
 
 const resetLayoutCustomizationsMock = vi.hoisted(() => vi.fn());
-const agentInstructionsHookMocks = vi.hoisted(() => ({
-	useGlobalAgentInstructions: vi.fn(),
-	saveGlobal: vi.fn(),
-}));
-
 vi.mock("@runtime-agent-catalog", () => ({
 	getRuntimeAgentCatalogEntry: vi.fn((agentId: string) => ({
 		id: agentId,
@@ -109,10 +104,6 @@ vi.mock("@/runtime/use-runtime-config", () => ({
 		refresh: vi.fn(),
 		save: vi.fn(async () => true),
 	}),
-}));
-
-vi.mock("@/runtime/use-agent-instructions", () => ({
-	useGlobalAgentInstructions: agentInstructionsHookMocks.useGlobalAgentInstructions,
 }));
 
 vi.mock("@/runtime/runtime-config-query", () => ({
@@ -174,23 +165,6 @@ describe("RuntimeSettingsDialog", () => {
 
 	beforeEach(() => {
 		resetLayoutCustomizationsMock.mockReset();
-		agentInstructionsHookMocks.saveGlobal.mockReset();
-		agentInstructionsHookMocks.saveGlobal.mockResolvedValue({
-			path: "/tmp/home/.kanban/AGENTS.md",
-			content: "# Global instructions\n",
-			exists: true,
-		});
-		agentInstructionsHookMocks.useGlobalAgentInstructions.mockReturnValue({
-			instructions: {
-				path: "/tmp/home/.kanban/AGENTS.md",
-				content: "# Global instructions\n",
-				exists: true,
-			},
-			isLoading: false,
-			isSaving: false,
-			loadError: null,
-			save: agentInstructionsHookMocks.saveGlobal,
-		});
 		window.localStorage.clear();
 		document.documentElement.removeAttribute("data-theme");
 		previousActEnvironment = (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
@@ -337,69 +311,5 @@ describe("RuntimeSettingsDialog", () => {
 		expect(handleOpenChange).toHaveBeenCalledWith(false);
 		expect(window.localStorage.getItem("kanban.theme")).toBe("graphite");
 		expect(document.documentElement.getAttribute("data-theme")).toBe("graphite");
-	});
-
-	it("shows and saves only the Kanban-wide AGENTS.md contents", async () => {
-		const handleOpenChange = vi.fn();
-		await act(async () => {
-			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedRuntimeConfig}
-					onOpenChange={handleOpenChange}
-				/>,
-			);
-		});
-
-		const globalEditor = document.querySelector(
-			'textarea[aria-label="Kanban-wide AGENTS.md contents"]',
-		) as HTMLTextAreaElement | null;
-		const saveButton = findButtonByText(document.body, "Save");
-		expect(globalEditor?.value).toBe("# Global instructions\n");
-		expect(document.querySelector('textarea[aria-label="Project AGENTS.md contents"]')).toBeNull();
-		expect(saveButton?.disabled).toBe(true);
-
-		await act(async () => {
-			if (!globalEditor) {
-				throw new Error("Expected the Kanban-wide AGENTS.md editor.");
-			}
-			const valueSetter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-			valueSetter?.call(globalEditor, "# Updated global instructions\n");
-			globalEditor.dispatchEvent(new Event("input", { bubbles: true }));
-		});
-
-		expect(saveButton?.disabled).toBe(false);
-		await act(async () => {
-			saveButton?.click();
-		});
-
-		expect(agentInstructionsHookMocks.saveGlobal).toHaveBeenCalledWith("# Updated global instructions\n");
-		expect(handleOpenChange).toHaveBeenCalledWith(false);
-	});
-
-	it("explains that a missing AGENTS.md procedure requires a runtime restart", async () => {
-		agentInstructionsHookMocks.useGlobalAgentInstructions.mockReturnValue({
-			instructions: null,
-			isLoading: false,
-			isSaving: false,
-			loadError: new Error('No procedure found on path "runtime.getGlobalAgentInstructions"'),
-			save: agentInstructionsHookMocks.saveGlobal,
-		});
-
-		await act(async () => {
-			root.render(
-				<RuntimeSettingsDialog
-					open={true}
-					workspaceId={"workspace-1"}
-					initialConfig={savedRuntimeConfig}
-					onOpenChange={vi.fn()}
-				/>,
-			);
-		});
-
-		expect(document.body.textContent).toContain(
-			"The Kanban interface is newer than the running runtime. Restart Kanban to load the AGENTS.md editor.",
-		);
 	});
 });
