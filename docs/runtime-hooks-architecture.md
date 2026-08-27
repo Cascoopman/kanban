@@ -108,7 +108,7 @@ When hook context is available, launch wiring injects:
 The hook-specific values and port are required by `kanban hooks ingest` to route an event to the correct session and runtime process.
 The agent-facing aliases allow `kanban task current`, `kanban task update --title "..."`, and
 `kanban task branch --title "..." --prompt "..."` to target the current card without copying an ID
-or resolving the main worktree path. Urgent user alerts are owned by the separate `kanban-notify` MCP,
+or resolving the main worktree path. Urgent user alerts are owned by the separate `notify-user-mac` MCP,
 which creates a Notification Center entry and a short-lived modal alert so Focus modes do not hide the
 immediate call to action.
 Branching creates and starts a new task with the source worktree
