@@ -10,13 +10,12 @@ import type {
 import {
 	ensureWorkspaceIndexCompatibility,
 	listWorkspaceIndexEntries,
+	loadPersistedWorkspaceStateById,
 	loadWorkspaceBoardById,
 	loadWorkspaceContext,
 	loadWorkspaceState,
 	type RuntimeWorkspaceIndexEntry,
 	reconcileWorkspaceSessionSummary,
-	removeWorkspaceIndexEntry,
-	removeWorkspaceStateFiles,
 } from "../state/workspace-state";
 import { TerminalSessionManager } from "../terminal/session-manager";
 
@@ -41,11 +40,10 @@ interface DisposeWorkspaceRegistryOptions {
 export interface ResolvedWorkspaceStreamTarget {
 	workspaceId: string | null;
 	workspacePath: string | null;
-	removedRequestedWorkspacePath: string | null;
-	didPruneProjects: boolean;
+	requestedWorkspaceError: string | null;
 }
 
-interface RemovedWorkspaceNotice {
+interface UnavailableWorkspaceNotice {
 	workspaceId: string;
 	repoPath: string;
 	message: string;
@@ -86,12 +84,7 @@ export interface WorkspaceRegistry {
 		currentProjectId: string | null;
 		projects: RuntimeProjectSummary[];
 	}>;
-	resolveWorkspaceForStream: (
-		requestedWorkspaceId: string | null,
-		options?: {
-			onRemovedWorkspace?: (workspace: RemovedWorkspaceNotice) => void;
-		},
-	) => Promise<ResolvedWorkspaceStreamTarget>;
+	resolveWorkspaceForStream: (requestedWorkspaceId: string | null) => Promise<ResolvedWorkspaceStreamTarget>;
 	listManagedWorkspaces: () => Array<{
 		workspaceId: string;
 		workspacePath: string | null;
@@ -189,7 +182,15 @@ function toProjectSummary(project: {
 export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDependencies): Promise<WorkspaceRegistry> {
 	await ensureWorkspaceIndexCompatibility();
 	const launchedFromGitRepo = deps.hasGitRepository(deps.cwd);
-	const initialWorkspace = launchedFromGitRepo ? await loadWorkspaceContext(deps.cwd) : null;
+	let initialWorkspace = null;
+	if (launchedFromGitRepo) {
+		try {
+			initialWorkspace = await loadWorkspaceContext(deps.cwd);
+		} catch {
+			// A Git probe can race with a temporarily unavailable checkout. Fall back
+			// to the persisted registry rather than making startup destructive.
+		}
+	}
 	let indexedWorkspace: RuntimeWorkspaceIndexEntry | null = null;
 	if (!initialWorkspace) {
 		const indexedWorkspaces = await listWorkspaceIndexEntries();
@@ -243,7 +244,14 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 				const existingWorkspace = await loadWorkspaceState(repoPath);
 				manager.hydrateFromRecord(existingWorkspace.sessions);
 			} catch {
-				// Workspace state will be created on demand.
+				// The checkout may be temporarily unavailable. Its persisted board and
+				// sessions are still authoritative and can be hydrated without Git.
+				try {
+					const persistedWorkspace = await loadPersistedWorkspaceStateById(workspaceId);
+					manager.hydrateFromRecord(persistedWorkspace.sessions);
+				} catch {
+					// Workspace state will be created on demand when the checkout returns.
+				}
 			}
 			terminalManagersByWorkspaceId.set(workspaceId, manager);
 			return manager;
@@ -333,7 +341,12 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 		return await Promise.all(
 			projects.map(async (project) => {
 				const terminalManager = await ensureTerminalManagerForWorkspace(project.workspaceId, project.repoPath);
-				const workspaceState = await loadWorkspaceState(project.repoPath);
+				let workspaceState: Pick<RuntimeWorkspaceStateResponse, "board" | "sessions">;
+				try {
+					workspaceState = await loadWorkspaceState(project.repoPath);
+				} catch {
+					workspaceState = await loadPersistedWorkspaceStateById(project.workspaceId);
+				}
 				for (const summary of terminalManager.listSummaries()) {
 					workspaceState.sessions[summary.taskId] = summary;
 				}
@@ -370,9 +383,7 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 	const buildProjectsPayload = async (preferredCurrentProjectId: string | null) => {
 		const projects = await listWorkspaceIndexEntries();
 		const fallbackProjectId =
-			projects.find((project) => project.workspaceId === activeWorkspaceId)?.workspaceId ??
-			projects[0]?.workspaceId ??
-			null;
+			projects.find((project) => project.workspaceId === activeWorkspaceId)?.workspaceId ?? null;
 		const resolvedCurrentProjectId =
 			(preferredCurrentProjectId &&
 				projects.some((project) => project.workspaceId === preferredCurrentProjectId) &&
@@ -396,53 +407,42 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 
 	const resolveWorkspaceForStream = async (
 		requestedWorkspaceId: string | null,
-		options?: {
-			onRemovedWorkspace?: (workspace: RemovedWorkspaceNotice) => void;
-		},
 	): Promise<ResolvedWorkspaceStreamTarget> => {
 		const allProjects = await listWorkspaceIndexEntries();
-		const existingProjects: RuntimeWorkspaceIndexEntry[] = [];
-		const removedProjects: RuntimeWorkspaceIndexEntry[] = [];
+		const availableProjects: RuntimeWorkspaceIndexEntry[] = [];
+		const unavailableProjects: UnavailableWorkspaceNotice[] = [];
 
 		for (const project of allProjects) {
-			let removalMessage: string | null = null;
+			let unavailableMessage: string | null = null;
 			if (!(await deps.pathIsDirectory(project.repoPath))) {
-				removalMessage = `Project no longer exists on disk and was removed: ${project.repoPath}`;
+				unavailableMessage = `Workspace "${project.workspaceId}" is still registered but its directory is unavailable at ${project.repoPath}. Restore or reconnect the directory, or remove the project explicitly. Persisted board and session data has been kept.`;
 			} else if (!deps.hasGitRepository(project.repoPath)) {
-				removalMessage = `Project is not a git repository and was removed: ${project.repoPath}`;
+				unavailableMessage = `Workspace "${project.workspaceId}" is still registered but Kanban could not open a Git repository at ${project.repoPath}. Check the checkout, then reconnect it or remove the project explicitly. Persisted board and session data has been kept.`;
 			}
 
-			if (!removalMessage) {
-				existingProjects.push(project);
+			if (!unavailableMessage) {
+				availableProjects.push(project);
 				continue;
 			}
 
-			removedProjects.push(project);
-			await removeWorkspaceIndexEntry(project.workspaceId);
-			await removeWorkspaceStateFiles(project.workspaceId);
-			disposeWorkspace(project.workspaceId);
-			options?.onRemovedWorkspace?.({
+			unavailableProjects.push({
 				workspaceId: project.workspaceId,
 				repoPath: project.repoPath,
-				message: removalMessage,
+				message: unavailableMessage,
 			});
 		}
 
-		const removedRequestedWorkspacePath = requestedWorkspaceId
-			? (removedProjects.find((project) => project.workspaceId === requestedWorkspaceId)?.repoPath ?? null)
-			: null;
-
-		const activeWorkspaceMissing = !existingProjects.some((project) => project.workspaceId === activeWorkspaceId);
+		const activeWorkspaceMissing = !availableProjects.some((project) => project.workspaceId === activeWorkspaceId);
 		if (activeWorkspaceMissing) {
-			if (existingProjects[0]) {
-				await setActiveWorkspace(existingProjects[0].workspaceId, existingProjects[0].repoPath);
+			if (availableProjects[0]) {
+				await setActiveWorkspace(availableProjects[0].workspaceId, availableProjects[0].repoPath);
 			} else {
 				clearActiveWorkspace();
 			}
 		}
 
 		if (requestedWorkspaceId) {
-			const requestedWorkspace = existingProjects.find((project) => project.workspaceId === requestedWorkspaceId);
+			const requestedWorkspace = availableProjects.find((project) => project.workspaceId === requestedWorkspaceId);
 			if (requestedWorkspace) {
 				if (
 					activeWorkspaceId !== requestedWorkspace.workspaceId ||
@@ -453,27 +453,28 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 				return {
 					workspaceId: requestedWorkspace.workspaceId,
 					workspacePath: requestedWorkspace.repoPath,
-					removedRequestedWorkspacePath,
-					didPruneProjects: removedProjects.length > 0,
+					requestedWorkspaceError: null,
 				};
 			}
 		}
 
 		const fallbackWorkspace =
-			existingProjects.find((project) => project.workspaceId === activeWorkspaceId) ?? existingProjects[0] ?? null;
+			availableProjects.find((project) => project.workspaceId === activeWorkspaceId) ?? availableProjects[0] ?? null;
+		const requestedWorkspaceError = requestedWorkspaceId
+			? (unavailableProjects.find((project) => project.workspaceId === requestedWorkspaceId)?.message ??
+				`Unknown workspace ID: ${requestedWorkspaceId}`)
+			: null;
 		if (!fallbackWorkspace) {
 			return {
 				workspaceId: null,
 				workspacePath: null,
-				removedRequestedWorkspacePath,
-				didPruneProjects: removedProjects.length > 0,
+				requestedWorkspaceError,
 			};
 		}
 		return {
 			workspaceId: fallbackWorkspace.workspaceId,
 			workspacePath: fallbackWorkspace.repoPath,
-			removedRequestedWorkspacePath,
-			didPruneProjects: removedProjects.length > 0,
+			requestedWorkspaceError,
 		};
 	};
 
@@ -481,6 +482,9 @@ export async function createWorkspaceRegistry(deps: CreateWorkspaceRegistryDepen
 	await Promise.all(
 		indexedProjects.map(async (project) => {
 			const manager = await ensureTerminalManagerForWorkspace(project.workspaceId, project.repoPath);
+			if (!deps.hasGitRepository(project.repoPath)) {
+				return;
+			}
 			for (const summary of manager.listSummaries()) {
 				await reconcileWorkspaceSessionSummary(project.repoPath, summary);
 			}
